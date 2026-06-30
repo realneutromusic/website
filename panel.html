@@ -137,17 +137,32 @@
   .submission-badge.kept { background: rgba(79,123,176,0.3); color: var(--steel-bright); }
   .submission-badge.dismissed { background: rgba(238,243,250,0.06); color: var(--ink-faint); }
 
+  .submission-link-row {
+    margin-top: 12px; padding: 10px 12px; border-radius: 10px;
+    background: rgba(4,7,13,0.35); border: 1px solid var(--line);
+    display: flex; align-items: center; gap: 10px;
+  }
+  .submission-link-row a {
+    display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1;
+    text-decoration: none;
+  }
+  .submission-link-row .link-host {
+    font-family: 'Unbounded', sans-serif; font-weight: 700; font-size: 14.5px; color: var(--steel-bright);
+  }
+  .submission-link-row .link-full {
+    font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--ink-faint);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .submission-link-row .link-arrow {
+    flex-shrink: 0; color: var(--steel-bright); font-size: 16px;
+  }
+  .submission-link-row .link-invalid {
+    color: #ff8080; font-style: italic; font-size: 13px;
+  }
+
   .submission-meta {
     margin-top: 10px; display: flex; gap: 14px; flex-wrap: wrap;
     font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: var(--ink-faint);
-  }
-  .submission-meta a { color: var(--steel-bright); text-decoration: underline; text-underline-offset: 2px; }
-  .submission-meta .link-host {
-    font-weight: 700; text-decoration: none; /* the surrounding <a> still underlines on hover */
-  }
-  .submission-meta a:hover .link-host { color: var(--steel-bright); }
-  .submission-meta .link-invalid {
-    color: #ff8080; font-style: italic; text-decoration: none;
   }
 
   .submission-note {
@@ -337,7 +352,7 @@
       clearAuthError();
       loginGate.style.display = 'none';
       adminShell.style.display = 'block';
-      whoLabel.textContent = user.email;
+      whoLabel.textContent = 'Signed in';
       startListening();
     } else {
       loginGate.style.display = 'flex';
@@ -406,13 +421,20 @@
       const rawLink = s.link || '';
       const host = getLinkHost(rawLink);
       const escHost = host ? escapeHtml(host) : null;
+      const escFullLink = escapeHtml(rawLink);
       // If the URL doesn't parse, don't render it as a clickable link at all —
       // safer than guessing, and it surfaces malformed/suspicious submissions.
-      const linkHtml = escHost
-        ? `<a href="${escapeAttr(rawLink)}" target="_blank" rel="noopener noreferrer">
-             <span class="link-host">${escHost}</span> ↗
-           </a>`
-        : `<span class="link-invalid">Invalid link — not opening</span>`;
+      const linkRowHtml = escHost
+        ? `<div class="submission-link-row">
+             <a href="${escapeAttr(rawLink)}" target="_blank" rel="noopener noreferrer">
+               <span class="link-host">${escHost}</span>
+               <span class="link-full">${escFullLink}</span>
+             </a>
+             <span class="link-arrow">↗</span>
+           </div>`
+        : `<div class="submission-link-row">
+             <span class="link-invalid">Invalid link — not opening (${escFullLink || 'empty'})</span>
+           </div>`;
       return `
         <div class="submission-card status-${status}" data-id="${s.id}">
           <div class="submission-top">
@@ -421,8 +443,9 @@
             </div>
             <span class="submission-badge ${status}">${status}</span>
           </div>
+          ${linkRowHtml}
           <div class="submission-meta">
-            ${linkHtml}
+
             <span>${formatDate(s.submittedAt)}</span>
           </div>
           ${escNote ? `<div class="submission-note">${escNote}</div>` : ''}
