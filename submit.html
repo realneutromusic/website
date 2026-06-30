@@ -125,22 +125,13 @@
   <div class="panel">
     <form id="submit-form">
       <div class="form-row">
-        <label for="f-title">Track title</label>
-        <input type="text" id="f-title" required maxlength="150" autocomplete="off">
-      </div>
-      <div class="form-row">
-        <label for="f-artist">Artist name</label>
-        <input type="text" id="f-artist" required maxlength="150" autocomplete="off">
+        <label for="f-name">Name</label>
+        <input type="text" id="f-name" required maxlength="150" autocomplete="off">
       </div>
       <div class="form-row">
         <label for="f-link">Link to the track</label>
         <input type="url" id="f-link" required placeholder="https://soundcloud.com/..." autocomplete="off">
         <div class="hint">SoundCloud, Spotify, YouTube — wherever I can actually listen to it.</div>
-      </div>
-      <div class="form-row">
-        <label for="f-contact">Your contact (email, Instagram, etc.)</label>
-        <input type="text" id="f-contact" required maxlength="150" autocomplete="off">
-        <div class="hint">So I can reach you back if I want to use it.</div>
       </div>
       <div class="form-row">
         <label for="f-note">Anything else? (optional)</label>
@@ -153,7 +144,7 @@
     <div class="success-state" id="success-state" style="display:none">
       <div class="icon"><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
       <h2>Got it — thank you.</h2>
-      <p>Your track is in. I'll reach out through the contact you left if it's a fit.</p>
+      <p>Your track is in. Neutro goes through every submission personally.</p>
     </div>
   </div>
 </div>
@@ -186,18 +177,14 @@
     submitBtn.disabled = true;
     submitBtn.textContent = 'Sending…';
 
-    const title = document.getElementById('f-title').value.trim();
-    const artist = document.getElementById('f-artist').value.trim();
+    const name = document.getElementById('f-name').value.trim();
     const link = document.getElementById('f-link').value.trim();
-    const contact = document.getElementById('f-contact').value.trim();
     const note = document.getElementById('f-note').value.trim();
 
     try {
       await addDoc(collection(db, 'submissions'), {
-        title,
-        artist,
+        name,
         link,
-        contact,
         note,
         status: 'new',
         submittedAt: serverTimestamp()

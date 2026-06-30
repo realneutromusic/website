@@ -129,7 +129,6 @@
     display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
   }
   .submission-title { font-family: 'Unbounded', sans-serif; font-weight: 700; font-size: 16px; }
-  .submission-artist { font-size: 13px; color: var(--ink-dim); margin-top: 2px; }
   .submission-badge {
     flex-shrink: 0; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase;
     padding: 4px 9px; border-radius: 999px; white-space: nowrap;
@@ -143,6 +142,13 @@
     font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: var(--ink-faint);
   }
   .submission-meta a { color: var(--steel-bright); text-decoration: underline; text-underline-offset: 2px; }
+  .submission-meta .link-host {
+    font-weight: 700; text-decoration: none; /* the surrounding <a> still underlines on hover */
+  }
+  .submission-meta a:hover .link-host { color: var(--steel-bright); }
+  .submission-meta .link-invalid {
+    color: #ff8080; font-style: italic; text-decoration: none;
+  }
 
   .submission-note {
     margin-top: 10px; font-size: 13px; color: var(--ink-dim); line-height: 1.5;
@@ -368,6 +374,18 @@
     return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
   }
 
+  // Parses a URL and returns just its hostname (e.g. "soundcloud.com"),
+  // so the admin can see where a link actually points before clicking it —
+  // instead of trusting link text/labels, which can be spoofed.
+  function getLinkHost(url) {
+    try {
+      const u = new URL(url);
+      return u.hostname.replace(/^www\./, '');
+    } catch {
+      return null; // not a valid absolute URL
+    }
+  }
+
   function render() {
     const items = currentFilter === 'all'
       ? allSubmissions
@@ -383,22 +401,28 @@
 
     listEl.innerHTML = items.map(s => {
       const status = s.status || 'new';
-      const escTitle = escapeHtml(s.title || 'Untitled');
-      const escArtist = escapeHtml(s.artist || 'Unknown artist');
-      const escContact = escapeHtml(s.contact || '');
+      const escName = escapeHtml(s.name || 'Unnamed');
       const escNote = s.note ? escapeHtml(s.note) : '';
+      const rawLink = s.link || '';
+      const host = getLinkHost(rawLink);
+      const escHost = host ? escapeHtml(host) : null;
+      // If the URL doesn't parse, don't render it as a clickable link at all —
+      // safer than guessing, and it surfaces malformed/suspicious submissions.
+      const linkHtml = escHost
+        ? `<a href="${escapeAttr(rawLink)}" target="_blank" rel="noopener noreferrer">
+             <span class="link-host">${escHost}</span> ↗
+           </a>`
+        : `<span class="link-invalid">Invalid link — not opening</span>`;
       return `
         <div class="submission-card status-${status}" data-id="${s.id}">
           <div class="submission-top">
             <div>
-              <div class="submission-title">${escTitle}</div>
-              <div class="submission-artist">${escArtist}</div>
+              <div class="submission-title">${escName}</div>
             </div>
             <span class="submission-badge ${status}">${status}</span>
           </div>
           <div class="submission-meta">
-            <a href="${escapeAttr(s.link || '#')}" target="_blank" rel="noopener">Open link ↗</a>
-            <span>${escContact}</span>
+            ${linkHtml}
             <span>${formatDate(s.submittedAt)}</span>
           </div>
           ${escNote ? `<div class="submission-note">${escNote}</div>` : ''}
