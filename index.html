@@ -2025,6 +2025,16 @@
     formStatus.className = 'form-status';
 
     try {
+      const nameValue = contactForm.querySelector('#cf-name').value.trim() || 'Someone';
+      // Unique subject per submission (includes name + timestamp) so Gmail
+      // doesn't collapse every message into a single thread — without this,
+      // all submissions share the exact same subject line and look like
+      // "only 1 message arrived" even though every one was delivered fine.
+      const subjectInput = contactForm.querySelector('input[name="_subject"]');
+      if (subjectInput) {
+        const stamp = new Date().toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+        subjectInput.value = `New message from ${nameValue} — neutro site (${stamp})`;
+      }
       const formData = new FormData(contactForm);
       const response = await fetch(FORMSPREE_ENDPOINT, {
         method: 'POST',

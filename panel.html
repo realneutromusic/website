@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+
+<title>Admin — Neutro</title>
+
+<link rel="icon" type="image/x-icon" href="./favicon.ico">
+<link rel="shortcut icon" type="image/x-icon" href="./favicon.ico">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;600;700;800;900&family=Sora:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+  :root {
+    --bg: #04070d;
+    --surface: #0c1424;
+    --surface-2: #16263f;
+    --line: #1d3050;
+    --ink: #eef3fa;
+    --ink-dim: #9fb4cf;
+    --ink-faint: #5b7299;
+    --steel: #4f7bb0;
+    --steel-bright: #a8c8ec;
+    --steel-soft: rgba(79,123,176,0.16);
+    --ease: cubic-bezier(.22, 1, .36, 1);
+    --ease-spring: cubic-bezier(.34, 1.45, .64, 1);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background-color: var(--bg);
+    background-image: radial-gradient(circle, rgba(159,180,207,0.18) 1px, transparent 1px);
+    background-size: 28px 28px;
+    background-position: -1px -1px;
+    color: var(--ink);
+    font-family: 'Sora', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+  }
+
+  a { color: inherit; }
+
+  /* ---------- login gate ---------- */
+  #login-gate {
+    min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px;
+  }
+  .login-card {
+    max-width: 360px; width: 100%; text-align: center;
+    border-radius: 18px; border: 1px solid var(--line); background: var(--surface);
+    padding: 36px 28px;
+  }
+  .login-card h1 { font-family: 'Unbounded', sans-serif; font-size: 21px; margin-bottom: 10px; }
+  .login-card p { font-size: 13.5px; color: var(--ink-dim); margin-bottom: 24px; line-height: 1.6; }
+
+  #email-login-form .form-row { margin-bottom: 10px; text-align: left; }
+  #email-login-form input {
+    width: 100%; background: rgba(4,7,13,0.4); border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px 14px; font-size: 14px; color: var(--ink); font-family: inherit;
+    transition: border-color 0.25s var(--ease), background 0.25s var(--ease);
+  }
+  #email-login-form input:focus { border-color: var(--steel); background: rgba(4,7,13,0.6); outline: none; }
+
+  .email-btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    width: 100%; background: transparent; color: var(--ink); border: 1px solid var(--line); border-radius: 999px;
+    padding: 12px 24px; font-size: 14px; font-weight: 700; cursor: pointer; font-family: inherit;
+    transition: all 0.25s var(--ease); margin-top: 4px;
+  }
+  .email-btn:hover { border-color: var(--steel); color: var(--steel-bright); }
+  .email-btn:disabled { opacity: 0.6; cursor: default; }
+
+  .login-error {
+    margin-top: 16px; font-size: 12.5px; color: #ff8080; line-height: 1.5;
+    text-align: left; background: rgba(255,128,128,0.08); border: 1px solid rgba(255,128,128,0.25);
+    border-radius: 10px; padding: 12px 14px; display: none;
+  }
+  .login-error.visible { display: block; }
+  .login-error strong { display: block; margin-bottom: 4px; color: #ffaaaa; }
+
+  .login-hint {
+    margin-top: 14px; font-size: 12px; color: var(--ink-faint); line-height: 1.5; text-align: left;
+    display: none;
+  }
+  .login-hint.visible { display: block; }
+
+  /* ---------- admin shell ---------- */
+  #admin-shell { display: none; max-width: 920px; margin: 0 auto; padding: 40px 24px 80px; }
+
+  .admin-header {
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    margin-bottom: 32px; flex-wrap: wrap;
+  }
+  .admin-header h1 { font-family: 'Unbounded', sans-serif; font-size: 26px; }
+  .admin-header .who { font-size: 12.5px; color: var(--ink-faint); margin-top: 4px; }
+  .signout-btn {
+    font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--ink-dim);
+    border: 1px solid var(--line); border-radius: 999px; padding: 8px 16px; cursor: pointer;
+    background: transparent; transition: all 0.2s var(--ease);
+  }
+  .signout-btn:hover { border-color: var(--ink-faint); color: var(--ink); }
+
+  .filter-row { display: flex; gap: 8px; margin-bottom: 24px; flex-wrap: wrap; }
+  .filter-btn {
+    font-family: 'JetBrains Mono', monospace; font-size: 11.5px; letter-spacing: 0.04em;
+    border: 1px solid var(--line); border-radius: 999px; padding: 7px 14px; cursor: pointer;
+    background: var(--surface); color: var(--ink-dim); transition: all 0.2s var(--ease);
+  }
+  .filter-btn.active { background: var(--steel); color: #04070d; border-color: var(--steel); }
+  .filter-btn:hover:not(.active) { border-color: var(--ink-faint); color: var(--ink); }
+
+  .empty-state {
+    text-align: center; padding: 60px 20px; color: var(--ink-faint); font-size: 14px;
+  }
+
+  .submission-list { display: flex; flex-direction: column; gap: 14px; }
+  .submission-card {
+    border-radius: 14px; border: 1px solid var(--line); background: var(--surface);
+    padding: 18px 20px;
+  }
+  .submission-card.status-kept { border-color: rgba(79,123,176,0.5); }
+  .submission-card.status-dismissed { opacity: 0.5; }
+
+  .submission-top {
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+  }
+  .submission-title { font-family: 'Unbounded', sans-serif; font-weight: 700; font-size: 16px; }
+  .submission-artist { font-size: 13px; color: var(--ink-dim); margin-top: 2px; }
+  .submission-badge {
+    flex-shrink: 0; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase;
+    padding: 4px 9px; border-radius: 999px; white-space: nowrap;
+  }
+  .submission-badge.new { background: var(--steel-soft); color: var(--steel-bright); }
+  .submission-badge.kept { background: rgba(79,123,176,0.3); color: var(--steel-bright); }
+  .submission-badge.dismissed { background: rgba(238,243,250,0.06); color: var(--ink-faint); }
+
+  .submission-meta {
+    margin-top: 10px; display: flex; gap: 14px; flex-wrap: wrap;
+    font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: var(--ink-faint);
+  }
+  .submission-meta a { color: var(--steel-bright); text-decoration: underline; text-underline-offset: 2px; }
+
+  .submission-note {
+    margin-top: 10px; font-size: 13px; color: var(--ink-dim); line-height: 1.5;
+    padding-top: 10px; border-top: 1px solid var(--line);
+  }
+
+  .submission-actions { margin-top: 14px; display: flex; gap: 8px; flex-wrap: wrap; }
+  .action-btn {
+    font-family: 'JetBrains Mono', monospace; font-size: 11.5px;
+    border-radius: 999px; padding: 7px 14px; cursor: pointer; border: 1px solid var(--line);
+    background: transparent; color: var(--ink-dim); transition: all 0.2s var(--ease);
+  }
+  .action-btn:hover { border-color: var(--ink-faint); color: var(--ink); }
+  .action-btn.keep:hover { border-color: var(--steel); color: var(--steel-bright); }
+  .action-btn.delete:hover { border-color: #ff8080; color: #ff8080; }
+</style>
+</head>
+<body>
+
+<div id="login-gate">
+  <div class="login-card">
+    <h1>Neutro Admin</h1>
+    <p>Sign in with your admin account.</p>
+
+    <form id="email-login-form">
+      <div class="form-row">
+        <input type="email" id="email-input" placeholder="Email" required autocomplete="username">
+      </div>
+      <div class="form-row">
+        <input type="password" id="password-input" placeholder="Password" required autocomplete="current-password">
+      </div>
+      <button type="submit" class="email-btn" id="email-signin-btn">Sign in with email</button>
+    </form>
+
+    <p class="login-error" id="login-error"></p>
+    <p class="login-hint" id="login-hint"></p>
+  </div>
+</div>
+
+<div id="admin-shell">
+  <div class="admin-header">
+    <div>
+      <h1>Submissions</h1>
+      <div class="who" id="who-label"></div>
+    </div>
+    <button class="signout-btn" id="signout-btn">Sign out</button>
+  </div>
+
+  <div class="filter-row">
+    <button class="filter-btn active" data-filter="all">All</button>
+    <button class="filter-btn" data-filter="new">New</button>
+    <button class="filter-btn" data-filter="kept">Kept</button>
+    <button class="filter-btn" data-filter="dismissed">Dismissed</button>
+  </div>
+
+  <div id="list-container">
+    <div class="empty-state" id="empty-state">Loading…</div>
+    <div class="submission-list" id="submission-list"></div>
+  </div>
+</div>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
+  import {
+    getAuth, signOut, onAuthStateChanged, signInWithEmailAndPassword
+  } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
+  import {
+    getFirestore, collection, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc
+  } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyCphqIMmkws58VaFE1Y8T1ikWE5vmDhQhA",
+    authDomain: "neutro-adm.firebaseapp.com",
+    projectId: "neutro-adm",
+    storageBucket: "neutro-adm.firebasestorage.app",
+    messagingSenderId: "481335512836",
+    appId: "1:481335512836:web:bfff64c4cd41407dd78a51"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+
+  const loginGate = document.getElementById('login-gate');
+  const adminShell = document.getElementById('admin-shell');
+  const emailForm = document.getElementById('email-login-form');
+  const emailInput = document.getElementById('email-input');
+  const passwordInput = document.getElementById('password-input');
+  const emailSigninBtn = document.getElementById('email-signin-btn');
+  const signoutBtn = document.getElementById('signout-btn');
+  const loginError = document.getElementById('login-error');
+  const loginHint = document.getElementById('login-hint');
+  const whoLabel = document.getElementById('who-label');
+  const listEl = document.getElementById('submission-list');
+  const emptyState = document.getElementById('empty-state');
+  const filterBtns = document.querySelectorAll('.filter-btn');
+
+  let allSubmissions = [];
+  let currentFilter = 'all';
+  let unsubscribe = null;
+
+  // ---- error message mapping --------------------------------------------
+  // Firebase Auth error codes -> a plain-language explanation + (optional)
+  // actionable hint, shown directly on the page instead of only in console.
+  function describeAuthError(err) {
+    const code = err && err.code ? err.code : 'unknown';
+    switch (code) {
+      case 'auth/invalid-credential':
+      case 'auth/wrong-password':
+        return {
+          message: "Incorrect email or password.",
+          hint: "Double-check both fields, or reset the password from Firebase Console → Authentication → Users."
+        };
+      case 'auth/user-not-found':
+        return {
+          message: "No account found with that email.",
+          hint: "Check the email, or add this user in Firebase Console → Authentication → Users."
+        };
+      case 'auth/invalid-email':
+        return {
+          message: "That email address doesn't look valid.",
+          hint: null
+        };
+      case 'auth/too-many-requests':
+        return {
+          message: "Too many failed attempts — temporarily blocked.",
+          hint: "Wait a few minutes before trying again."
+        };
+      case 'auth/network-request-failed':
+        return {
+          message: "Network error while contacting Firebase.",
+          hint: "Check your internet connection, or that nothing (a privacy extension, VPN, or browser shield) is blocking firebaseapp.com."
+        };
+      default:
+        return {
+          message: "Sign-in failed: " + code,
+          hint: "If this keeps happening, check the browser console (F12) for more detail."
+        };
+    }
+  }
+
+  function showAuthError(err) {
+    console.error('Sign-in failed:', err);
+    const info = describeAuthError(err);
+    if (!info) { // benign, ignorable error — clear any old message
+      loginError.classList.remove('visible');
+      loginHint.classList.remove('visible');
+      return;
+    }
+    loginError.innerHTML = `<strong>Couldn't sign in</strong>${info.message}`;
+    loginError.classList.add('visible');
+    if (info.hint) {
+      loginHint.textContent = info.hint;
+      loginHint.classList.add('visible');
+    } else {
+      loginHint.classList.remove('visible');
+    }
+  }
+
+  function clearAuthError() {
+    loginError.classList.remove('visible');
+    loginHint.classList.remove('visible');
+  }
+
+  // ---- sign-in --------------------------------------------------------
+  emailForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    clearAuthError();
+    emailSigninBtn.disabled = true;
+    emailSigninBtn.textContent = 'Signing in…';
+    try {
+      await signInWithEmailAndPassword(auth, emailInput.value.trim(), passwordInput.value);
+      // onAuthStateChanged will fire and handle the UI switch.
+    } catch (err) {
+      showAuthError(err);
+    } finally {
+      emailSigninBtn.disabled = false;
+      emailSigninBtn.textContent = 'Sign in with email';
+    }
+  });
+
+  signoutBtn.addEventListener('click', () => signOut(auth));
+
+  onAuthStateChanged(auth, (user) => {
+    if (user) {
+      clearAuthError();
+      loginGate.style.display = 'none';
+      adminShell.style.display = 'block';
+      whoLabel.textContent = user.email;
+      startListening();
+    } else {
+      loginGate.style.display = 'flex';
+      adminShell.style.display = 'none';
+      if (unsubscribe) { unsubscribe(); unsubscribe = null; }
+      allSubmissions = [];
+    }
+  });
+
+  function startListening() {
+    const q = query(collection(db, 'submissions'), orderBy('submittedAt', 'desc'));
+    unsubscribe = onSnapshot(q, (snapshot) => {
+      allSubmissions = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      render();
+    }, (err) => {
+      console.error('Failed to load submissions:', err);
+      emptyState.textContent = "Couldn't load submissions — check your connection.";
+      emptyState.style.display = 'block';
+    });
+  }
+
+  filterBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      filterBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentFilter = btn.dataset.filter;
+      render();
+    });
+  });
+
+  function formatDate(ts) {
+    if (!ts) return '';
+    const d = ts.toDate ? ts.toDate() : new Date(ts);
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+
+  function render() {
+    const items = currentFilter === 'all'
+      ? allSubmissions
+      : allSubmissions.filter(s => (s.status || 'new') === currentFilter);
+
+    if (items.length === 0) {
+      emptyState.textContent = currentFilter === 'all' ? 'No submissions yet.' : `Nothing in "${currentFilter}".`;
+      emptyState.style.display = 'block';
+      listEl.innerHTML = '';
+      return;
+    }
+    emptyState.style.display = 'none';
+
+    listEl.innerHTML = items.map(s => {
+      const status = s.status || 'new';
+      const escTitle = escapeHtml(s.title || 'Untitled');
+      const escArtist = escapeHtml(s.artist || 'Unknown artist');
+      const escContact = escapeHtml(s.contact || '');
+      const escNote = s.note ? escapeHtml(s.note) : '';
+      return `
+        <div class="submission-card status-${status}" data-id="${s.id}">
+          <div class="submission-top">
+            <div>
+              <div class="submission-title">${escTitle}</div>
+              <div class="submission-artist">${escArtist}</div>
+            </div>
+            <span class="submission-badge ${status}">${status}</span>
+          </div>
+          <div class="submission-meta">
+            <a href="${escapeAttr(s.link || '#')}" target="_blank" rel="noopener">Open link ↗</a>
+            <span>${escContact}</span>
+            <span>${formatDate(s.submittedAt)}</span>
+          </div>
+          ${escNote ? `<div class="submission-note">${escNote}</div>` : ''}
+          <div class="submission-actions">
+            <button class="action-btn keep" data-action="kept">Keep</button>
+            <button class="action-btn" data-action="new">Mark new</button>
+            <button class="action-btn" data-action="dismissed">Dismiss</button>
+            <button class="action-btn delete" data-action="delete">Delete</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  listEl.addEventListener('click', async (e) => {
+    const btn = e.target.closest('.action-btn');
+    if (!btn) return;
+    const card = btn.closest('.submission-card');
+    const id = card.dataset.id;
+    const action = btn.dataset.action;
+
+    try {
+      if (action === 'delete') {
+        if (!confirm('Delete this submission permanently? This can\'t be undone.')) return;
+        await deleteDoc(doc(db, 'submissions', id));
+      } else {
+        await updateDoc(doc(db, 'submissions', id), { status: action });
+      }
+    } catch (err) {
+      console.error('Action failed:', err);
+      alert("That didn't work — try again.");
+    }
+  });
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+  function escapeAttr(str) {
+    return String(str).replace(/"/g, '&quot;');
+  }
+</script>
+
+</body>
+</html>

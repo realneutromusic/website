@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Submit Your Track — Neutro</title>
+<meta name="description" content="Send your track to Neutro for consideration on upcoming livestreams and sets.">
+
+<link rel="icon" type="image/x-icon" href="./favicon.ico">
+<link rel="shortcut icon" type="image/x-icon" href="./favicon.ico">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;600;700;800;900&family=Sora:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+  :root {
+    --bg: #04070d;
+    --surface: #0c1424;
+    --surface-2: #16263f;
+    --line: #1d3050;
+    --ink: #eef3fa;
+    --ink-dim: #9fb4cf;
+    --ink-faint: #5b7299;
+    --steel: #4f7bb0;
+    --steel-bright: #a8c8ec;
+    --steel-soft: rgba(79,123,176,0.16);
+    --ease: cubic-bezier(.22, 1, .36, 1);
+    --ease-spring: cubic-bezier(.34, 1.45, .64, 1);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background-color: var(--bg);
+    background-image: radial-gradient(circle, rgba(159,180,207,0.18) 1px, transparent 1px);
+    background-size: 28px 28px;
+    background-position: -1px -1px;
+    color: var(--ink);
+    font-family: 'Sora', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+
+  a { color: var(--steel-bright); }
+
+  .wrap { max-width: 480px; width: 100%; }
+
+  .back-link {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-family: 'JetBrains Mono', monospace; font-size: 12.5px; color: var(--ink-faint);
+    margin-bottom: 24px; transition: color 0.2s var(--ease);
+  }
+  .back-link:hover { color: var(--steel-bright); }
+
+  .tag {
+    display: inline-flex; align-items: center; gap: 7px;
+    font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--steel-bright); margin-bottom: 14px;
+  }
+  .tag::before { content: ''; width: 14px; height: 1px; background: var(--steel-bright); }
+
+  h1 {
+    font-family: 'Unbounded', sans-serif; font-weight: 800; font-size: clamp(2rem, 6vw, 2.6rem);
+    letter-spacing: -0.02em; line-height: 1.05; margin-bottom: 14px;
+  }
+
+  .sub { font-size: 14.5px; color: var(--ink-dim); line-height: 1.6; margin-bottom: 32px; }
+
+  .panel {
+    border-radius: 18px; border: 1px solid var(--line); background: var(--surface);
+    padding: 28px;
+  }
+
+  .form-row { margin-bottom: 18px; }
+  .form-row label {
+    display: block; font-size: 12.5px; font-weight: 600; color: var(--ink-dim); margin-bottom: 7px;
+  }
+  .form-row .hint { font-size: 11.5px; color: var(--ink-faint); margin-top: 5px; }
+  .form-row input, .form-row textarea {
+    width: 100%; background: rgba(4,7,13,0.4); border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px 14px; font-size: 14px; color: var(--ink); font-family: inherit;
+    transition: border-color 0.25s var(--ease), background 0.25s var(--ease);
+  }
+  .form-row input:focus, .form-row textarea:focus { border-color: var(--steel); background: rgba(4,7,13,0.6); outline: none; }
+  .form-row textarea { min-height: 80px; resize: vertical; }
+
+  .submit-btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    width: 100%;
+    background: var(--steel); color: #04070d; border: none; border-radius: 999px;
+    padding: 14px 26px; font-size: 14px; font-weight: 700; cursor: pointer;
+    transition: all 0.3s var(--ease-spring); font-family: inherit;
+  }
+  .submit-btn:hover { transform: translateY(-2px); background: var(--steel-bright); box-shadow: 0 10px 26px -8px rgba(79,123,176,0.6); }
+  .submit-btn:disabled { opacity: 0.6; cursor: default; transform: none; }
+
+  .status { font-size: 13px; margin-top: 14px; text-align: center; min-height: 18px; }
+  .status.success { color: var(--steel-bright); }
+  .status.error { color: #ff8080; }
+
+  .success-state { text-align: center; padding: 20px 0; }
+  .success-state .icon {
+    width: 56px; height: 56px; border-radius: 50%; background: var(--steel-soft);
+    display: flex; align-items: center; justify-content: center; margin: 0 auto 18px;
+  }
+  .success-state .icon svg { width: 24px; height: 24px; stroke: var(--steel-bright); fill: none; stroke-width: 2; }
+  .success-state h2 { font-family: 'Unbounded', sans-serif; font-size: 19px; margin-bottom: 8px; }
+  .success-state p { font-size: 13.5px; color: var(--ink-dim); line-height: 1.6; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <a class="back-link" href="./">← Back to neutro.</a>
+  <div class="tag">For artists</div>
+  <h1>Send me your track</h1>
+  <p class="sub">Got something that fits a Neutro livestream or set? Drop the details below — I go through every submission myself.</p>
+
+  <div class="panel">
+    <form id="submit-form">
+      <div class="form-row">
+        <label for="f-title">Track title</label>
+        <input type="text" id="f-title" required maxlength="150" autocomplete="off">
+      </div>
+      <div class="form-row">
+        <label for="f-artist">Artist name</label>
+        <input type="text" id="f-artist" required maxlength="150" autocomplete="off">
+      </div>
+      <div class="form-row">
+        <label for="f-link">Link to the track</label>
+        <input type="url" id="f-link" required placeholder="https://soundcloud.com/..." autocomplete="off">
+        <div class="hint">SoundCloud, Spotify, YouTube — wherever I can actually listen to it.</div>
+      </div>
+      <div class="form-row">
+        <label for="f-contact">Your contact (email, Instagram, etc.)</label>
+        <input type="text" id="f-contact" required maxlength="150" autocomplete="off">
+        <div class="hint">So I can reach you back if I want to use it.</div>
+      </div>
+      <div class="form-row">
+        <label for="f-note">Anything else? (optional)</label>
+        <textarea id="f-note" maxlength="500"></textarea>
+      </div>
+      <button type="submit" class="submit-btn" id="submit-btn">Send track</button>
+      <p class="status" id="status"></p>
+    </form>
+
+    <div class="success-state" id="success-state" style="display:none">
+      <div class="icon"><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <h2>Got it — thank you.</h2>
+      <p>Your track is in. I'll reach out through the contact you left if it's a fit.</p>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
+  import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyCphqIMmkws58VaFE1Y8T1ikWE5vmDhQhA",
+    authDomain: "neutro-adm.firebaseapp.com",
+    projectId: "neutro-adm",
+    storageBucket: "neutro-adm.firebasestorage.app",
+    messagingSenderId: "481335512836",
+    appId: "1:481335512836:web:bfff64c4cd41407dd78a51"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+
+  const form = document.getElementById('submit-form');
+  const submitBtn = document.getElementById('submit-btn');
+  const statusEl = document.getElementById('status');
+  const successState = document.getElementById('success-state');
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    statusEl.textContent = '';
+    statusEl.className = 'status';
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Sending…';
+
+    const title = document.getElementById('f-title').value.trim();
+    const artist = document.getElementById('f-artist').value.trim();
+    const link = document.getElementById('f-link').value.trim();
+    const contact = document.getElementById('f-contact').value.trim();
+    const note = document.getElementById('f-note').value.trim();
+
+    try {
+      await addDoc(collection(db, 'submissions'), {
+        title,
+        artist,
+        link,
+        contact,
+        note,
+        status: 'new',
+        submittedAt: serverTimestamp()
+      });
+      form.style.display = 'none';
+      successState.style.display = 'block';
+    } catch (err) {
+      console.error('Submission failed:', err);
+      statusEl.textContent = "Something went wrong — please try again in a moment.";
+      statusEl.className = 'status error';
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Send track';
+    }
+  });
+</script>
+
+</body>
+</html>
