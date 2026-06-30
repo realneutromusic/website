@@ -172,9 +172,18 @@
   }
   .filter-btn.active { background: var(--steel); color: #04070d; border-color: var(--steel); }
   .filter-btn:hover:not(.active) { border-color: var(--ink-faint); color: var(--ink); }
-  .trash-btn { margin-left: auto; color: var(--ink-faint); }
+  .trash-btn { color: var(--ink-faint); }
   .trash-btn.active { background: rgba(255,128,128,0.2); color: #ff8080; border-color: rgba(255,128,128,0.4); }
   .trash-btn:hover:not(.active) { border-color: #ff8080; color: #ff8080; }
+
+  .sort-toggle-btn {
+    margin-left: auto; display: inline-flex; align-items: center; gap: 6px;
+    font-family: 'JetBrains Mono', monospace; font-size: 11.5px; letter-spacing: 0.04em;
+    border: 1px solid var(--line); border-radius: 999px; padding: 7px 14px; cursor: pointer;
+    background: var(--surface); color: var(--ink-dim); transition: all 0.2s var(--ease);
+  }
+  .sort-toggle-btn svg { width: 13px; height: 13px; flex-shrink: 0; }
+  .sort-toggle-btn:hover { border-color: var(--steel-bright); color: var(--steel-bright); }
 
   .empty-trash-btn {
     display: block; margin: 0 0 16px auto;
@@ -240,7 +249,11 @@
   .embed-wrap iframe { display: block; width: 100%; border: none; }
   .embed-soundcloud iframe { height: 120px; }
   .embed-youtube iframe { height: 160px; }
-  .embed-soundcloud-oembed iframe { height: 120px; }
+  .embed-soundcloud-oembed iframe {
+    height: 120px;
+    transition: height 0.3s var(--ease);
+  }
+  .embed-soundcloud-oembed iframe.sc-playing { height: 300px; }
   .embed-loading, .embed-error {
     margin: 0; padding: 14px 12px; font-size: 12.5px; color: var(--ink-faint); text-align: center;
   }
@@ -256,7 +269,7 @@
     padding-top: 10px; border-top: 1px solid var(--line);
   }
 
-  .submission-actions { margin-top: 14px; display: flex; gap: 8px; flex-wrap: wrap; }
+  .submission-actions { margin-top: 14px; display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
   .action-btn {
     font-family: 'JetBrains Mono', monospace; font-size: 11.5px;
     border-radius: 999px; padding: 7px 14px; cursor: pointer; border: 1px solid var(--line);
@@ -354,38 +367,45 @@
   .wheel-modal {
     position: fixed; inset: 0; z-index: 100; display: none;
     background: rgba(4,7,13,0.85); backdrop-filter: blur(8px);
-    padding: 40px 20px; overflow-y: auto;
+    padding: 24px 16px; overflow-y: auto;
+    box-sizing: border-box;
   }
-  .wheel-modal.open { display: block; }
+  .wheel-modal.open { display: flex; align-items: flex-start; justify-content: center; }
   .wheel-modal-inner {
-    max-width: 560px; margin: 0 auto; background: var(--bg); border: 1px solid var(--line);
-    border-radius: 24px; padding: 38px 32px; position: relative; text-align: center;
-    overflow: hidden;
+    width: 100%; max-width: 520px; max-height: calc(100vh - 48px); margin: 0;
+    background: var(--bg); border: 1px solid var(--line);
+    border-radius: 24px; padding: 32px 24px; position: relative; text-align: center;
+    overflow-y: auto; box-sizing: border-box;
   }
   .wheel-modal-close {
-    position: absolute; top: 18px; right: 18px; width: 34px; height: 34px; border-radius: 50%;
+    position: absolute; top: 16px; right: 16px; width: 32px; height: 32px; border-radius: 50%;
     background: var(--surface); border: 1px solid var(--line); color: var(--ink);
     display: flex; align-items: center; justify-content: center; font-size: 15px; cursor: pointer;
     z-index: 3;
   }
   .wheel-modal-close:hover { background: var(--steel); border-color: var(--steel); color: #060a12; }
-  .wheel-modal h2 { font-family: 'Unbounded', sans-serif; font-size: 1.7rem; font-weight: 800; margin-bottom: 6px; }
-  .wheel-modal .desc { font-size: 13px; color: var(--ink-dim); margin-bottom: 26px; line-height: 1.5; }
+  .wheel-modal h2 { font-family: 'Unbounded', sans-serif; font-size: 1.5rem; font-weight: 800; margin-bottom: 6px; padding-right: 30px; }
+  .wheel-modal .desc { font-size: 12.5px; color: var(--ink-dim); margin-bottom: 22px; line-height: 1.5; }
 
-  .wheel-stage { position: relative; width: 380px; max-width: 100%; height: 380px; margin: 0 auto 26px; }
+  .wheel-stage {
+    position: relative; margin: 0 auto 22px;
+    width: min(300px, 100%, 42vh);
+    height: min(300px, 100%, 42vh);
+    aspect-ratio: 1 / 1;
+  }
   .wheel-pointer {
     position: absolute; top: -6px; left: 50%; transform: translateX(-50%);
-    width: 0; height: 0; border-left: 15px solid transparent; border-right: 15px solid transparent;
-    border-top: 24px solid var(--steel-bright); z-index: 2;
+    width: 0; height: 0; border-left: 13px solid transparent; border-right: 13px solid transparent;
+    border-top: 20px solid var(--steel-bright); z-index: 2;
     filter: drop-shadow(0 2px 4px rgba(0,0,0,0.4));
   }
   .wheel-hub {
     position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-    width: 44px; height: 44px; border-radius: 50%; background: var(--bg);
+    width: 38px; height: 38px; border-radius: 50%; background: var(--bg);
     border: 3px solid var(--steel-bright); z-index: 2;
     display: flex; align-items: center; justify-content: center;
   }
-  .wheel-hub svg { width: 18px; height: 18px; color: var(--steel-bright); }
+  .wheel-hub svg { width: 16px; height: 16px; color: var(--steel-bright); }
   .wheel-svg-wrap {
     width: 100%; height: 100%; border-radius: 50%; border: 4px solid var(--line); overflow: hidden;
     transition: transform 4.5s cubic-bezier(0.12, 0.66, 0.2, 1);
@@ -447,10 +467,13 @@
     font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: var(--ink-faint);
     margin-bottom: 10px; text-align: center;
   }
+  .wheel-track-row {
+    display: flex; align-items: center; gap: 6px; margin-bottom: 6px;
+  }
   .wheel-track-item {
-    display: flex; align-items: center; gap: 10px; width: 100%;
+    display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0;
     background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
-    padding: 10px 14px; margin-bottom: 6px; cursor: pointer; transition: all 0.2s var(--ease);
+    padding: 10px 14px; cursor: pointer; transition: all 0.2s var(--ease);
     font-family: inherit; text-align: left;
   }
   .wheel-track-item:hover { border-color: var(--steel-bright); background: var(--steel-soft); }
@@ -463,6 +486,13 @@
     flex: 1; min-width: 0; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--steel-bright);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
+  .wheel-track-delete-btn {
+    flex-shrink: 0; width: 38px; height: 38px; border-radius: 10px;
+    background: transparent; border: 1px solid var(--line); color: var(--ink-faint); cursor: pointer;
+    display: flex; align-items: center; justify-content: center; transition: all 0.2s var(--ease);
+  }
+  .wheel-track-delete-btn svg { width: 15px; height: 15px; }
+  .wheel-track-delete-btn:hover { border-color: #ff8080; color: #ff8080; }
 
   .wheel-secondary-actions {
     display: flex; gap: 8px; opacity: 0; animation: wheelResultIn 0.5s var(--ease-spring) 0.25s forwards;
@@ -536,6 +566,10 @@
     <button class="filter-btn" data-filter="new">New</button>
     <button class="filter-btn" data-filter="kept">Kept</button>
     <button class="filter-btn trash-btn" data-filter="trash">Trash</button>
+    <button class="sort-toggle-btn" id="sort-toggle-btn" title="Reverse arrival order">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 7h13M3 12h9M3 17h5M17 7v13M17 7l-4 4M17 7l4 4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span id="sort-toggle-label">Oldest first</span>
+    </button>
   </div>
 
   <button class="empty-trash-btn" id="empty-trash-btn" style="display:none">Empty trash — delete all permanently</button>
@@ -554,6 +588,24 @@
   import {
     getFirestore, collection, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc, serverTimestamp, writeBatch
   } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+
+  // SoundCloud's Widget API (classic script, not an ES module) — lets us
+  // listen for PLAY/PAUSE on each embedded player so the iframe can grow
+  // while actually playing (giving room to use the seek bar comfortably)
+  // and shrink back down when paused/finished. Loaded once, lazily, the
+  // first time it's actually needed.
+  let scWidgetApiPromise = null;
+  function loadSoundcloudWidgetApi() {
+    if (scWidgetApiPromise) return scWidgetApiPromise;
+    scWidgetApiPromise = new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = 'https://w.soundcloud.com/player/api.js';
+      script.onload = () => resolve(window.SC);
+      script.onerror = () => reject(new Error('Failed to load SoundCloud Widget API'));
+      document.head.appendChild(script);
+    });
+    return scWidgetApiPromise;
+  }
 
   const firebaseConfig = {
     apiKey: "AIzaSyCphqIMmkws58VaFE1Y8T1ikWE5vmDhQhA",
@@ -581,6 +633,8 @@
   const listEl = document.getElementById('submission-list');
   const emptyState = document.getElementById('empty-state');
   const emptyTrashBtn = document.getElementById('empty-trash-btn');
+  const sortToggleBtn = document.getElementById('sort-toggle-btn');
+  const sortToggleLabel = document.getElementById('sort-toggle-label');
   const filterBtns = document.querySelectorAll('.filter-btn');
   const searchInput = document.getElementById('search-input');
   const searchClear = document.getElementById('search-clear');
@@ -590,6 +644,8 @@
   let allSubmissions = [];
   let currentFilter = 'all';
   let searchQuery = '';
+  let sortReversed = false; // false = oldest first (arrival order); true = newest first
+  let relativeTimeRefreshInterval = null;
   let panelVolume = 80; // single panel-wide volume, applied to every embed
   let unsubscribe = null;
 
@@ -686,6 +742,7 @@
       loginGate.style.display = 'flex';
       adminShell.style.display = 'none';
       if (unsubscribe) { unsubscribe(); unsubscribe = null; }
+      if (relativeTimeRefreshInterval) { clearInterval(relativeTimeRefreshInterval); relativeTimeRefreshInterval = null; }
       allSubmissions = [];
     }
   });
@@ -700,6 +757,24 @@
       emptyState.textContent = "Couldn't load submissions — check your connection.";
       emptyState.style.display = 'block';
     });
+    // Re-render periodically so "20s ago" doesn't silently go stale between
+    // actual data changes. IMPORTANT: this must NOT call the full render()
+    // — render() rebuilds listEl.innerHTML from scratch, which destroys and
+    // recreates every SoundCloud iframe in the list, including any that are
+    // actively playing (the audio audibly restarts/cuts out every time this
+    // fires). refreshRelativeTimes() only touches the small <span> text
+    // nodes, leaving the rest of the DOM — and any playing embeds —
+    // completely untouched.
+    if (relativeTimeRefreshInterval) clearInterval(relativeTimeRefreshInterval);
+    relativeTimeRefreshInterval = setInterval(refreshRelativeTimes, 15000);
+  }
+
+  function refreshRelativeTimes() {
+    listEl.querySelectorAll('.relative-time[data-submitted-at-ms]').forEach(el => {
+      const ms = Number(el.dataset.submittedAtMs);
+      if (!ms) return;
+      el.textContent = formatRelativeTime(ms);
+    });
   }
 
   filterBtns.forEach(btn => {
@@ -709,6 +784,12 @@
       currentFilter = btn.dataset.filter;
       render();
     });
+  });
+
+  sortToggleBtn.addEventListener('click', () => {
+    sortReversed = !sortReversed;
+    sortToggleLabel.textContent = sortReversed ? 'Newest first' : 'Oldest first';
+    render();
   });
 
   searchInput.addEventListener('input', (e) => {
@@ -751,6 +832,31 @@
   // Both SoundCloud's Widget API and YouTube's IFrame API accept volume
   // commands via postMessage, so this works without loading either
   // platform's JS SDK — just send the right message shape to each iframe.
+  // YouTube's IFrame API posts state-change events back via postMessage once
+  // a listener has been registered with it (the {event:'listen', ...}
+  // handshake below). State 1 = playing. Listening globally rather than
+  // attaching one handler per iframe, since all YouTube embeds post to the
+  // same window — we identify which iframe a message came from by matching
+  // event.source against each tracked iframe's contentWindow.
+  window.addEventListener('message', (event) => {
+    if (event.origin !== 'https://www.youtube.com') return;
+    let data;
+    try { data = JSON.parse(event.data); } catch { return; }
+    if (data.event !== 'onStateChange' || data.info !== 1) return; // 1 = playing
+    activeYoutubeIframes.forEach(iframe => {
+      if (iframe.contentWindow === event.source) pauseAllExcept(iframe);
+    });
+  });
+
+  function setupYoutubePauseTracking(iframe) {
+    activeYoutubeIframes.add(iframe);
+    iframe.addEventListener('load', () => {
+      if (iframe.contentWindow) {
+        iframe.contentWindow.postMessage(JSON.stringify({ event: 'listening', id: 1 }), 'https://www.youtube.com');
+      }
+    });
+  }
+
   function applyGlobalVolumeToYoutubeIframe(iframe) {
     if (!iframe || !iframe.contentWindow) return;
     iframe.contentWindow.postMessage(
@@ -779,6 +885,24 @@
     if (!ts) return '';
     const d = ts.toDate ? ts.toDate() : new Date(ts);
     return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+
+  // Relative time ("20s ago", "5m ago", "2h ago", "3d ago") for how long
+  // ago a track arrived. Falls back to an absolute date (formatDate) once
+  // it's old enough that "X days ago" stops being useful at a glance.
+  function formatRelativeTime(ts) {
+    if (!ts) return '';
+    const d = ts.toDate ? ts.toDate() : new Date(ts);
+    const seconds = Math.floor((Date.now() - d.getTime()) / 1000);
+    if (seconds < 5) return 'just now';
+    if (seconds < 60) return `${seconds}s ago`;
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    if (days < 14) return `${days}d ago`;
+    return formatDate(ts); // beyond ~2 weeks, an actual date is more useful than "17d ago"
   }
 
   // Parses a URL and returns just its hostname (e.g. "soundcloud.com"),
@@ -834,34 +958,91 @@
     }
   }
 
-  // Cache of resolved SoundCloud oEmbed HTML, keyed by source URL, so
+  // Cache of resolved SoundCloud oEmbed data, keyed by source URL, so
   // switching filters/search (which re-renders the list) doesn't re-fetch
-  // oEmbed for tracks we've already resolved this session.
-  const soundcloudOembedCache = new Map();
+  // oEmbed for tracks we've already resolved this session. Stores both the
+  // embed HTML (for the player) and the track's title (for anywhere we need
+  // a human-readable name instead of the raw URL — e.g. the wheel's track
+  // picker list).
+  const soundcloudOembedCache = new Map(); // sourceUrl -> { html, title }
+
+  // Grows the SoundCloud iframe taller while it's actively playing (giving
+  // enough room to comfortably grab and drag the waveform to seek), and
+  // shrinks it back to compact size on pause/finish. Uses the official
+  // Widget API's PLAY/PAUSE/FINISH events rather than guessing from
+  // postMessage traffic, since those are the documented, reliable signal.
+  // Also tracks every connected widget so that starting one can pause all
+  // the others — avoids overlapping audio from multiple tracks at once.
+  const activeSoundcloudWidgets = new Map(); // iframe -> SC.Widget instance
+  const activeYoutubeIframes = new Set();
+
+  function pauseAllExcept(exceptIframe) {
+    activeSoundcloudWidgets.forEach((widget, iframe) => {
+      if (iframe !== exceptIframe) widget.pause();
+    });
+    activeYoutubeIframes.forEach(iframe => {
+      if (iframe !== exceptIframe && iframe.contentWindow) {
+        iframe.contentWindow.postMessage(
+          JSON.stringify({ event: 'command', func: 'pauseVideo', args: [] }),
+          'https://www.youtube.com'
+        );
+      }
+    });
+  }
+
+  async function setupSoundcloudGrowOnPlay(iframe) {
+    try {
+      const SC = await loadSoundcloudWidgetApi();
+      const widget = SC.Widget(iframe);
+      activeSoundcloudWidgets.set(iframe, widget);
+      // Wait for the widget's own READY event before binding PLAY/PAUSE —
+      // the iframe's native 'load' event (which triggers this whole
+      // function) fires once the HTML document loads, but SoundCloud's
+      // internal widget JS can still be initializing after that. Binding
+      // too early is what made grow-on-play silently fail to attach.
+      widget.bind(SC.Widget.Events.READY, () => {
+        widget.bind(SC.Widget.Events.PLAY, () => {
+          iframe.classList.add('sc-playing');
+          pauseAllExcept(iframe);
+        });
+        widget.bind(SC.Widget.Events.PAUSE, () => iframe.classList.remove('sc-playing'));
+        widget.bind(SC.Widget.Events.FINISH, () => iframe.classList.remove('sc-playing'));
+      });
+    } catch (err) {
+      // Non-critical — the player still works at its normal compact size,
+      // it just won't grow on play. No need to surface this to the admin.
+      console.error('Could not attach SoundCloud grow-on-play behavior:', err);
+    }
+  }
 
   async function resolveSoundcloudEmbed(submissionId, sourceUrl) {
     const container = document.getElementById(`embed-${submissionId}`);
     if (!container) return; // card no longer in the DOM (filter changed, etc.)
     try {
-      let html = soundcloudOembedCache.get(sourceUrl);
-      if (!html) {
+      let cached = soundcloudOembedCache.get(sourceUrl);
+      if (!cached) {
         const oembedUrl = `https://soundcloud.com/oembed?format=json&url=${encodeURIComponent(sourceUrl)}&auto_play=false&color=%23a8c8ec&visual=false&show_comments=false&show_reposts=false`;
         const res = await fetch(oembedUrl);
         if (!res.ok) throw new Error('oEmbed request failed: ' + res.status);
         const data = await res.json();
-        html = data.html;
-        soundcloudOembedCache.set(sourceUrl, html);
+        cached = { html: data.html, title: data.title || null };
+        soundcloudOembedCache.set(sourceUrl, cached);
       }
       // Re-check the container still exists — the fetch is async and the
       // admin may have switched filters/search while it was in flight.
       const stillThere = document.getElementById(`embed-${submissionId}`);
       if (stillThere) {
-        stillThere.innerHTML = html;
-        // SoundCloud's iframe needs a moment to initialize its widget after
-        // being inserted before it'll respond to volume postMessage calls.
+        stillThere.innerHTML = cached.html;
+        // SoundCloud's iframe needs to finish loading before the Widget API
+        // can bind to it reliably — both the volume call and the
+        // grow-on-play setup wait for 'load' rather than running immediately
+        // after the iframe is inserted.
         const iframe = stillThere.querySelector('iframe');
         if (iframe) {
-          iframe.addEventListener('load', () => applyGlobalVolumeToSoundcloudIframe(iframe));
+          iframe.addEventListener('load', () => {
+            applyGlobalVolumeToSoundcloudIframe(iframe);
+            setupSoundcloudGrowOnPlay(iframe);
+          });
         }
       }
     } catch (err) {
@@ -880,6 +1061,143 @@
           : '<p class="embed-error">Couldn\'t load the SoundCloud player for this link — it may be private, deleted, or temporarily unavailable. The link above still works to open it directly.</p>';
       }
     }
+  }
+
+  // Builds the inner HTML for one card EXCLUDING the embed — used both for
+  // brand-new cards and for refreshing an existing card's non-embed content
+  // (name, badge, link, actions, relative time) without touching its embed
+  // wrapper, which is exactly what must stay untouched while something is
+  // playing inside it.
+  function buildCardShellHtml(s, inTrash) {
+    const status = s.status || 'new';
+    const escName = escapeHtml(s.name || 'Unnamed');
+    const escNote = s.note ? escapeHtml(s.note) : '';
+    const rawLink = s.link || '';
+    const host = getLinkHost(rawLink);
+    const escHost = host ? escapeHtml(host) : null;
+    const escFullLink = escapeHtml(rawLink);
+    const linkRowHtml = escHost
+      ? `<div class="submission-link-row">
+           <a href="${escapeAttr(rawLink)}" target="_blank" rel="noopener noreferrer">${escFullLink}</a>
+           <button type="button" class="link-copy-btn" data-copy="${escapeAttr(rawLink)}" aria-label="Copy link" title="Copy link">
+             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 012-2h10"/></svg>
+           </button>
+           <a href="${escapeAttr(rawLink)}" target="_blank" rel="noopener noreferrer" class="link-arrow" aria-label="Open link" title="Open link">↗</a>
+         </div>`
+      : `<div class="submission-link-row">
+           <span class="link-invalid">Invalid link — not opening (${escFullLink || 'empty'})</span>
+         </div>`;
+    const actionsHtml = inTrash
+      ? `<button class="action-btn keep" data-action="restore">Restore</button>
+         <button class="action-btn delete" data-action="delete-forever">Delete forever</button>`
+      : `<button class="action-btn keep" data-action="kept">Keep</button>
+         <button class="action-btn" data-action="new">Mark new</button>
+         <button class="action-btn delete" data-action="delete">Delete</button>`;
+    return `
+        <div class="submission-top">
+          <div>
+            <div class="submission-title" data-hook="title">${escName}</div>
+          </div>
+          <span class="submission-badge ${status}" data-hook="badge">${inTrash ? 'deleted' : status}</span>
+        </div>
+        <div data-hook="link-row">${linkRowHtml}</div>
+        <div class="embed-slot" data-embed-slot></div>
+        <div class="submission-meta" data-hook="meta">
+          ${inTrash
+            ? `<span>Deleted ${formatDate(s.deletedAt)}</span>`
+            : `<span class="relative-time" data-submitted-at-ms="${s.submittedAt && s.submittedAt.toMillis ? s.submittedAt.toMillis() : ''}">${formatRelativeTime(s.submittedAt)}</span>`}
+        </div>
+        <div data-hook="note">${escNote ? `<div class="submission-note">${escNote}</div>` : ''}</div>
+        <div class="submission-actions" data-hook="actions">
+          ${actionsHtml}
+        </div>
+      `;
+  }
+
+  // Updates an EXISTING card's non-embed content in place by mutating the
+  // specific [data-hook] nodes, rather than reassigning card.innerHTML.
+  //
+  // This is the actual fix for tracks cutting out: card.innerHTML = '...'
+  // detaches and destroys every descendant node, including the .embed-wrap
+  // (and the playing <iframe> inside it) — even when that .embed-wrap gets
+  // captured beforehand and re-inserted afterward via replaceWith(), because
+  // by the time innerHTML reassignment runs, the browser has ALREADY
+  // disconnected that iframe from the document, which kills its playback
+  // state. The only way to leave a live iframe truly untouched is to never
+  // touch its ancestor's innerHTML in the first place — hence mutating each
+  // hook node's content/className directly instead.
+  function updateCardShell(card, s, inTrash) {
+    const status = s.status || 'new';
+    card.className = `submission-card status-${status}`;
+
+    const titleEl = card.querySelector('[data-hook="title"]');
+    if (titleEl) titleEl.textContent = s.name || 'Unnamed';
+
+    const badgeEl = card.querySelector('[data-hook="badge"]');
+    if (badgeEl) {
+      badgeEl.className = `submission-badge ${status}`;
+      badgeEl.textContent = inTrash ? 'deleted' : status;
+    }
+
+    const rawLink = s.link || '';
+    const host = getLinkHost(rawLink);
+    const escHost = host ? escapeHtml(host) : null;
+    const escFullLink = escapeHtml(rawLink);
+    const linkRowEl = card.querySelector('[data-hook="link-row"]');
+    if (linkRowEl) {
+      linkRowEl.innerHTML = escHost
+        ? `<div class="submission-link-row">
+             <a href="${escapeAttr(rawLink)}" target="_blank" rel="noopener noreferrer">${escFullLink}</a>
+             <button type="button" class="link-copy-btn" data-copy="${escapeAttr(rawLink)}" aria-label="Copy link" title="Copy link">
+               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 012-2h10"/></svg>
+             </button>
+             <a href="${escapeAttr(rawLink)}" target="_blank" rel="noopener noreferrer" class="link-arrow" aria-label="Open link" title="Open link">↗</a>
+           </div>`
+        : `<div class="submission-link-row">
+             <span class="link-invalid">Invalid link — not opening (${escFullLink || 'empty'})</span>
+           </div>`;
+    }
+
+    const metaEl = card.querySelector('[data-hook="meta"]');
+    if (metaEl) {
+      metaEl.innerHTML = inTrash
+        ? `<span>Deleted ${formatDate(s.deletedAt)}</span>`
+        : `<span class="relative-time" data-submitted-at-ms="${s.submittedAt && s.submittedAt.toMillis ? s.submittedAt.toMillis() : ''}">${formatRelativeTime(s.submittedAt)}</span>`;
+    }
+
+    const noteEl = card.querySelector('[data-hook="note"]');
+    if (noteEl) {
+      const escNote = s.note ? escapeHtml(s.note) : '';
+      noteEl.innerHTML = escNote ? `<div class="submission-note">${escNote}</div>` : '';
+    }
+
+    const actionsEl = card.querySelector('[data-hook="actions"]');
+    if (actionsEl) {
+      actionsEl.innerHTML = inTrash
+        ? `<button class="action-btn keep" data-action="restore">Restore</button>
+           <button class="action-btn delete" data-action="delete-forever">Delete forever</button>`
+        : `<button class="action-btn keep" data-action="kept">Keep</button>
+           <button class="action-btn" data-action="new">Mark new</button>
+           <button class="action-btn delete" data-action="delete">Delete</button>`;
+    }
+  }
+
+  function buildEmbedHtml(s) {
+    const rawLink = s.link || '';
+    const host = getLinkHost(rawLink);
+    const embedInfo = host ? getEmbedInfo(rawLink, host) : null;
+    if (embedInfo && embedInfo.type === 'soundcloud-oembed') {
+      // Placeholder shown immediately; resolveSoundcloudEmbed() fetches the
+      // real player HTML right after this card is in the DOM (see below).
+      return { html: `<div class="embed-wrap embed-soundcloud-oembed" id="embed-${s.id}"><p class="embed-loading">Loading player…</p></div>`, info: embedInfo };
+    } else if (embedInfo) {
+      const embedId = `embed-${s.id}`;
+      return {
+        html: `<div class="embed-wrap embed-${embedInfo.type}" data-embed-type="${embedInfo.type}" id="${embedId}"><iframe src="${escapeAttr(embedInfo.src)}" allow="autoplay" loading="lazy"></iframe></div>`,
+        info: embedInfo
+      };
+    }
+    return { html: '', info: null };
   }
 
   function render() {
@@ -903,6 +1221,11 @@
       });
     }
 
+    // Firestore always delivers oldest-first (see the orderBy('asc') query
+    // below); flip in memory here when the admin wants newest-first instead
+    // — avoids re-subscribing to Firestore just to change display order.
+    if (sortReversed) items = [...items].reverse();
+
     if (items.length === 0) {
       emptyState.textContent = searchQuery
         ? `No matches for "${searchQuery}".`
@@ -916,73 +1239,64 @@
     emptyState.style.display = 'none';
 
     const inTrash = currentFilter === 'trash';
+    const wantedIds = items.map(s => s.id);
+    const wantedIdSet = new Set(wantedIds);
 
-    listEl.innerHTML = items.map(s => {
-      const status = s.status || 'new';
-      const escName = escapeHtml(s.name || 'Unnamed');
-      const escNote = s.note ? escapeHtml(s.note) : '';
-      const rawLink = s.link || '';
-      const host = getLinkHost(rawLink);
-      const escHost = host ? escapeHtml(host) : null;
-      const escFullLink = escapeHtml(rawLink);
-      // If the URL doesn't parse, don't render it as a clickable link at all —
-      // safer than guessing, and it surfaces malformed/suspicious submissions.
-      const linkRowHtml = escHost
-        ? `<div class="submission-link-row">
-             <a href="${escapeAttr(rawLink)}" target="_blank" rel="noopener noreferrer">${escFullLink}</a>
-             <button type="button" class="link-copy-btn" data-copy="${escapeAttr(rawLink)}" aria-label="Copy link" title="Copy link">
-               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 012-2h10"/></svg>
-             </button>
-             <a href="${escapeAttr(rawLink)}" target="_blank" rel="noopener noreferrer" class="link-arrow" aria-label="Open link" title="Open link">↗</a>
-           </div>`
-        : `<div class="submission-link-row">
-             <span class="link-invalid">Invalid link — not opening (${escFullLink || 'empty'})</span>
-           </div>`;
-      const embedInfo = escHost ? getEmbedInfo(rawLink, host) : null;
-      let embedHtml = '';
-      if (embedInfo && embedInfo.type === 'soundcloud-oembed') {
-        // Placeholder shown immediately; resolveSoundcloudEmbed() fetches the
-        // real player HTML right after this card is in the DOM (see below).
-        embedHtml = `<div class="embed-wrap embed-soundcloud-oembed" id="embed-${s.id}">
-          <p class="embed-loading">Loading player…</p>
-        </div>`;
-      } else if (embedInfo) {
-        const embedId = `embed-${s.id}`;
-        embedHtml = `
-          <div class="embed-wrap embed-${embedInfo.type}" data-embed-type="${embedInfo.type}" id="${embedId}">
-            <iframe src="${escapeAttr(embedInfo.src)}" allow="autoplay" loading="lazy"></iframe>
-          </div>`;
+    // Remove cards that no longer belong in this view (filtered out,
+    // deleted, search no longer matches). This is the only case where a
+    // card with a possibly-playing embed gets torn down — which is correct,
+    // since it's leaving the list entirely.
+    listEl.querySelectorAll('.submission-card').forEach(card => {
+      if (!wantedIdSet.has(card.dataset.id)) card.remove();
+    });
+
+    const newlyAddedSubmissions = [];
+    const orderedCards = []; // built up in the final desired order
+
+    items.forEach((s) => {
+      let card = listEl.querySelector(`.submission-card[data-id="${s.id}"]`);
+      if (!card) {
+        // Brand-new card: build it fully, including a fresh embed.
+        card = document.createElement('div');
+        card.className = `submission-card status-${s.status || 'new'}`;
+        card.dataset.id = s.id;
+        card.innerHTML = buildCardShellHtml(s, inTrash);
+        const { html: embedHtml } = buildEmbedHtml(s);
+        const slot = card.querySelector('[data-embed-slot]');
+        if (slot && embedHtml) slot.outerHTML = embedHtml;
+        else if (slot) slot.remove();
+        newlyAddedSubmissions.push(s);
+      } else {
+        // Existing card: mutate the non-embed hooks in place — NEVER touch
+        // card.innerHTML here, since doing so detaches (and effectively
+        // kills) any playing iframe inside .embed-wrap before it can be
+        // rescued. See updateCardShell()'s comment for the full reasoning.
+        updateCardShell(card, s, inTrash);
       }
-      const actionsHtml = inTrash
-        ? `<button class="action-btn keep" data-action="restore">Restore</button>
-           <button class="action-btn delete" data-action="delete-forever">Delete forever</button>`
-        : `<button class="action-btn keep" data-action="kept">Keep</button>
-           <button class="action-btn" data-action="new">Mark new</button>
-           <button class="action-btn delete" data-action="delete">Delete</button>`;
-      return `
-        <div class="submission-card status-${status}" data-id="${s.id}">
-          <div class="submission-top">
-            <div>
-              <div class="submission-title">${escName}</div>
-            </div>
-            <span class="submission-badge ${status}">${inTrash ? 'deleted' : status}</span>
-          </div>
-          ${linkRowHtml}
-          ${embedHtml}
-          ${inTrash ? `<div class="submission-meta"><span>Deleted ${formatDate(s.deletedAt)}</span></div>` : ''}
-          ${escNote ? `<div class="submission-note">${escNote}</div>` : ''}
-          <div class="submission-actions">
-            ${actionsHtml}
-          </div>
-        </div>
-      `;
-    }).join('');
+      orderedCards.push(card);
+    });
 
-    // Resolve SoundCloud players via oEmbed now that their placeholder divs
-    // are in the DOM. Done after innerHTML assignment, not during the .map()
-    // above, because fetch() is async and we need the container element to
-    // already exist when the response comes back.
-    items.forEach(s => {
+    // Reposition cards to match the desired order — but only move a card
+    // when its DOM position genuinely disagrees with where it should be.
+    // This matters specifically because <iframe>s reload from scratch on
+    // ANY DOM reinsertion (even moving a node to a spot it's arguably
+    // "already near"), which would silently kill active playback. Walking
+    // forward and comparing against the live DOM's current child at each
+    // position — rather than unconditionally calling insertBefore for every
+    // item — means a card already sitting correctly is never touched at
+    // all, so e.g. a brand-new submission appended at the end never
+    // disturbs any card before it.
+    orderedCards.forEach((card, index) => {
+      if (listEl.children[index] !== card) {
+        listEl.insertBefore(card, listEl.children[index] || null);
+      }
+    });
+
+    // Resolve SoundCloud players via oEmbed only for genuinely new cards —
+    // existing ones either already resolved, or are still loading from a
+    // previous render, so re-triggering here would be redundant (or worse,
+    // would yank a playing embed's HTML out from under it).
+    newlyAddedSubmissions.forEach(s => {
       const rawLink = s.link || '';
       const host = getLinkHost(rawLink);
       const info = host ? getEmbedInfo(rawLink, host) : null;
@@ -995,6 +1309,15 @@
     // inserted (SoundCloud embeds get theirs set once their oEmbed HTML
     // resolves — see applyGlobalVolumeToEmbed, called from there too).
     listEl.querySelectorAll('.embed-wrap[data-embed-type="youtube"] iframe').forEach(applyGlobalVolumeToYoutubeIframe);
+
+    // Wire up pause-the-others tracking only for YouTube iframes that are
+    // actually new this render — existing ones are already tracked, and
+    // re-registering would attach duplicate 'load' listeners.
+    newlyAddedSubmissions.forEach(s => {
+      const card = listEl.querySelector(`.submission-card[data-id="${s.id}"]`);
+      const iframe = card && card.querySelector('.embed-wrap[data-embed-type="youtube"] iframe');
+      if (iframe) setupYoutubePauseTracking(iframe);
+    });
   }
 
   listEl.addEventListener('click', async (e) => {
@@ -1439,12 +1762,19 @@
 
       // Label, placed along the slice's mid-angle, rotated to read outward
       // from center. Skipped for slices too thin to fit readable text.
+      // Max character count scales with the slice's angular width (a narrow
+      // slice from a crowded wheel gets less room than a wide one in a
+      // 2-person wheel), and long names get a trailing ellipsis instead of
+      // being abruptly chopped mid-word.
       if (n <= 16 && sliceAngle >= 12) {
         const midAngle = startAngle + sliceAngle / 2;
         const labelR = r * 0.62;
         const lx = cx + labelR * Math.cos(midAngle * Math.PI / 180);
         const ly = cy + labelR * Math.sin(midAngle * Math.PI / 180);
-        const text = escapeHtml((entry.label || '').slice(0, 16));
+        const maxChars = Math.max(6, Math.round(sliceAngle / 5)); // ~5deg per character, rough but works at this font size
+        const fullLabel = entry.label || '';
+        const truncated = fullLabel.length > maxChars ? fullLabel.slice(0, maxChars - 1).trimEnd() + '…' : fullLabel;
+        const text = escapeHtml(truncated);
         svg += `<text x="${lx}" y="${ly}" fill="#eef3fa" font-size="14" font-family="JetBrains Mono, monospace" text-anchor="middle" dominant-baseline="middle" transform="rotate(${midAngle + 90}, ${lx}, ${ly})">${text}</text>`;
       }
     });
@@ -1573,48 +1903,127 @@
       setTimeout(() => wheelSvgWrap.classList.remove('winner-pulse'), 700);
       launchWheelConfetti();
 
-      // If the winner only sent one track, skip straight to a single
-      // "Listen" button — no need to make the admin pick from a list of one.
-      const trackListHtml = winner.tracks.length === 1
-        ? `<button type="button" class="wheel-goto-btn" data-track-id="${winner.tracks[0].id}">Listen to this track →</button>`
-        : `<div class="wheel-track-list">
+      renderWheelResult(winner);
+    }, durationMs + 100);
+  });
+
+  // Each track gets a placeholder label immediately (its domain, e.g.
+  // "soundcloud.com" — never the raw link, which is hard to scan at a
+  // glance), then resolveWheelTrackTitle() below swaps in the real track
+  // title once SoundCloud's oEmbed responds (or leaves the domain label
+  // as-is for non-SoundCloud links / on failure).
+  function placeholderLabelFor(link) {
+    const host = getLinkHost(link);
+    return host || 'Unknown link';
+  }
+
+  // Renders the winner's result block (name + track picker + actions).
+  // Pulled out as its own function (rather than inline in the spin handler)
+  // so deleting a single track from the list — see the delete-track-id
+  // handler below — can re-render in place without spinning again or
+  // closing the modal.
+  function renderWheelResult(winner) {
+    // If the winner only sent one (remaining) track, skip straight to a
+    // single "Listen" button — no need to make the admin pick from a list
+    // of one. If somehow all of their tracks got deleted, fall back to
+    // showing just their name with no track actions.
+    let trackListHtml;
+    if (winner.tracks.length === 0) {
+      trackListHtml = `<p class="wheel-track-list-label">No tracks left from ${escapeHtml(winner.label)}.</p>`;
+    } else if (winner.tracks.length === 1) {
+      trackListHtml = `<button type="button" class="wheel-goto-btn" data-track-id="${winner.tracks[0].id}" id="wheel-single-track-label">${escapeHtml(placeholderLabelFor(winner.tracks[0].link))} →</button>`;
+    } else {
+      trackListHtml = `<div class="wheel-track-list">
              <p class="wheel-track-list-label">${winner.tracks.length} tracks from ${escapeHtml(winner.label)} — pick one:</p>
              ${winner.tracks.map((t, i) => `
-               <button type="button" class="wheel-track-item" data-track-id="${t.id}">
-                 <span class="wheel-track-item-num">${i + 1}</span>
-                 <span class="wheel-track-item-link">${escapeHtml(t.link || 'No link')}</span>
-               </button>
+               <div class="wheel-track-row">
+                 <button type="button" class="wheel-track-item" data-track-id="${t.id}">
+                   <span class="wheel-track-item-num">${i + 1}</span>
+                   <span class="wheel-track-item-link" id="wheel-track-label-${t.id}">${escapeHtml(placeholderLabelFor(t.link))}</span>
+                 </button>
+                 <button type="button" class="wheel-track-delete-btn" data-delete-track-id="${t.id}" aria-label="Delete this track" title="Delete this track">
+                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14z"/></svg>
+                 </button>
+               </div>
              `).join('')}
            </div>`;
+    }
 
-      wheelResultEl.innerHTML = `
+    wheelResultEl.innerHTML = `
         <div class="wheel-result-name">🎯 ${escapeHtml(winner.label)}</div>
         ${trackListHtml}
         <div class="wheel-secondary-actions">
-          <button type="button" class="wheel-secondary-btn" id="wheel-spin-again-btn">Spin again</button>
           <button type="button" class="wheel-secondary-btn" id="wheel-remove-btn">Remove from wheel</button>
         </div>
       `;
-      wheelResultEl.querySelectorAll('[data-track-id]').forEach(btn => {
-        btn.addEventListener('click', () => goToSubmission(btn.dataset.trackId));
+    wheelResultEl.querySelectorAll('[data-track-id]').forEach(btn => {
+      btn.addEventListener('click', () => goToSubmission(btn.dataset.trackId));
+    });
+    // Resolve each track's real title in the background (SoundCloud only —
+    // other platforms keep showing their domain as the label). Uses the
+    // same cache as the main list's embeds, so this is instant for tracks
+    // that were already resolved there, and only hits the network for ones
+    // that weren't (e.g. the admin had a different filter open).
+    winner.tracks.forEach(t => resolveWheelTrackTitle(t));
+
+    // Deleting one track from the list: soft-deletes it (Trash, recoverable
+    // there, same as the Delete button on the main list) and re-renders this
+    // same result in place — no re-spin, no closing the modal — so the
+    // admin can prune a person's tracks one at a time while deciding what
+    // to listen to.
+    wheelResultEl.querySelectorAll('[data-delete-track-id]').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const trackId = btn.dataset.deleteTrackId;
+        btn.disabled = true;
+        try {
+          await updateDoc(doc(db, 'submissions', trackId), { status: 'deleted', deletedAt: serverTimestamp() });
+        } catch (err) {
+          console.error('Could not delete track from wheel result:', err);
+          alert("That didn't work — try again.");
+          btn.disabled = false;
+          return;
+        }
+        winner.tracks = winner.tracks.filter(t => t.id !== trackId);
+        renderWheelResult(winner);
       });
-      // Standard random-picker convention: "Spin again" never touches the
-      // winner's status — it's purely "I want another pick," same odds,
-      // repeats allowed (same as any name picker — landing on the same
-      // entry twice in a row is normal, not a bug).
-      document.getElementById('wheel-spin-again-btn').addEventListener('click', () => {
-        wheelSpinBtn.click();
-      });
-      // "Remove from wheel" takes this PERSON (all their tracks) out of the
-      // rotation for the rest of *this* wheel session only — nothing is
-      // written to Firestore, nothing changes in the main list. Closing and
-      // reopening the wheel brings them back.
-      document.getElementById('wheel-remove-btn').addEventListener('click', () => {
-        wheelSkippedNames.add(winner.label.toLowerCase());
-        renderWheel();
-      });
-    }, durationMs + 100);
-  });
+    });
+
+    // "Remove from wheel" takes this PERSON (all their tracks) out of the
+    // rotation for the rest of *this* wheel session only — nothing is
+    // written to Firestore, nothing changes in the main list. Closing and
+    // reopening the wheel brings them back.
+    document.getElementById('wheel-remove-btn').addEventListener('click', () => {
+      wheelSkippedNames.add(winner.label.toLowerCase());
+      renderWheel();
+    });
+  }
+
+  async function resolveWheelTrackTitle(track) {
+    const host = getLinkHost(track.link);
+    // Only SoundCloud's oEmbed gives us a usable title; other hosts
+    // (YouTube, Drive, etc.) keep showing their domain via the placeholder
+    // set above — no extra request needed for those.
+    if (host !== 'soundcloud.com' && host !== 'on.soundcloud.com' && host !== 'm.soundcloud.com') return;
+    try {
+      let cached = soundcloudOembedCache.get(track.link);
+      if (!cached) {
+        const oembedUrl = `https://soundcloud.com/oembed?format=json&url=${encodeURIComponent(track.link)}&auto_play=false&color=%23a8c8ec&visual=false&show_comments=false&show_reposts=false`;
+        const res = await fetch(oembedUrl);
+        if (!res.ok) throw new Error('oEmbed request failed: ' + res.status);
+        const data = await res.json();
+        cached = { html: data.html, title: data.title || null };
+        soundcloudOembedCache.set(track.link, cached);
+      }
+      if (!cached.title) return; // nothing better to show than the placeholder
+      const target = document.getElementById(`wheel-track-label-${track.id}`) || document.getElementById('wheel-single-track-label');
+      if (target) target.textContent = cached.title + (target.id === 'wheel-single-track-label' ? ' →' : '');
+    } catch (err) {
+      // Leave the domain placeholder in place — not worth surfacing an
+      // error for what's purely a cosmetic upgrade (the link still works).
+      console.error('Could not resolve track title for wheel list:', err);
+    }
+  }
 
   // Small celebratory burst of CSS-animated confetti pieces, centered on the
   // wheel. Pure CSS/JS, no external library — each piece gets a random
