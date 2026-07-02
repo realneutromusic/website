@@ -101,11 +101,14 @@
   #admin-shell { display: none; max-width: 920px; margin: 0 auto; padding: 40px 24px 80px; }
 
   .admin-header {
-    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    display: flex; align-items: flex-end; justify-content: space-between; gap: 16px;
     margin-bottom: 32px; flex-wrap: wrap;
   }
   .admin-header h1 { font-family: 'Unbounded', sans-serif; font-size: 26px; }
   .admin-header .who { font-size: 12.5px; color: var(--ink-faint); margin-top: 4px; }
+  .header-actions-status {
+    display: flex; align-items: center; gap: 10px; margin-top: 12px; width: fit-content;
+  }
   .signout-btn {
     font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--ink-dim);
     border: 1px solid var(--line); border-radius: 999px; padding: 8px 16px; cursor: pointer;
@@ -113,7 +116,7 @@
   }
   .signout-btn:hover { border-color: var(--ink-faint); color: var(--ink); }
 
-  .header-actions { display: flex; align-items: center; gap: 10px; }
+  .header-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 
   .wheel-trigger-btn {
     display: inline-flex; align-items: center; gap: 7px;
@@ -141,8 +144,24 @@
   .submit-toggle-btn.is-open .submit-toggle-dot {
     background: var(--steel-bright); animation: nowPlayingDot 1.4s ease-in-out infinite;
   }
+  .autoclean-toggle-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--ink);
+    background: transparent; border: 1px solid var(--line); border-radius: 999px;
+    padding: 8px 16px; cursor: pointer; transition: all 0.2s var(--ease);
+  }
+  .autoclean-toggle-btn:hover { border-color: var(--ink-faint); }
+  .autoclean-toggle-dot {
+    width: 7px; height: 7px; border-radius: 50%; background: var(--ink-faint); flex-shrink: 0;
+  }
+  .autoclean-toggle-btn.is-on { border-color: rgba(224,168,72,0.5); color: #e0a848; }
+  .autoclean-toggle-btn.is-on .autoclean-toggle-dot {
+    background: #e0a848; animation: nowPlayingDot 1.4s ease-in-out infinite;
+  }
+  .sm-autoclean-toggle-btn { width: calc(100% - 36px); margin: 0 18px 12px; justify-content: center; font-size: 11px; padding: 8px 10px; }
 
   .filter-row { display: flex; gap: 8px; margin-bottom: 24px; flex-wrap: wrap; }
+  .filter-row-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
 
   .search-row {
     display: flex; align-items: center; gap: 10px; margin-bottom: 16px;
@@ -375,7 +394,7 @@
   .trash-btn:hover:not(.active) { border-color: #ff8080; color: #ff8080; }
 
   .sort-toggle-btn {
-    margin-left: auto; display: inline-flex; align-items: center; gap: 6px;
+    display: inline-flex; align-items: center; gap: 6px;
     font-family: 'JetBrains Mono', monospace; font-size: 11.5px; letter-spacing: 0.04em;
     border: 1px solid var(--line); border-radius: 999px; padding: 7px 14px; cursor: pointer;
     background: var(--surface); color: var(--ink-dim); transition: all 0.2s var(--ease);
@@ -384,17 +403,17 @@
   .sort-toggle-btn:hover { border-color: var(--steel-bright); color: var(--steel-bright); }
 
   .empty-trash-btn {
-    display: block; margin: 0 0 16px auto;
+    display: inline-flex; align-items: center;
     font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: #ff8080;
     background: rgba(255,128,128,0.08); border: 1px solid rgba(255,128,128,0.3); border-radius: 999px;
-    padding: 8px 16px; cursor: pointer; transition: all 0.2s var(--ease);
+    padding: 7px 14px; cursor: pointer; transition: all 0.2s var(--ease);
   }
   .empty-trash-btn:hover { background: rgba(255,128,128,0.18); border-color: #ff8080; }
   .clean-all-btn {
-    display: block; margin: 0 0 16px auto;
+    display: inline-flex; align-items: center;
     font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: #ff8080;
     background: rgba(255,128,128,0.08); border: 1px solid rgba(255,128,128,0.3); border-radius: 999px;
-    padding: 8px 16px; cursor: pointer; transition: all 0.2s var(--ease);
+    padding: 7px 14px; cursor: pointer; transition: all 0.2s var(--ease);
   }
   .clean-all-btn:hover { background: rgba(255,128,128,0.18); border-color: #ff8080; }
 
@@ -466,6 +485,7 @@
   }
   .submission-badge.new { background: var(--steel-soft); color: var(--steel-bright); }
   .submission-badge.kept { background: rgba(79,123,176,0.3); color: var(--steel-bright); }
+  .submission-badge.listened { background: rgba(160,160,170,0.18); color: var(--ink-dim); }
 
   .submission-link-row {
     margin-top: 12px; padding: 9px 12px; border-radius: 10px;
@@ -502,8 +522,11 @@
   .link-hide-btn svg { width: 13px; height: 13px; }
   .link-hide-btn:hover { border-color: var(--steel-bright); color: var(--steel-bright); }
   .submission-link-row .link-arrow {
-    flex-shrink: 0; color: var(--steel-bright); font-size: 15px; text-decoration: none;
+    flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center;
+    width: 26px; height: 26px; border-radius: 6px; border: 1px solid var(--line);
+    color: var(--ink-faint); font-size: 15px; text-decoration: none; transition: all 0.15s var(--ease);
   }
+  .submission-link-row .link-arrow:hover { border-color: var(--steel-bright); color: var(--steel-bright); }
   .submission-link-row .link-invalid {
     color: #ff8080; font-style: italic; font-size: 13px;
   }
@@ -537,10 +560,10 @@
   .embed-dropbox-audio { padding: 10px 12px; }
   .embed-dropbox-audio audio { display: block; width: 100%; height: 36px; }
   .embed-soundcloud-oembed iframe {
-    height: 120px;
+    height: 120px !important;
     transition: height 0.3s var(--ease);
   }
-  .embed-soundcloud-oembed iframe.sc-playing { height: 300px; }
+  .embed-soundcloud-oembed iframe.sc-playing { height: 300px !important; }
   .embed-loading, .embed-error {
     margin: 0; padding: 14px 12px; font-size: 12.5px; color: var(--ink-faint); text-align: center;
   }
@@ -1021,15 +1044,21 @@
 
 <div id="admin-shell">
   <div class="admin-header">
-    <div>
+    <div class="admin-header-title-group">
       <h1>Submissions</h1>
       <div class="who" id="who-label"></div>
+      <div class="header-actions-status">
+        <button type="button" class="submit-toggle-btn" id="submit-toggle-btn" title="Toggle whether the public submit page is accepting tracks right now">
+          <span class="submit-toggle-dot" id="submit-toggle-dot"></span>
+          <span id="submit-toggle-label">Submissions: loading…</span>
+        </button>
+        <button type="button" class="autoclean-toggle-btn" id="autoclean-toggle-btn" title="When on, automatically sends anything older than 12 hours straight to Trash">
+          <span class="autoclean-toggle-dot" id="autoclean-toggle-dot"></span>
+          <span id="autoclean-toggle-label">Auto-clean: loading…</span>
+        </button>
+      </div>
     </div>
     <div class="header-actions">
-      <button type="button" class="submit-toggle-btn" id="submit-toggle-btn" title="Toggle whether the public submit page is accepting tracks right now">
-        <span class="submit-toggle-dot" id="submit-toggle-dot"></span>
-        <span id="submit-toggle-label">Submissions: loading…</span>
-      </button>
       <button class="wheel-trigger-btn" id="open-wheel">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 3v9l6 3"/></svg>
         Wheel
@@ -1051,17 +1080,18 @@
 
     <div class="filter-row">
       <button class="filter-btn active" data-filter="all">All</button>
-      <button class="filter-btn" data-filter="new">New</button>
       <button class="filter-btn" data-filter="kept">Save</button>
+      <button class="filter-btn" data-filter="listened">Listened</button>
       <button class="filter-btn trash-btn" data-filter="trash">Trash</button>
-      <button class="sort-toggle-btn" id="sort-toggle-btn" title="Reverse arrival order">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 7h13M3 12h9M3 17h5M17 7v13M17 7l-4 4M17 7l4 4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        <span id="sort-toggle-label">Newest first</span>
-      </button>
+      <div class="filter-row-right">
+        <button class="clean-all-btn" id="clean-all-btn" style="display:none">Clean all — send everything to Trash</button>
+        <button class="empty-trash-btn" id="empty-trash-btn" style="display:none">Empty trash — delete all permanently</button>
+        <button class="sort-toggle-btn" id="sort-toggle-btn" title="Reverse arrival order">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 7h13M3 12h9M3 17h5M17 7v13M17 7l-4 4M17 7l4 4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span id="sort-toggle-label">Newest first</span>
+        </button>
+      </div>
     </div>
-
-    <button class="empty-trash-btn" id="empty-trash-btn" style="display:none">Empty trash — delete all permanently</button>
-    <button class="clean-all-btn" id="clean-all-btn" style="display:none">Clean all — send everything to Trash</button>
 
     <div id="list-container">
       <div class="empty-state" id="empty-state">Loading…</div>
@@ -1096,6 +1126,10 @@
             Wheel
           </button>
         </div>
+        <button type="button" class="autoclean-toggle-btn sm-autoclean-toggle-btn" id="sm-autoclean-toggle-btn" title="When on, automatically sends anything older than 12 hours straight to Trash">
+          <span class="autoclean-toggle-dot" id="sm-autoclean-toggle-dot"></span>
+          <span id="sm-autoclean-toggle-label">Auto-clean: loading…</span>
+        </button>
         <p class="stream-total-count" id="sm-total-count"></p>
         <button type="button" class="stream-listened-history-btn" id="sm-open-listened-history">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12a9 9 0 109-9 9.75 9.75 0 00-6.74 2.74L3 8"/><path d="M3 3v5h5M12 7v5l4 2" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -1225,6 +1259,10 @@
   const submitToggleLabel = document.getElementById('submit-toggle-label');
   const smSubmitToggleBtn = document.getElementById('sm-submit-toggle-btn');
   const smSubmitToggleLabel = document.getElementById('sm-submit-toggle-label');
+  const autocleanToggleBtn = document.getElementById('autoclean-toggle-btn');
+  const autocleanToggleLabel = document.getElementById('autoclean-toggle-label');
+  const smAutocleanToggleBtn = document.getElementById('sm-autoclean-toggle-btn');
+  const smAutocleanToggleLabel = document.getElementById('sm-autoclean-toggle-label');
   const sortToggleBtn = document.getElementById('sort-toggle-btn');
   const sortToggleLabel = document.getElementById('sort-toggle-label');
   const filterBtns = document.querySelectorAll('.filter-btn');
@@ -1246,6 +1284,10 @@
   let unsubscribe = null;
   let unsubscribeSubmitGate = null;
   let submitGateOpen = false; // whether the public submit page is currently accepting tracks
+  let unsubscribeAutoClean = null;
+  let autoCleanEnabled = false;
+  let autoCleanSweepInterval = null;
+  const AUTO_CLEAN_THRESHOLD_MS = 12 * 60 * 60 * 1000; // 12 hours
   // Which submission IDs currently have their link REVEALED — empty by
   // default, meaning every link is blurred until the admin explicitly
   // clicks the eye icon to reveal it. Per-session, browser-local
@@ -1407,6 +1449,8 @@
       adminShell.style.display = 'none';
       if (unsubscribe) { unsubscribe(); unsubscribe = null; }
       if (unsubscribeSubmitGate) { unsubscribeSubmitGate(); unsubscribeSubmitGate = null; }
+      if (unsubscribeAutoClean) { unsubscribeAutoClean(); unsubscribeAutoClean = null; }
+      if (autoCleanSweepInterval) { clearInterval(autoCleanSweepInterval); autoCleanSweepInterval = null; }
       if (relativeTimeRefreshInterval) { clearInterval(relativeTimeRefreshInterval); relativeTimeRefreshInterval = null; }
       allSubmissions = [];
     }
@@ -1441,6 +1485,24 @@
       console.error('Failed to load submit-gate status:', err);
       submitToggleLabel.textContent = 'Submissions: unknown';
     });
+
+    // Auto-clean: when on, anything older than AUTO_CLEAN_THRESHOLD_MS gets
+    // swept to Trash automatically. IMPORTANT LIMITATION: this only runs
+    // while a browser tab with this admin page is actually open — there's
+    // no server-side scheduled function behind it, just a client-side
+    // interval, so it can't clean anything up while nobody has the panel
+    // or Stream Mode loaded anywhere.
+    unsubscribeAutoClean = onSnapshot(doc(db, 'settings', 'autoClean'), (snap) => {
+      const wasEnabled = autoCleanEnabled;
+      autoCleanEnabled = snap.exists() && snap.data().enabled === true;
+      updateAutocleanToggleUI();
+      if (autoCleanEnabled && !wasEnabled) runAutoCleanSweep(); // sweep immediately the moment it's turned on, don't wait for the next interval tick
+    }, (err) => {
+      console.error('Failed to load auto-clean status:', err);
+      autocleanToggleLabel.textContent = 'Auto-clean: unknown';
+    });
+    if (autoCleanSweepInterval) clearInterval(autoCleanSweepInterval);
+    autoCleanSweepInterval = setInterval(() => { if (autoCleanEnabled) runAutoCleanSweep(); }, 5 * 60 * 1000);
 
     // Re-render periodically so "20s ago" doesn't silently go stale between
     // actual data changes. IMPORTANT: this must NOT call the full render()
@@ -1618,6 +1680,51 @@
       smSubmitToggleBtn.disabled = false;
     }
   });
+
+  function updateAutocleanToggleUI() {
+    autocleanToggleBtn.classList.toggle('is-on', autoCleanEnabled);
+    autocleanToggleLabel.textContent = `Auto-clean: ${autoCleanEnabled ? 'on' : 'off'}`;
+    smAutocleanToggleBtn.classList.toggle('is-on', autoCleanEnabled);
+    smAutocleanToggleLabel.textContent = `Auto-clean: ${autoCleanEnabled ? 'on' : 'off'}`;
+  }
+
+  async function toggleAutoClean(triggerBtn) {
+    const nextEnabled = !autoCleanEnabled;
+    triggerBtn.disabled = true;
+    try {
+      await setDoc(doc(db, 'settings', 'autoClean'), { enabled: nextEnabled }, { merge: true });
+    } catch (err) {
+      console.error('Toggle auto-clean failed:', err);
+      alert("Couldn't change the auto-clean status — try again.");
+    } finally {
+      triggerBtn.disabled = false;
+    }
+  }
+  autocleanToggleBtn.addEventListener('click', () => toggleAutoClean(autocleanToggleBtn));
+  smAutocleanToggleBtn.addEventListener('click', () => toggleAutoClean(smAutocleanToggleBtn));
+
+  // Sweeps everything active (not already deleted) older than the
+  // threshold straight to Trash — same soft-delete every other Delete
+  // action uses, so anything swept by mistake is still recoverable there.
+  async function runAutoCleanSweep() {
+    const cutoff = Date.now() - AUTO_CLEAN_THRESHOLD_MS;
+    const stale = allSubmissions.filter(s => {
+      if (s.status === 'deleted') return false;
+      const ms = s.submittedAt && s.submittedAt.toMillis ? s.submittedAt.toMillis() : null;
+      return ms !== null && ms < cutoff;
+    });
+    if (stale.length === 0) return;
+    try {
+      const chunkSize = 450;
+      for (let i = 0; i < stale.length; i += chunkSize) {
+        const batch = writeBatch(db);
+        stale.slice(i, i + chunkSize).forEach(s => batch.update(doc(db, 'submissions', s.id), { status: 'deleted', deletedAt: serverTimestamp() }));
+        await batch.commit();
+      }
+    } catch (err) {
+      console.error('Auto-clean sweep failed:', err);
+    }
+  }
 
   // ========================================================================
   // STREAM MODE — a full-screen view of the SAME live data already loaded
@@ -1866,7 +1973,7 @@
           widget.bind(SC.Widget.Events.READY, () => {
             if (smSelectedId !== s.id) return;
             smCurrentSoundcloudWidget = widget;
-            widget.setVolume(panelVolume);
+            widget.setVolume(toPerceptualVolume(panelVolume));
           });
           widget.bind(SC.Widget.Events.PLAY, () => {
             if (smSelectedId !== s.id) return;
@@ -1887,7 +1994,7 @@
       const audioEl = smEmbedWrap.querySelector('audio');
       if (audioEl) {
         smCurrentDropboxAudio = audioEl;
-        audioEl.volume = panelVolume / 100;
+        audioEl.volume = toPerceptualVolume(panelVolume) / 100;
         audioEl.addEventListener('play', () => {
           smCurrentPlayingEl = audioEl;
           pauseAllExcept(audioEl);
@@ -1914,7 +2021,7 @@
               onReady: () => {
                 if (smSelectedId !== s.id) return;
                 smCurrentYoutubePlayer = player;
-                player.setVolume(panelVolume);
+                player.setVolume(toPerceptualVolume(panelVolume));
               },
               onStateChange: (e) => {
                 if (smSelectedId !== s.id) return;
@@ -2108,7 +2215,7 @@
       smSearchClear.style.display = 'none';
     }
     smSelectTrack(trackId);
-    const row = smList.querySelector(`[data-row-id="${trackId}"]`);
+    const row = smList.querySelector(`[data-select-id="${trackId}"]`);
     if (row) {
       row.classList.add('wheel-highlight');
       row.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -2160,12 +2267,12 @@
         events: {
           onReady: () => {
             youtubePlayers.set(iframe, player);
-            player.setVolume(panelVolume); // same "apply current volume once the player actually exists" fix as before, just via the real API now
+            player.setVolume(toPerceptualVolume(panelVolume)); // same "apply current volume once the player actually exists" fix as before, just via the real API now
           },
           onStateChange: (e) => {
             const state = e.data; // YT.PlayerState: -1 unstarted, 0 ended, 1 playing, 2 paused, 3 buffering, 5 cued
             if (state === 1) {
-              player.setVolume(panelVolume);
+              player.setVolume(toPerceptualVolume(panelVolume));
               growIframeWithScrollCompensation(iframe, true, 'yt-playing');
               markNowPlaying(iframe);
               pauseAllExcept(iframe);
@@ -2207,14 +2314,14 @@
 
   function applyGlobalVolumeToYoutubeIframe(iframe) {
     const player = youtubePlayers.get(iframe);
-    if (player && typeof player.setVolume === 'function') player.setVolume(panelVolume);
+    if (player && typeof player.setVolume === 'function') player.setVolume(toPerceptualVolume(panelVolume));
   }
   function applyGlobalVolumeToSoundcloudIframe(iframe) {
     // Prefer the Widget SDK's setVolume() when we have a connected instance
     // — more reliable than posting the raw message by hand, and matches
     // what the PLAY handler above uses to make the volume actually stick.
     const widget = activeSoundcloudWidgets.get(iframe);
-    if (widget) { widget.setVolume(panelVolume); return; }
+    if (widget) { widget.setVolume(toPerceptualVolume(panelVolume)); return; }
     if (!iframe || !iframe.contentWindow) return;
     iframe.contentWindow.postMessage(
       JSON.stringify({ method: 'setVolume', value: panelVolume }),
@@ -2226,7 +2333,7 @@
   // (native <audio>.volume is 0–1, panelVolume is 0–100).
   function applyGlobalVolumeToDropboxAudio(audioEl) {
     if (!audioEl) return;
-    audioEl.volume = panelVolume / 100;
+    audioEl.volume = toPerceptualVolume(panelVolume) / 100;
   }
   function applyGlobalVolumeToAllEmbeds() {
     // THE DROPBOX VOLUME BUG: this used to only touch YouTube/SoundCloud
@@ -2239,9 +2346,9 @@
     // Stream Mode's single active embed, if any — the volume widget is
     // shared between both views now, so it needs to reach whichever one
     // is actually playing, not just the admin card list.
-    if (smCurrentSoundcloudWidget) { try { smCurrentSoundcloudWidget.setVolume(panelVolume); } catch {} }
-    if (smCurrentYoutubePlayer && typeof smCurrentYoutubePlayer.setVolume === 'function') { try { smCurrentYoutubePlayer.setVolume(panelVolume); } catch {} }
-    if (smCurrentDropboxAudio) { smCurrentDropboxAudio.volume = panelVolume / 100; }
+    if (smCurrentSoundcloudWidget) { try { smCurrentSoundcloudWidget.setVolume(toPerceptualVolume(panelVolume)); } catch {} }
+    if (smCurrentYoutubePlayer && typeof smCurrentYoutubePlayer.setVolume === 'function') { try { smCurrentYoutubePlayer.setVolume(toPerceptualVolume(panelVolume)); } catch {} }
+    if (smCurrentDropboxAudio) { smCurrentDropboxAudio.volume = toPerceptualVolume(panelVolume) / 100; }
   }
 
   // Paints the slider's filled portion as a gradient up to the current
@@ -2252,6 +2359,24 @@
   function updateVolumeSliderFill() {
     globalVolumeSlider.style.background =
       `linear-gradient(to right, var(--steel-bright) ${panelVolume}%, var(--line) ${panelVolume}%)`;
+  }
+
+  // THE VOLUME-ISN'T-LINEAR BUG: passing the slider's raw 0-100 value
+  // straight to setVolume()/audio.volume assumes loudness scales linearly
+  // with that number — it doesn't. Human hearing is much closer to
+  // logarithmic, so a straight linear mapping crams nearly all of the
+  // perceptible loudness change into roughly the top third of the slider,
+  // and everything below that sits somewhere between "already very quiet"
+  // and "silent" with barely any distinction — matching exactly the "I
+  // have to drag it down to ~6% before it actually sounds quiet" symptom.
+  // Squaring the linear fraction (a standard, simple perceptual-volume
+  // taper) spreads the audible change out much more evenly across the
+  // whole 0-100 range instead of bunching it all up near the top.
+  // panelVolume itself stays the raw slider position (what the % label
+  // shows) — only the actual value handed to each platform's API goes
+  // through this curve.
+  function toPerceptualVolume(linearPercent) {
+    return (linearPercent * linearPercent) / 100;
   }
 
   // Single source of truth for every volume change, whichever control
@@ -2343,6 +2468,13 @@
   function getLinkHost(url) {
     const u = normalizeUrl(url);
     return u ? u.hostname.replace(/^www\./, '') : null;
+  }
+
+  // Display-only relabeling — the underlying status value stays 'kept'
+  // (filters, CSS classes, Firestore docs all still use it), this just
+  // changes what the badge text says.
+  function statusLabel(status) {
+    return status === 'kept' ? 'saved' : status;
   }
 
   // Detects whether a link can be embedded as an inline player, and returns
@@ -2938,7 +3070,7 @@
       // a moment and briefly (harmlessly, but pointlessly) mark it paused
       // right before being overwritten anyway.
       function onSoundcloudTrackStarted() {
-        widget.setVolume(panelVolume);
+        widget.setVolume(toPerceptualVolume(panelVolume));
         growIframeWithScrollCompensation(iframe, true);
         markNowPlaying(iframe);
         pauseAllExcept(iframe);
@@ -2958,7 +3090,7 @@
       // internal widget JS can still be initializing after that. Binding
       // too early is what made grow-on-play silently fail to attach.
       widget.bind(SC.Widget.Events.READY, () => {
-        widget.setVolume(panelVolume);
+        widget.setVolume(toPerceptualVolume(panelVolume));
         widget.getDuration((ms) => { durationMs = ms; });
         widget.bind(SC.Widget.Events.PLAY, onSoundcloudTrackStarted);
         widget.bind(SC.Widget.Events.PAUSE, onSoundcloudTrackPaused);
@@ -3086,17 +3218,20 @@
     const actionsHtml = inTrash
       ? `<button class="action-btn keep" data-action="restore">Restore</button>
          <button class="action-btn delete" data-action="delete-forever">Delete forever</button>`
-      : status === 'kept'
-        ? `<button class="action-btn unsave" data-action="new">Unsave</button>
+      : status === 'listened'
+        ? `<button class="action-btn keep" data-action="new">Restore</button>
            <button class="action-btn delete" data-action="delete">Delete</button>`
-        : `<button class="action-btn keep" data-action="kept">Save</button>
-           <button class="action-btn delete" data-action="delete">Delete</button>`;
+        : status === 'kept'
+          ? `<button class="action-btn unsave" data-action="new">Unsave</button>
+             <button class="action-btn delete" data-action="delete">Delete</button>`
+          : `<button class="action-btn keep" data-action="kept">Save</button>
+             <button class="action-btn delete" data-action="delete">Delete</button>`;
     return `
         <div class="submission-top">
           <div>
             <div class="submission-title" data-hook="title">${escName}</div>
           </div>
-          <span class="submission-badge ${status}" data-hook="badge">${inTrash ? 'deleted' : status}</span>
+          <span class="submission-badge ${status}" data-hook="badge">${inTrash ? 'deleted' : statusLabel(status)}</span>
         </div>
         <div data-hook="link-row">${linkRowHtml}</div>
         <div class="embed-slot" data-embed-slot></div>
@@ -3134,7 +3269,7 @@
     const badgeEl = card.querySelector('[data-hook="badge"]');
     if (badgeEl) {
       badgeEl.className = `submission-badge ${status}`;
-      badgeEl.textContent = inTrash ? 'deleted' : status;
+      badgeEl.textContent = inTrash ? 'deleted' : statusLabel(status);
     }
 
     const rawLink = s.link || '';
@@ -3381,13 +3516,13 @@
     // "Empty trash" only makes sense while looking at Trash, and only if
     // there's something in it to empty.
     const trashCount = allSubmissions.filter(s => s.status === 'deleted').length;
-    emptyTrashBtn.style.display = (currentFilter === 'trash' && trashCount > 0) ? 'block' : 'none';
+    emptyTrashBtn.style.display = (currentFilter === 'trash' && trashCount > 0) ? 'inline-flex' : 'none';
 
-    // "Clean all" lives on the "All" tab — sending everything to Trash
-    // only makes sense from the overview, not from a single narrowed
-    // filter like New or Save.
+    // "Clean all" lives on the "All" and "Save" tabs — sending everything
+    // to Trash from either of those makes sense; Trash itself has its own
+    // "Empty trash" for permanent deletion instead.
     const activeCount = allSubmissions.filter(s => s.status !== 'deleted').length;
-    cleanAllBtn.style.display = (currentFilter === 'all' && activeCount > 0) ? 'block' : 'none';
+    cleanAllBtn.style.display = ((currentFilter === 'all' || currentFilter === 'trash' || currentFilter === 'listened') && activeCount > 0) ? 'inline-flex' : 'none';
 
     if (searchQuery) {
       items = items.filter(s => {
@@ -3577,6 +3712,11 @@
       } else if (action === 'delete-forever') {
         if (!confirm('Permanently delete this submission? This can\'t be undone.')) return;
         await deleteDoc(doc(db, 'submissions', id));
+      } else if (action === 'new') {
+        // Covers both "Unsave" (from Save) and "Restore" (from Listened) —
+        // clearing listenedAt here too so a stale timestamp doesn't linger
+        // on a doc that's no longer marked listened.
+        await updateDoc(doc(db, 'submissions', id), { status: 'new', listenedAt: null });
       } else {
         await updateDoc(doc(db, 'submissions', id), { status: action });
       }
@@ -4144,7 +4284,12 @@
     setTimeout(() => {
       const card = listEl.querySelector(`.submission-card[data-id="${submissionId}"]`);
       if (!card) return; // shouldn't happen, but don't break if it does
-      card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // Instant, not smooth — a still-in-flight smooth-scroll animation
+      // clashes with growIframeWithScrollCompensation's anchor math if the
+      // admin clicks play shortly after landing here (both are trying to
+      // control scrollY at the same time), which is what caused the
+      // "jumps to the very top when I hit play" bug.
+      card.scrollIntoView({ behavior: 'auto', block: 'center' });
       card.classList.add('wheel-highlight');
       setTimeout(() => card.classList.remove('wheel-highlight'), 2200);
     }, 50);
