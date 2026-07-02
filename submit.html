@@ -34,9 +34,6 @@
 
   body {
     background-color: var(--bg);
-    background-image: radial-gradient(circle, rgba(159,180,207,0.18) 1px, transparent 1px);
-    background-size: 28px 28px;
-    background-position: -1px -1px;
     color: var(--ink);
     font-family: 'Sora', sans-serif;
     -webkit-font-smoothing: antialiased;
@@ -47,9 +44,20 @@
     padding: 24px;
   }
 
+  /* Background dot grid lives on a <canvas> (#bg-dots-canvas, see the
+     script near the end of the page) instead of a static CSS pattern — it
+     drifts down-right on its own, and dots near the cursor get pushed
+     outward from it. Matches the same effect used in the admin panel and
+     the main site. */
+  #bg-dots-canvas {
+    position: fixed; inset: 0; z-index: -1; pointer-events: none;
+    width: 100%; height: 100%; display: block;
+  }
+
   a { color: var(--steel-bright); }
 
   .wrap { max-width: 480px; width: 100%; }
+  .gate-loading { color: var(--ink-faint); font-size: 13.5px; text-align: center; }
 
   .back-link {
     display: inline-flex; align-items: center; gap: 6px;
@@ -78,6 +86,7 @@
   }
 
   .form-row { margin-bottom: 18px; }
+  .hp-field { position: absolute; left: -9999px; top: -9999px; width: 1px; height: 1px; overflow: hidden; }
   .form-row label {
     display: block; font-size: 12.5px; font-weight: 600; color: var(--ink-dim); margin-bottom: 7px;
   }
@@ -116,7 +125,14 @@
 </head>
 <body>
 
-<div class="wrap">
+<canvas id="bg-dots-canvas" aria-hidden="true"></canvas>
+
+
+<div class="gate-loading" id="gate-loading">
+  <p>Checking…</p>
+</div>
+
+<div class="wrap" id="wrap" style="display:none">
   <a class="back-link" href="./">← Back to neutro.</a>
   <div class="tag">For artists</div>
   <h1>Send me your track</h1>
@@ -124,6 +140,14 @@
 
   <div class="panel">
     <form id="submit-form">
+      <!-- Honeypot: invisible to real people (off-screen, no label, never
+           tabbable), but a basic bot filling every input on the page will
+           fill it too. If it's non-empty on submit, silently drop the
+           submission instead of creating it. -->
+      <div class="hp-field" aria-hidden="true">
+        <label for="f-website">Website</label>
+        <input type="text" id="f-website" name="website" tabindex="-1" autocomplete="off">
+      </div>
       <div class="form-row">
         <label for="f-name">Name</label>
         <input type="text" id="f-name" required maxlength="150" autocomplete="off">
@@ -151,7 +175,7 @@
 
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
-  import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+  import { getFirestore, collection, addDoc, doc, getDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyCphqIMmkws58VaFE1Y8T1ikWE5vmDhQhA",
@@ -165,15 +189,52 @@
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
 
+  const gateLoading = document.getElementById('gate-loading');
+  const wrap = document.getElementById('wrap');
   const form = document.getElementById('submit-form');
   const submitBtn = document.getElementById('submit-btn');
   const statusEl = document.getElementById('status');
   const successState = document.getElementById('success-state');
 
+  async function isSubmitOpen() {
+    try {
+      const snap = await getDoc(doc(db, 'settings', 'submitGate'));
+      return snap.exists() && snap.data().open === true;
+    } catch (err) {
+      console.error('Could not check submit status:', err);
+      return false;
+    }
+  }
+
+  // Gate: this page only shows the form while Neutro has it toggled open
+  // from the admin panel (closed by default between streams). A single
+  // doc read, not a live listener — someone submitting mid-stream doesn't
+  // need to react to it closing while they're mid-form, and a listener
+  // would just be a connection this page holds open for no benefit.
+  (async function gateOnSubmitOpen() {
+    if (!(await isSubmitOpen())) {
+      window.location.replace('./');
+      return;
+    }
+    gateLoading.style.display = 'none';
+    wrap.style.display = 'block';
+  })();
+
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     statusEl.textContent = '';
     statusEl.className = 'status';
+
+    // Honeypot: a real person never sees or fills this field. If it's
+    // filled, quietly pretend it worked (no error, no clue for whatever
+    // filled it that it got caught) without actually writing anything.
+    const honeypot = document.getElementById('f-website').value.trim();
+    if (honeypot) {
+      form.style.display = 'none';
+      successState.style.display = 'block';
+      return;
+    }
+
     submitBtn.disabled = true;
     submitBtn.textContent = 'Sending…';
 
@@ -199,6 +260,133 @@
       submitBtn.textContent = 'Send track';
     }
   });
+</script>
+
+<script>
+  // ---- background dot grid: auto-drift + cursor-push displacement -------
+  // Drawn on canvas (not CSS) specifically because individual dots need to
+  // displace based on their OWN distance to the cursor — a single
+  // repeating CSS background can only move as one rigid layer, it can't
+  // push just the nearby dots while the rest stay put. The grid drifts
+  // down-right on its own regardless of the mouse; hovering over it pushes
+  // nearby dots radially outward from the cursor (a soft "disturbance" in
+  // the grid), easing toward the cursor with a slight lag rather than
+  // snapping straight to it — dots move, they don't light up.
+  (function setupBackgroundDots() {
+    const canvas = document.getElementById('bg-dots-canvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    const SPACING = 28;
+    const DOT_RADIUS = 1;
+    const DOT_ALPHA = 0.2;
+    const PUSH_REACH = 160;     // px from the cursor where dots start getting pushed (reduced — gentler reach)
+    const PUSH_STRENGTH = 10;   // max px a dot gets displaced, right at the cursor (reduced — softer push)
+    const POINTER_EASE = 0.08;  // how quickly the push-point catches up to the cursor each frame (lower = more lag)
+    const DRIFT_SPEED = 2.5;    // px/sec, down-right — slow and calm
+
+    let dpr = Math.min(window.devicePixelRatio || 1, 2);
+    let width = 0, height = 0;
+    let targetX = null, targetY = null;   // raw cursor position
+    let pointerX = null, pointerY = null; // eased position the push effect actually originates from
+    let driftOffset = 0;
+
+    function resize() {
+      width = window.innerWidth;
+      height = window.innerHeight;
+      canvas.width = Math.round(width * dpr);
+      canvas.height = Math.round(height * dpr);
+      canvas.style.width = width + 'px';
+      canvas.style.height = height + 'px';
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+
+    // Smoothstep-style falloff (3t² - 2t³) — the push fades in/out
+    // gradually as a dot crosses the reach radius, instead of snapping on
+    // at a hard edge.
+    function smoothFalloff(t) {
+      return t * t * (3 - 2 * t);
+    }
+
+    function drawFrame() {
+      ctx.clearRect(0, 0, width, height);
+      const offset = driftOffset % SPACING;
+      ctx.fillStyle = `rgba(168, 200, 236, ${DOT_ALPHA})`;
+      for (let x = offset - SPACING; x < width + SPACING; x += SPACING) {
+        for (let y = offset - SPACING; y < height + SPACING; y += SPACING) {
+          let drawX = x, drawY = y;
+          if (pointerX !== null) {
+            const dx = x - pointerX;
+            const dy = y - pointerY;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < PUSH_REACH && dist > 0.01) {
+              const t = smoothFalloff(1 - dist / PUSH_REACH);
+              const push = PUSH_STRENGTH * t;
+              drawX = x + (dx / dist) * push; // pushed directly away from the pointer
+              drawY = y + (dy / dist) * push;
+            }
+          }
+          ctx.beginPath();
+          ctx.arc(drawX, drawY, DOT_RADIUS, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
+
+    function handleMouseMove(e) {
+      targetX = e.clientX;
+      targetY = e.clientY;
+      if (prefersReducedMotion) {
+        // No continuous rAF loop running for reduced-motion users — the
+        // push-point snaps straight to the cursor (no eased trailing lag,
+        // since that lag is itself a per-frame animation) and redraws only
+        // in direct response to the visitor's own cursor movement.
+        pointerX = targetX;
+        pointerY = targetY;
+        drawFrame();
+      }
+    }
+    function handleMouseLeave() {
+      targetX = targetY = null;
+      if (prefersReducedMotion) {
+        pointerX = pointerY = null;
+        drawFrame();
+      }
+    }
+
+    resize();
+    drawFrame();
+    window.addEventListener('resize', () => { resize(); drawFrame(); });
+    window.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseleave', handleMouseLeave);
+
+    if (!prefersReducedMotion) {
+      // Continuous drift + pointer easing, entirely automatic where the
+      // drift is concerned (runs regardless of the cursor); the push-point
+      // lerps toward the cursor's actual position a little each frame
+      // (POINTER_EASE), which is what produces the soft trailing-follow
+      // feel instead of the push rigidly snapping to the mouse coordinate.
+      let lastTime = performance.now();
+      requestAnimationFrame(function tick(now) {
+        const dt = (now - lastTime) / 1000;
+        lastTime = now;
+        driftOffset += DRIFT_SPEED * dt;
+        if (targetX !== null) {
+          if (pointerX === null) { pointerX = targetX; pointerY = targetY; } // first move: jump straight there, nothing to ease from yet
+          else {
+            pointerX += (targetX - pointerX) * POINTER_EASE;
+            pointerY += (targetY - pointerY) * POINTER_EASE;
+          }
+        } else if (pointerX !== null) {
+          // Cursor left the window — drop the push point immediately.
+          pointerX = pointerY = null;
+        }
+        drawFrame();
+        requestAnimationFrame(tick);
+      });
+    }
+  })();
 </script>
 
 </body>

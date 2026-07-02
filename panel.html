@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
 
 <title>Admin — Neutro</title>
@@ -34,13 +34,22 @@
 
   body {
     background-color: var(--bg);
-    background-image: radial-gradient(circle, rgba(159,180,207,0.18) 1px, transparent 1px);
-    background-size: 28px 28px;
-    background-position: -1px -1px;
     color: var(--ink);
     font-family: 'Sora', sans-serif;
     -webkit-font-smoothing: antialiased;
     min-height: 100vh;
+  }
+
+  /* Background dot grid lives on a <canvas> now (#bg-dots-canvas, see the
+     JS section below) instead of a CSS radial-gradient pattern — getting
+     individual dots to react to cursor proximity (brighten/grow the ones
+     near the mouse specifically, like songstats.com) means each dot needs
+     its own per-frame distance-to-cursor calculation, which a single
+     repeating CSS background can't do; a canvas redrawing each dot
+     individually can. */
+  #bg-dots-canvas {
+    position: fixed; inset: 0; z-index: -1; pointer-events: none;
+    width: 100%; height: 100%; display: block;
   }
 
   a { color: inherit; }
@@ -123,6 +132,24 @@
   .wheel-trigger-btn:hover { border-color: var(--steel-bright); color: var(--steel-bright); }
   .wheel-trigger-btn svg { width: 13px; height: 13px; }
 
+  /* Toggles whether the public submit page is currently accepting
+     submissions — closed by default between streams; the admin opens it
+     right before going live and closes it after. */
+  .submit-toggle-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--ink);
+    background: transparent; border: 1px solid var(--line); border-radius: 999px;
+    padding: 8px 16px; cursor: pointer; transition: all 0.2s var(--ease);
+  }
+  .submit-toggle-btn:hover { border-color: var(--ink-faint); }
+  .submit-toggle-dot {
+    width: 7px; height: 7px; border-radius: 50%; background: var(--ink-faint); flex-shrink: 0;
+  }
+  .submit-toggle-btn.is-open { border-color: rgba(79,123,176,0.5); color: var(--steel-bright); }
+  .submit-toggle-btn.is-open .submit-toggle-dot {
+    background: var(--steel-bright); animation: nowPlayingDot 1.4s ease-in-out infinite;
+  }
+
   .filter-row { display: flex; gap: 8px; margin-bottom: 24px; flex-wrap: wrap; }
 
   .search-row {
@@ -140,31 +167,210 @@
   }
   .search-row button:hover { color: var(--ink); }
 
+  /* ---------- floating volume widget ---------- */
+  /* A circular mute-toggle button (with an animated sound-wave icon that
+     gently pulses while unmuted, and swaps to a muted icon at 0%) plus a
+     gradient-filled slider that visually shows the current level — instead
+     of the previous plain icon + bare slider with no feedback beyond the
+     number. */
   .floating-volume {
     position: fixed; bottom: 20px; right: 20px; z-index: 90;
-    display: flex; align-items: center; gap: 10px;
+    display: flex; align-items: center; gap: 4px;
     background: rgba(12,20,36,0.92); backdrop-filter: blur(10px);
-    border: 1px solid var(--line); border-radius: 12px;
-    padding: 10px 14px; box-shadow: 0 10px 30px -8px rgba(0,0,0,0.55);
+    border: 1px solid var(--line); border-radius: 999px;
+    padding: 4px 16px 4px 4px; box-shadow: 0 10px 30px -8px rgba(0,0,0,0.55);
+    transition: bottom 0.25s var(--ease), transform 0.2s var(--ease), box-shadow 0.2s var(--ease), border-color 0.2s var(--ease);
   }
-  .floating-volume svg {
-    width: 16px; height: 16px; color: var(--ink-dim); flex-shrink: 0;
+  .floating-volume:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 14px 36px -8px rgba(0,0,0,0.65);
+    border-color: var(--steel-bright);
   }
+
+  /* ---------- queue position badge ---------- */
+  /* "Track 8 of 34" — updates as the admin scrolls through the list, so
+     there's always a sense of how much of the queue is left, on stream or
+     off. Only shown once there's actually a list to be positioned within
+     (hidden on Trash/empty states, etc. — see updateQueuePosition()). */
+  .queue-position-badge {
+    position: fixed; bottom: 20px; left: 20px; z-index: 90;
+    background: rgba(12,20,36,0.92); backdrop-filter: blur(10px);
+    border: 1px solid var(--line); border-radius: 999px;
+    padding: 10px 18px; box-shadow: 0 10px 30px -8px rgba(0,0,0,0.55);
+    font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--ink-dim);
+    transition: opacity 0.2s var(--ease);
+  }
+  .queue-position-badge strong { color: var(--steel-bright); font-weight: 700; }
+
+  .floating-volume-mute-btn {
+    width: 36px; height: 36px; flex-shrink: 0; border-radius: 50%;
+    background: transparent; border: none; color: var(--ink-dim); cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: color 0.2s var(--ease), background 0.2s var(--ease);
+  }
+  .floating-volume-mute-btn:hover { color: var(--steel-bright); background: rgba(168,200,236,0.1); }
+  .floating-volume-mute-btn svg { width: 18px; height: 18px; overflow: visible; }
+
+  /* The two wave arcs pulse out of phase with each other for a subtle
+     "sound is alive" effect — frozen and hidden the instant volume hits 0,
+     where the muted (speaker + X) icon takes over instead. */
+  .vol-wave {
+    transform-origin: 7px 12px;
+    animation: volWavePulse 1.8s ease-in-out infinite;
+  }
+  .vol-wave-2 { animation-delay: 0.2s; }
+  @keyframes volWavePulse {
+    0%, 100% { opacity: 0.4; transform: scale(0.92); }
+    50% { opacity: 1; transform: scale(1); }
+  }
+  .vol-mute-x { display: none; }
+  .floating-volume.is-muted .vol-wave { display: none; }
+  .floating-volume.is-muted .vol-mute-x { display: block; stroke: #ff8a8a; }
+  .floating-volume.is-muted .floating-volume-mute-btn { color: #ff8a8a; }
+
   .floating-volume input[type="range"] {
-    width: 100px; height: 3px; -webkit-appearance: none; appearance: none;
-    background: var(--line); border-radius: 999px; outline: none; cursor: pointer; flex-shrink: 0;
+    width: 100px; height: 4px; -webkit-appearance: none; appearance: none;
+    border-radius: 999px; outline: none; cursor: pointer; flex-shrink: 0;
+    /* background is a left-to-right gradient set inline by JS (updateVolumeSliderFill),
+       so the filled portion always matches the current value at a glance —
+       same visual language as the sticky player's seek bar. */
   }
   .floating-volume input[type="range"]::-webkit-slider-thumb {
-    -webkit-appearance: none; appearance: none; width: 12px; height: 12px; border-radius: 50%;
-    background: var(--steel-bright); cursor: pointer;
+    -webkit-appearance: none; appearance: none; width: 13px; height: 13px; border-radius: 50%;
+    background: var(--steel-bright); cursor: pointer; box-shadow: 0 0 0 3px rgba(12,20,36,0.92);
+    transition: transform 0.15s var(--ease);
   }
+  .floating-volume input[type="range"]:hover::-webkit-slider-thumb,
+  .floating-volume input[type="range"]:active::-webkit-slider-thumb { transform: scale(1.2); }
   .floating-volume input[type="range"]::-moz-range-thumb {
-    width: 12px; height: 12px; border-radius: 50%; background: var(--steel-bright); border: none; cursor: pointer;
+    width: 13px; height: 13px; border-radius: 50%; background: var(--steel-bright); border: none; cursor: pointer;
+    box-shadow: 0 0 0 3px rgba(12,20,36,0.92);
   }
   .global-volume-value {
     font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--ink-faint);
     width: 30px; text-align: right; flex-shrink: 0;
   }
+
+  /* ---------- sticky now-playing bar ---------- */
+  /* A floating pill, centered at the bottom of the viewport — not a
+     full-width bar — so it reads as a compact control rather than another
+     toolbar competing with the header/filters. Two rows: track info +
+     controls on top, a dedicated seek row below it with real breathing
+     room (not squeezed into the pill's edge) and an always-visible
+     draggable handle, so it's obvious at a glance that it's grabbable.
+     Wide enough, with the title allowed to wrap, that long track names
+     have real room instead of getting clipped to a tiny fixed width. */
+  .sticky-player {
+    position: fixed; left: 50%; z-index: 95;
+    /* max() with env(safe-area-inset-bottom) keeps this clear of a mobile
+       browser's own bottom chrome/home-indicator area, in addition to the
+       normal 20px breathing room — falls back to plain 20px wherever
+       safe-area-inset isn't a thing (desktop browsers). */
+    bottom: max(20px, calc(20px + env(safe-area-inset-bottom, 0px)));
+    width: min(620px, calc(100% - 24px));
+    display: none; flex-direction: column;
+    background: rgba(12,20,36,0.97); backdrop-filter: blur(10px);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    box-shadow: 0 18px 44px -12px rgba(0,0,0,0.65);
+    transform: translate(-50%, 16px); opacity: 0; pointer-events: none;
+    transition: transform 0.25s var(--ease), opacity 0.25s var(--ease);
+  }
+  .sticky-player.visible { display: flex; transform: translate(-50%, 0); opacity: 1; pointer-events: auto; }
+
+  .sticky-player-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 14px;
+    padding: 16px 16px 6px 18px;
+  }
+  .sticky-player-info { display: flex; align-items: flex-start; gap: 10px; min-width: 0; flex: 1; }
+  .sticky-player-eq {
+    display: flex; align-items: flex-end; gap: 2px; width: 14px; height: 12px; flex-shrink: 0;
+    margin-top: 8px; /* aligns with the first line of the (possibly 2-line) title */
+  }
+  .sticky-player-eq span {
+    flex: 1; height: 100%; background: var(--steel-bright); border-radius: 1px;
+    transform: scaleY(0.25); transform-origin: bottom;
+    animation: eqBounce 0.9s ease-in-out infinite;
+  }
+  .sticky-player-eq span:nth-child(1) { animation-duration: 0.8s; animation-delay: 0s; }
+  .sticky-player-eq span:nth-child(2) { animation-duration: 1.1s; animation-delay: 0.2s; }
+  .sticky-player-eq span:nth-child(3) { animation-duration: 0.7s; animation-delay: 0.05s; }
+  .sticky-player-eq span:nth-child(4) { animation-duration: 0.95s; animation-delay: 0.35s; }
+  @keyframes eqBounce { 0%, 100% { transform: scaleY(0.25); } 50% { transform: scaleY(1); } }
+  .sticky-player.is-paused .sticky-player-eq span { animation-play-state: paused; transform: scaleY(0.25); }
+  @media (prefers-reduced-motion: reduce) {
+    .sticky-player-eq span { animation: none; transform: scaleY(0.7); }
+  }
+  .sticky-player-text { min-width: 0; flex: 1; }
+  /* No fixed width cap — uses all the space the row gives it (everything
+     except the buttons), wrapping to up to 2 lines for long titles instead
+     of truncating into a sliver of text. */
+  .sticky-player-track {
+    font-family: 'Unbounded', sans-serif; font-weight: 700; font-size: 14.5px; color: var(--ink);
+    line-height: 1.3;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    overflow: hidden; text-overflow: ellipsis; word-break: break-word;
+  }
+  .sticky-player-name {
+    margin-top: 3px;
+    font-family: 'Sora', sans-serif; font-size: 11.5px; color: var(--ink-faint);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .sticky-player-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; align-self: center; }
+  .sticky-player-btn {
+    width: 34px; height: 34px; border-radius: 10px;
+    font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: var(--ink-dim);
+    background: transparent; border: 1px solid var(--line); cursor: pointer; transition: all 0.2s var(--ease);
+    display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .sticky-player-btn svg { width: 16px; height: 16px; }
+  .sticky-player-btn:hover { border-color: var(--steel-bright); color: var(--steel-bright); }
+  .sticky-player-delete:hover { border-color: #ff8080; color: #ff8080; }
+
+  /* Seek row: its own dedicated space (not clipped into the pill's edge)
+     with a generous click/drag target and a handle that's always visible
+     — not just on hover — so it reads as obviously draggable. */
+  .sticky-player-seek {
+    display: flex; align-items: center; gap: 9px;
+    padding: 2px 18px 15px;
+  }
+  .sticky-player-time-current,
+  .sticky-player-time-total {
+    font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--ink-faint);
+    flex-shrink: 0; white-space: nowrap; width: 30px;
+  }
+  .sticky-player-time-total { text-align: right; }
+  .sticky-player-progress {
+    position: relative; flex: 1; height: 22px; /* generous hit area beyond the visible track */
+    display: flex; align-items: center; cursor: pointer; touch-action: none;
+  }
+  .sticky-player-progress:focus-visible { outline: none; }
+  .sticky-player-progress:not(.seekable) { cursor: default; }
+  .sticky-player-progress-track {
+    position: relative; width: 100%; height: 5px; border-radius: 999px;
+    background: var(--line);
+  }
+  .sticky-player-progress-fill {
+    position: absolute; top: 0; left: 0; height: 100%; width: 0%;
+    background: var(--steel-bright); border-radius: 999px; pointer-events: none;
+  }
+  .sticky-player-progress-handle {
+    position: absolute; top: 50%; left: 0%; transform: translate(-50%, -50%);
+    width: 13px; height: 13px; border-radius: 50%; background: var(--steel-bright);
+    box-shadow: 0 0 0 3px rgba(12,20,36,0.97), 0 2px 6px rgba(0,0,0,0.4);
+    pointer-events: none; transition: transform 0.12s var(--ease), opacity 0.15s var(--ease);
+  }
+  .sticky-player-progress:hover .sticky-player-progress-handle,
+  .sticky-player-progress:focus-visible .sticky-player-progress-handle,
+  .sticky-player-progress:active .sticky-player-progress-handle {
+    transform: translate(-50%, -50%) scale(1.2);
+  }
+  .sticky-player-progress:not(.seekable) .sticky-player-progress-handle { opacity: 0.4; }
+
+  @media (max-width: 460px) {
+    .sticky-player-btn { width: 30px; height: 30px; }
+  }
+
   .filter-btn {
     font-family: 'JetBrains Mono', monospace; font-size: 11.5px; letter-spacing: 0.04em;
     border: 1px solid var(--line); border-radius: 999px; padding: 7px 14px; cursor: pointer;
@@ -198,11 +404,58 @@
   }
 
   .submission-list { display: flex; flex-direction: column; gap: 14px; }
+  /* Sort order is flipped PURELY visually via flex-direction — see the
+     sort-toggle handler's comment for why the DOM itself must never be
+     reordered just to change display order. */
+  .submission-list.sort-reversed { flex-direction: column-reverse; }
   .submission-card {
     border-radius: 14px; border: 1px solid var(--line); background: var(--surface);
     padding: 18px 20px;
+    transition: opacity 0.35s var(--ease), filter 0.35s var(--ease), transform 0.3s var(--ease), border-color 0.3s var(--ease), box-shadow 0.3s var(--ease);
   }
   .submission-card.status-kept { border-color: rgba(79,123,176,0.5); }
+
+  /* Plays right before a card actually leaves the DOM (deleted, saved out
+     of the current filter, search no longer matches, etc.) — reuses the
+     card's own existing opacity/transform transitions, just animating
+     toward a "gone" end-state instead of removing it instantly. */
+  .submission-card.card-exiting {
+    opacity: 0 !important;
+    transform: scale(0.95) translateY(-8px) !important;
+    pointer-events: none;
+  }
+
+  /* When something is actually playing AND its card is in view: that card
+     gets full focus (subtle glowing border + pulse), everything else dims
+     and blurs slightly so attention naturally goes to what's actually
+     sounding. The .has-playing class itself is only added by JS while the
+     playing card is in the viewport (see refreshFocusDimming()) — scrolled
+     away to browse the rest of the list, or paused, nothing dims at all.
+     Hovering a dimmed card brings it back to full clarity temporarily, so
+     it stays fully usable (reading the link, clicking Keep/Delete, etc.)
+     without having to stop playback first. */
+  .submission-list.has-playing .submission-card:not(.now-playing) {
+    opacity: 0.45; filter: blur(1.5px) saturate(0.7);
+  }
+  .submission-list.has-playing .submission-card:not(.now-playing):hover {
+    opacity: 0.92; filter: blur(0) saturate(1);
+  }
+  .submission-card.now-playing {
+    border-color: var(--steel-bright);
+    box-shadow: 0 0 0 1px var(--steel-bright), 0 0 28px -4px rgba(168,200,236,0.45);
+    animation: nowPlayingPulse 2.4s ease-in-out infinite;
+  }
+  /* Paused (loaded but not sounding): steady border, no pulse — visually
+     distinct from "actively playing" without losing track of which card is
+     the one the sticky bar's play button will resume. */
+  .submission-card.now-playing.is-paused {
+    animation: none;
+    box-shadow: 0 0 0 1px var(--steel-bright);
+  }
+  @keyframes nowPlayingPulse {
+    0%, 100% { box-shadow: 0 0 0 1px var(--steel-bright), 0 0 28px -4px rgba(168,200,236,0.45); }
+    50% { box-shadow: 0 0 0 1px var(--steel-bright), 0 0 38px 2px rgba(168,200,236,0.65); }
+  }
 
   .submission-top {
     display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
@@ -235,6 +488,20 @@
   .link-copy-btn svg { width: 13px; height: 13px; }
   .link-copy-btn:hover { border-color: var(--steel-bright); color: var(--steel-bright); }
   .link-copy-btn.copied { border-color: var(--steel); color: var(--steel-bright); }
+
+  .link-text {
+    transition: filter 0.2s var(--ease);
+  }
+  .link-text.link-hidden {
+    filter: blur(5px); user-select: none; pointer-events: none;
+  }
+  .link-hide-btn {
+    flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center;
+    width: 26px; height: 26px; border-radius: 6px; border: 1px solid var(--line);
+    background: transparent; color: var(--ink-faint); cursor: pointer; transition: all 0.15s var(--ease);
+  }
+  .link-hide-btn svg { width: 13px; height: 13px; }
+  .link-hide-btn:hover { border-color: var(--steel-bright); color: var(--steel-bright); }
   .submission-link-row .link-arrow {
     flex-shrink: 0; color: var(--steel-bright); font-size: 15px; text-decoration: none;
   }
@@ -248,7 +515,28 @@
   }
   .embed-wrap iframe { display: block; width: 100%; border: none; }
   .embed-soundcloud iframe { height: 120px; }
-  .embed-youtube iframe { height: 160px; }
+  /* Compact by default — same as SoundCloud's collapsed state — and only
+     grows to full size while actually playing (yt-playing, toggled by
+     growIframeWithScrollCompensation() from the play/pause handlers).
+     The grown state uses a real aspect-ratio (not a fixed height) so the
+     video fills its actual width properly — a fixed height that doesn't
+     match a 16:9 ratio at the card's real width is exactly what caused
+     YouTube's player to letterbox with black bars on the sides. Loses the
+     smooth height transition for this one case (aspect-ratio/height:auto
+     don't animate), which is the right tradeoff over black bars. */
+  .embed-youtube iframe {
+    height: 120px;
+    transition: height 0.3s var(--ease);
+  }
+  .embed-youtube iframe.yt-playing {
+    height: auto;
+    aspect-ratio: 16 / 9;
+  }
+  .embed-spotify iframe { height: 152px; }
+  .embed-spotify.embed-spotify-tall iframe { height: 352px; }
+  .embed-drive iframe { height: 80px; }
+  .embed-dropbox-audio { padding: 10px 12px; }
+  .embed-dropbox-audio audio { display: block; width: 100%; height: 36px; }
   .embed-soundcloud-oembed iframe {
     height: 120px;
     transition: height 0.3s var(--ease);
@@ -258,6 +546,9 @@
     margin: 0; padding: 14px 12px; font-size: 12.5px; color: var(--ink-faint); text-align: center;
   }
   .embed-error { color: #ff8080; }
+  .embed-hint {
+    margin: 8px 2px 0; font-size: 11.5px; color: var(--ink-faint); line-height: 1.5;
+  }
 
   .submission-meta {
     margin-top: 10px; display: flex; gap: 14px; flex-wrap: wrap;
@@ -278,6 +569,7 @@
   .action-btn:hover { border-color: var(--ink-faint); color: var(--ink); }
   .action-btn.keep:hover { border-color: var(--steel); color: var(--steel-bright); }
   .action-btn.delete:hover { border-color: #ff8080; color: #ff8080; }
+  .action-btn.unsave:hover { border-color: #e0a848; color: #e0a848; }
 
   /* ---------- Key Finder & BPM tool (ported from index.html) ---------- */
   .tools-modal {
@@ -372,11 +664,13 @@
   }
   .wheel-modal.open { display: flex; align-items: flex-start; justify-content: center; }
   .wheel-modal-inner {
-    width: 100%; max-width: 520px; max-height: calc(100vh - 48px); margin: 0;
+    width: 100%; max-width: 600px; max-height: calc(100vh - 48px); margin: 0;
     background: var(--bg); border: 1px solid var(--line);
     border-radius: 24px; padding: 32px 24px; position: relative; text-align: center;
     overflow-y: auto; box-sizing: border-box;
+    scrollbar-width: none; -ms-overflow-style: none;
   }
+  .wheel-modal-inner::-webkit-scrollbar { display: none; width: 0; }
   .wheel-modal-close {
     position: absolute; top: 16px; right: 16px; width: 32px; height: 32px; border-radius: 50%;
     background: var(--surface); border: 1px solid var(--line); color: var(--ink);
@@ -389,8 +683,8 @@
 
   .wheel-stage {
     position: relative; margin: 0 auto 22px;
-    width: min(300px, 100%, 42vh);
-    height: min(300px, 100%, 42vh);
+    width: min(380px, 100%, 50vh);
+    height: min(380px, 100%, 50vh);
     aspect-ratio: 1 / 1;
   }
   .wheel-pointer {
@@ -467,6 +761,15 @@
     font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: var(--ink-faint);
     margin-bottom: 10px; text-align: center;
   }
+  .wheel-track-rows {
+    max-height: 240px; overflow-y: auto; padding-right: 4px;
+    /* Thin, unobtrusive scrollbar instead of the browser's default chunky one,
+       so a long list of tracks (4+) scrolls cleanly inside its own box
+       rather than stretching the whole wheel modal taller and taller. */
+    scrollbar-width: thin; scrollbar-color: var(--line) transparent;
+  }
+  .wheel-track-rows::-webkit-scrollbar { width: 6px; }
+  .wheel-track-rows::-webkit-scrollbar-thumb { background: var(--line); border-radius: 999px; }
   .wheel-track-row {
     display: flex; align-items: center; gap: 6px; margin-bottom: 6px;
   }
@@ -512,9 +815,22 @@
     animation: wheelHighlightPulse 1.1s ease-out 2;
     border-color: var(--steel-bright);
   }
+  /* THE "WHEEL PICK GETS STUCK DIMMED" BUG: jumping to the wheel's winning
+     card only added a border pulse — it never overrode the has-playing
+     dimming/blur that applies to every card except whichever is actually
+     playing. If something else was already playing, the card the wheel
+     just pointed you at stayed opacity:0.45 + blurred, making its own
+     play button hard to even see clearly, let alone click — which is
+     exactly what made it look like "nothing happens" when going to it.
+     Higher specificity here (extra class) wins over that dimming rule. */
+  .submission-list.has-playing .submission-card.wheel-highlight:not(.now-playing) {
+    opacity: 1; filter: none;
+  }
 </style>
 </head>
 <body>
+
+<canvas id="bg-dots-canvas" aria-hidden="true"></canvas>
 
 <div id="login-gate">
   <div class="login-card">
@@ -543,6 +859,10 @@
       <div class="who" id="who-label"></div>
     </div>
     <div class="header-actions">
+      <button type="button" class="submit-toggle-btn" id="submit-toggle-btn" title="Toggle whether the public submit page is accepting tracks right now">
+        <span class="submit-toggle-dot" id="submit-toggle-dot"></span>
+        <span id="submit-toggle-label">Submissions: loading…</span>
+      </button>
       <button class="wheel-trigger-btn" id="open-wheel">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 3v9l6 3"/></svg>
         Wheel
@@ -564,7 +884,7 @@
   <div class="filter-row">
     <button class="filter-btn active" data-filter="all">All</button>
     <button class="filter-btn" data-filter="new">New</button>
-    <button class="filter-btn" data-filter="kept">Kept</button>
+    <button class="filter-btn" data-filter="kept">Save</button>
     <button class="filter-btn trash-btn" data-filter="trash">Trash</button>
     <button class="sort-toggle-btn" id="sort-toggle-btn" title="Reverse arrival order">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 7h13M3 12h9M3 17h5M17 7v13M17 7l-4 4M17 7l4 4" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -586,7 +906,7 @@
     getAuth, signOut, onAuthStateChanged, signInWithEmailAndPassword
   } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
   import {
-    getFirestore, collection, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc, serverTimestamp, writeBatch
+    getFirestore, collection, query, orderBy, onSnapshot, doc, setDoc, updateDoc, deleteDoc, serverTimestamp, writeBatch
   } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 
   // SoundCloud's Widget API (classic script, not an ES module) — lets us
@@ -633,6 +953,8 @@
   const listEl = document.getElementById('submission-list');
   const emptyState = document.getElementById('empty-state');
   const emptyTrashBtn = document.getElementById('empty-trash-btn');
+  const submitToggleBtn = document.getElementById('submit-toggle-btn');
+  const submitToggleLabel = document.getElementById('submit-toggle-label');
   const sortToggleBtn = document.getElementById('sort-toggle-btn');
   const sortToggleLabel = document.getElementById('sort-toggle-label');
   const filterBtns = document.querySelectorAll('.filter-btn');
@@ -640,6 +962,10 @@
   const searchClear = document.getElementById('search-clear');
   const globalVolumeSlider = document.getElementById('global-volume-slider');
   const globalVolumeValue = document.getElementById('global-volume-value');
+  const floatingVolume = document.getElementById('floating-volume');
+  const queuePositionBadge = document.getElementById('queue-position-badge');
+  const queuePositionText = document.getElementById('queue-position-text');
+  const floatingVolumeMuteBtn = document.getElementById('floating-volume-mute-btn');
 
   let allSubmissions = [];
   let currentFilter = 'all';
@@ -648,6 +974,16 @@
   let relativeTimeRefreshInterval = null;
   let panelVolume = 80; // single panel-wide volume, applied to every embed
   let unsubscribe = null;
+  let unsubscribeSubmitGate = null;
+  let submitGateOpen = false; // whether the public submit page is currently accepting tracks
+  // Which submission IDs currently have their link REVEALED — empty by
+  // default, meaning every link is blurred until the admin explicitly
+  // clicks the eye icon to reveal it. Per-session, browser-local
+  // preference, not written to Firestore.
+  const visibleLinkIds = new Set();
+
+  const EYE_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>';
+  const EYE_OFF_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17.94 17.94A10.94 10.94 0 0112 19c-7 0-11-7-11-7a18.5 18.5 0 015.06-5.94M9.9 4.24A10.4 10.4 0 0112 4c7 0 11 7 11 7a18.5 18.5 0 01-2.16 3.19m-6.18-1.07a3 3 0 11-4.24-4.24" stroke-linecap="round" stroke-linejoin="round"/><path d="M1 1l22 22" stroke-linecap="round"/></svg>';
 
   // ---- error message mapping --------------------------------------------
   // Firebase Auth error codes -> a plain-language explanation + (optional)
@@ -712,6 +1048,64 @@
     loginHint.classList.remove('visible');
   }
 
+  // ---- background dot grid: auto-drift only ------------------------------
+  // Just the constant down-right drift — no cursor interaction here (kept
+  // only on the public submit page; the admin panel is where focus matters
+  // most, so this stays purely ambient and unreactive).
+  (function setupBackgroundDots() {
+    const canvas = document.getElementById('bg-dots-canvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    const SPACING = 28;
+    const DOT_RADIUS = 1;
+    const DOT_ALPHA = 0.2;
+    const DRIFT_SPEED = 2.5; // px/sec, down-right — slow and calm
+
+    let dpr = Math.min(window.devicePixelRatio || 1, 2);
+    let width = 0, height = 0;
+    let driftOffset = 0;
+
+    function resize() {
+      width = window.innerWidth;
+      height = window.innerHeight;
+      canvas.width = Math.round(width * dpr);
+      canvas.height = Math.round(height * dpr);
+      canvas.style.width = width + 'px';
+      canvas.style.height = height + 'px';
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+
+    function drawFrame() {
+      ctx.clearRect(0, 0, width, height);
+      const offset = driftOffset % SPACING;
+      ctx.fillStyle = `rgba(168, 200, 236, ${DOT_ALPHA})`;
+      for (let x = offset - SPACING; x < width + SPACING; x += SPACING) {
+        for (let y = offset - SPACING; y < height + SPACING; y += SPACING) {
+          ctx.beginPath();
+          ctx.arc(x, y, DOT_RADIUS, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
+
+    resize();
+    drawFrame();
+    window.addEventListener('resize', () => { resize(); drawFrame(); });
+
+    if (!prefersReducedMotion) {
+      let lastTime = performance.now();
+      requestAnimationFrame(function tick(now) {
+        const dt = (now - lastTime) / 1000;
+        lastTime = now;
+        driftOffset += DRIFT_SPEED * dt;
+        drawFrame();
+        requestAnimationFrame(tick);
+      });
+    }
+  })();
+
   // ---- sign-in --------------------------------------------------------
   emailForm.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -742,6 +1136,7 @@
       loginGate.style.display = 'flex';
       adminShell.style.display = 'none';
       if (unsubscribe) { unsubscribe(); unsubscribe = null; }
+      if (unsubscribeSubmitGate) { unsubscribeSubmitGate(); unsubscribeSubmitGate = null; }
       if (relativeTimeRefreshInterval) { clearInterval(relativeTimeRefreshInterval); relativeTimeRefreshInterval = null; }
       allSubmissions = [];
     }
@@ -757,6 +1152,18 @@
       emptyState.textContent = "Couldn't load submissions — check your connection.";
       emptyState.style.display = 'block';
     });
+
+    // Single doc the public submit page reads (unauthenticated) to decide
+    // whether to show its form at all — see submit.html. Toggled from the
+    // button in the header.
+    unsubscribeSubmitGate = onSnapshot(doc(db, 'settings', 'submitGate'), (snap) => {
+      submitGateOpen = snap.exists() && snap.data().open === true;
+      updateSubmitToggleUI();
+    }, (err) => {
+      console.error('Failed to load submit-gate status:', err);
+      submitToggleLabel.textContent = 'Submissions: unknown';
+    });
+
     // Re-render periodically so "20s ago" doesn't silently go stale between
     // actual data changes. IMPORTANT: this must NOT call the full render()
     // — render() rebuilds listEl.innerHTML from scratch, which destroys and
@@ -777,6 +1184,34 @@
     });
   }
 
+  // "Track 8 of 34" — the count is based on the first card whose bottom
+  // edge hasn't scrolled above the top of the viewport yet, i.e. the
+  // topmost card still at least partly visible. That updates naturally as
+  // you scroll (no exact pixel to land on) and stays unambiguous even with
+  // several cards on screen at once — it's always specifically the
+  // topmost one still in view, not some card matching an arbitrary line.
+  // Reads cards in actual VISUAL order (top-to-bottom on screen), not raw
+  // DOM order — .sort-reversed flips the visual order via CSS
+  // (flex-direction) without touching the DOM, so DOM order alone would
+  // mislabel "Track 1" as the bottommost card whenever newest-first sort
+  // is active.
+  function updateQueuePosition() {
+    const cards = Array.from(listEl.querySelectorAll('.submission-card:not(.card-exiting)'));
+    if (cards.length === 0) { queuePositionBadge.style.display = 'none'; return; }
+    if (listEl.classList.contains('sort-reversed')) cards.reverse();
+
+    let index = cards.findIndex(card => card.getBoundingClientRect().bottom > 0);
+    if (index === -1) index = cards.length - 1; // scrolled past everything
+    queuePositionText.innerHTML = `Track <strong>${index + 1}</strong> of ${cards.length}`;
+    queuePositionBadge.style.display = 'block';
+  }
+  let queuePositionRafPending = false;
+  window.addEventListener('scroll', () => {
+    if (queuePositionRafPending) return;
+    queuePositionRafPending = true;
+    requestAnimationFrame(() => { queuePositionRafPending = false; updateQueuePosition(); });
+  }, { passive: true });
+
   filterBtns.forEach(btn => {
     btn.addEventListener('click', () => {
       filterBtns.forEach(b => b.classList.remove('active'));
@@ -789,7 +1224,17 @@
   sortToggleBtn.addEventListener('click', () => {
     sortReversed = !sortReversed;
     sortToggleLabel.textContent = sortReversed ? 'Newest first' : 'Oldest first';
-    render();
+    // THE SORT BUG: this used to call render(), which rebuilds the ordered
+    // card list and repositions any card whose index no longer matches —
+    // and reversing the order means almost EVERY card's correct index
+    // changes at once. Moving a card via insertBefore (even just to swap
+    // two adjacent positions) forces browsers to reload any <iframe>
+    // inside it from scratch, so flipping the sort order was silently
+    // reloading/cutting out every SoundCloud/YouTube embed on the page
+    // simultaneously, including whatever was actively playing. Toggling
+    // this class instead flips the *visual* order via flex-direction with
+    // zero DOM moves — nothing in the list is touched at all.
+    listEl.classList.toggle('sort-reversed', sortReversed);
   });
 
   searchInput.addEventListener('input', (e) => {
@@ -828,58 +1273,196 @@
     }
   });
 
-  // ---- panel-wide volume: one slider, applied to every embed at once ----
-  // Both SoundCloud's Widget API and YouTube's IFrame API accept volume
-  // commands via postMessage, so this works without loading either
-  // platform's JS SDK — just send the right message shape to each iframe.
-  // YouTube's IFrame API posts state-change events back via postMessage once
-  // a listener has been registered with it (the {event:'listen', ...}
-  // handshake below). State 1 = playing. Listening globally rather than
-  // attaching one handler per iframe, since all YouTube embeds post to the
-  // same window — we identify which iframe a message came from by matching
-  // event.source against each tracked iframe's contentWindow.
-  window.addEventListener('message', (event) => {
-    if (event.origin !== 'https://www.youtube.com') return;
-    let data;
-    try { data = JSON.parse(event.data); } catch { return; }
-    if (data.event !== 'onStateChange' || data.info !== 1) return; // 1 = playing
-    activeYoutubeIframes.forEach(iframe => {
-      if (iframe.contentWindow === event.source) pauseAllExcept(iframe);
-    });
+  // ---- submit gate: open/close the public submit page -------------------
+  // A single settings doc the public submit form checks (unauthenticated
+  // read) before showing itself at all — closed by default between
+  // streams, opened right before going live. Uses setDoc(...,{merge:true})
+  // rather than updateDoc so the very first toggle works even before the
+  // doc exists yet (updateDoc would fail with "no such document").
+  function updateSubmitToggleUI() {
+    submitToggleBtn.classList.toggle('is-open', submitGateOpen);
+    submitToggleLabel.textContent = `Submissions: ${submitGateOpen ? 'open' : 'closed'}`;
+  }
+
+  submitToggleBtn.addEventListener('click', async () => {
+    const nextOpen = !submitGateOpen;
+    submitToggleBtn.disabled = true;
+    try {
+      await setDoc(doc(db, 'settings', 'submitGate'), { open: nextOpen }, { merge: true });
+    } catch (err) {
+      console.error('Toggle submit gate failed:', err);
+      alert("Couldn't change the submit status — try again.");
+    } finally {
+      submitToggleBtn.disabled = false;
+    }
   });
 
-  function setupYoutubePauseTracking(iframe) {
-    activeYoutubeIframes.add(iframe);
-    iframe.addEventListener('load', () => {
-      if (iframe.contentWindow) {
-        iframe.contentWindow.postMessage(JSON.stringify({ event: 'listening', id: 1 }), 'https://www.youtube.com');
-      }
+  // ---- YouTube: official IFrame Player API -------------------------------
+  // Previously this hand-rolled the raw postMessage protocol YouTube's
+  // player uses internally (sending {event:'listening',...} by hand and
+  // parsing {event:'onStateChange',...} messages back). That's exactly
+  // what growing-on-play kept failing on — the raw protocol is undocumented
+  // and version-fragile, and evidently wasn't firing onStateChange
+  // reliably in practice despite matching the expected shape. Loading
+  // YouTube's own official IFrame API script and using a real YT.Player
+  // instance instead means Google's code handles that entire handshake,
+  // not a hand-written guess at it.
+  let youtubeApiPromise = null;
+  function loadYoutubeApi() {
+    if (youtubeApiPromise) return youtubeApiPromise;
+    youtubeApiPromise = new Promise((resolve) => {
+      if (window.YT && window.YT.Player) { resolve(); return; }
+      const previous = window.onYouTubeIframeAPIReady;
+      window.onYouTubeIframeAPIReady = () => {
+        if (typeof previous === 'function') previous(); // don't clobber some other script's callback, if any
+        resolve();
+      };
+      const tag = document.createElement('script');
+      tag.src = 'https://www.youtube.com/iframe_api';
+      document.head.appendChild(tag);
     });
+    return youtubeApiPromise;
+  }
+
+  const youtubePlayers = new Map(); // iframe -> YT.Player instance, once its onReady has fired
+
+  function setupYoutubePlayer(iframe) {
+    if (!iframe.id) iframe.id = `yt-iframe-${Math.random().toString(36).slice(2)}`;
+    loadYoutubeApi().then(() => {
+      // The card (and this iframe) might have been removed from the DOM
+      // already (filter/search changed) by the time the API script
+      // finishes loading — don't bind a player to a detached element.
+      if (!iframe.isConnected) return;
+      // YT.Player "upgrades" the EXISTING iframe in place (it recognizes a
+      // valid youtube.com embed src with enablejsapi=1 and binds to it)
+      // rather than replacing it — so this doesn't disrupt anything already
+      // pointing at this iframe element.
+      const player = new YT.Player(iframe.id, {
+        events: {
+          onReady: () => {
+            youtubePlayers.set(iframe, player);
+            player.setVolume(panelVolume); // same "apply current volume once the player actually exists" fix as before, just via the real API now
+          },
+          onStateChange: (e) => {
+            const state = e.data; // YT.PlayerState: -1 unstarted, 0 ended, 1 playing, 2 paused, 3 buffering, 5 cued
+            if (state === 1) {
+              player.setVolume(panelVolume);
+              growIframeWithScrollCompensation(iframe, true, 'yt-playing');
+              markNowPlaying(iframe);
+              pauseAllExcept(iframe);
+              startYoutubeProgressPolling(iframe, player);
+            } else if (state === 2) {
+              growIframeWithScrollCompensation(iframe, false, 'yt-playing');
+              markPaused(iframe);
+              stopYoutubeProgressPolling(iframe);
+            } else if (state === 0) {
+              growIframeWithScrollCompensation(iframe, false, 'yt-playing');
+              clearNowPlaying(iframe);
+              stopYoutubeProgressPolling(iframe);
+            }
+          }
+        }
+      });
+    });
+  }
+
+  // The official API doesn't push continuous progress events the way
+  // SoundCloud's Widget SDK's PLAY_PROGRESS does — polling
+  // getCurrentTime()/getDuration() while this is the actually-playing
+  // track is the equivalent for feeding the sticky bar's seek strip.
+  const youtubeProgressTimers = new Map(); // iframe -> interval id
+  function startYoutubeProgressPolling(iframe, player) {
+    stopYoutubeProgressPolling(iframe);
+    const timer = setInterval(() => {
+      if (currentPlayingIframe !== iframe) { stopYoutubeProgressPolling(iframe); return; }
+      const duration = player.getDuration ? player.getDuration() : 0;
+      const current = player.getCurrentTime ? player.getCurrentTime() : 0;
+      if (duration > 0) updateStickyProgress(current, duration);
+    }, 400);
+    youtubeProgressTimers.set(iframe, timer);
+  }
+  function stopYoutubeProgressPolling(iframe) {
+    const timer = youtubeProgressTimers.get(iframe);
+    if (timer) { clearInterval(timer); youtubeProgressTimers.delete(iframe); }
   }
 
   function applyGlobalVolumeToYoutubeIframe(iframe) {
-    if (!iframe || !iframe.contentWindow) return;
-    iframe.contentWindow.postMessage(
-      JSON.stringify({ event: 'command', func: 'setVolume', args: [panelVolume] }),
-      'https://www.youtube.com'
-    );
+    const player = youtubePlayers.get(iframe);
+    if (player && typeof player.setVolume === 'function') player.setVolume(panelVolume);
   }
   function applyGlobalVolumeToSoundcloudIframe(iframe) {
+    // Prefer the Widget SDK's setVolume() when we have a connected instance
+    // — more reliable than posting the raw message by hand, and matches
+    // what the PLAY handler above uses to make the volume actually stick.
+    const widget = activeSoundcloudWidgets.get(iframe);
+    if (widget) { widget.setVolume(panelVolume); return; }
     if (!iframe || !iframe.contentWindow) return;
     iframe.contentWindow.postMessage(
       JSON.stringify({ method: 'setVolume', value: panelVolume }),
       'https://w.soundcloud.com'
     );
   }
+  // Dropbox tracks are a native <audio> element, not an iframe — no
+  // postMessage handshake needed, just set its .volume property directly
+  // (native <audio>.volume is 0–1, panelVolume is 0–100).
+  function applyGlobalVolumeToDropboxAudio(audioEl) {
+    if (!audioEl) return;
+    audioEl.volume = panelVolume / 100;
+  }
   function applyGlobalVolumeToAllEmbeds() {
+    // THE DROPBOX VOLUME BUG: this used to only touch YouTube/SoundCloud
+    // iframes — Dropbox's native <audio> element was never included at
+    // all, so the panel-wide volume slider silently had zero effect on it
+    // regardless of where the slider was set.
     listEl.querySelectorAll('.embed-wrap[data-embed-type="youtube"] iframe').forEach(applyGlobalVolumeToYoutubeIframe);
     listEl.querySelectorAll('.embed-soundcloud-oembed iframe').forEach(applyGlobalVolumeToSoundcloudIframe);
+    listEl.querySelectorAll('.embed-dropbox-audio audio').forEach(applyGlobalVolumeToDropboxAudio);
   }
-  globalVolumeSlider.addEventListener('input', (e) => {
-    panelVolume = Number(e.target.value);
+
+  // Paints the slider's filled portion as a gradient up to the current
+  // value — native <input type="range"> has no built-in way to show this,
+  // so it's set as an inline background on every value change. Mirrors the
+  // same fill language as the sticky player's seek bar for visual
+  // consistency across the panel's audio controls.
+  function updateVolumeSliderFill() {
+    globalVolumeSlider.style.background =
+      `linear-gradient(to right, var(--steel-bright) ${panelVolume}%, var(--line) ${panelVolume}%)`;
+  }
+
+  // Single source of truth for every volume change, whichever control
+  // triggered it (the slider being dragged, or the mute button toggling) —
+  // keeps the slider position, the % label, the gradient fill, the muted
+  // icon state, and what's actually applied to the embeds from ever
+  // drifting out of sync with each other.
+  function setPanelVolume(value) {
+    panelVolume = clamp(Math.round(value), 0, 100);
+    globalVolumeSlider.value = panelVolume;
     globalVolumeValue.textContent = panelVolume + '%';
+    floatingVolume.classList.toggle('is-muted', panelVolume === 0);
+    updateVolumeSliderFill();
     applyGlobalVolumeToAllEmbeds();
+  }
+
+  globalVolumeSlider.addEventListener('input', (e) => {
+    setPanelVolume(Number(e.target.value));
   });
+
+  // Mute toggle: remembers the volume from right before muting so clicking
+  // again restores it exactly, instead of snapping back to some fixed
+  // default. Dragging the slider back up from 0 manually also implicitly
+  // "unmutes" — is-muted is purely derived from panelVolume === 0, not a
+  // separate flag, so the two controls can never disagree about state.
+  let volumeBeforeMute = panelVolume;
+  floatingVolumeMuteBtn.addEventListener('click', () => {
+    if (panelVolume > 0) {
+      volumeBeforeMute = panelVolume;
+      setPanelVolume(0);
+    } else {
+      setPanelVolume(volumeBeforeMute || 80);
+    }
+  });
+
+  updateVolumeSliderFill(); // paint the initial gradient to match the slider's default value
 
   function formatDate(ts) {
     if (!ts) return '';
@@ -905,16 +1488,36 @@
     return formatDate(ts); // beyond ~2 weeks, an actual date is more useful than "17d ago"
   }
 
+  // Parses a submitted link permissively: if it's missing a scheme
+  // entirely (very common — people paste "dropbox.com/..." or
+  // "www.dropbox.com/..." straight from an address bar without the
+  // "https://"), retries assuming https instead of treating it as invalid.
+  // Without this, `new URL()` throws on any scheme-less link, which broke
+  // host detection, embedding, AND the actual <a href> (a schemeless string
+  // in an href attribute resolves as a RELATIVE path on this panel's own
+  // domain instead of navigating out to the real site) — for every
+  // platform, not just one.
+  function normalizeUrl(raw) {
+    if (!raw) return null;
+    const trimmed = String(raw).trim();
+    if (!trimmed) return null;
+    try {
+      return new URL(trimmed);
+    } catch {
+      try {
+        return new URL('https://' + trimmed);
+      } catch {
+        return null;
+      }
+    }
+  }
+
   // Parses a URL and returns just its hostname (e.g. "soundcloud.com"),
   // so the admin can see where a link actually points before clicking it —
   // instead of trusting link text/labels, which can be spoofed.
   function getLinkHost(url) {
-    try {
-      const u = new URL(url);
-      return u.hostname.replace(/^www\./, '');
-    } catch {
-      return null; // not a valid absolute URL
-    }
+    const u = normalizeUrl(url);
+    return u ? u.hostname.replace(/^www\./, '') : null;
   }
 
   // Detects whether a link can be embedded as an inline player, and returns
@@ -933,9 +1536,13 @@
   function getEmbedInfo(url, host) {
     if (!host) return null;
     try {
-      const u = new URL(url);
+      const u = normalizeUrl(url);
+      if (!u) return null;
       if (host === 'soundcloud.com' || host === 'on.soundcloud.com' || host === 'm.soundcloud.com') {
-        return { type: 'soundcloud-oembed', sourceUrl: url };
+        // Use the normalized (guaranteed-https) URL here, not the raw
+        // `url` — SoundCloud's oEmbed endpoint needs a real absolute URL
+        // and won't resolve a scheme-less one like "soundcloud.com/...".
+        return { type: 'soundcloud-oembed', sourceUrl: u.toString() };
       }
       if (host === 'youtube.com' || host === 'youtu.be' || host === 'music.youtube.com') {
         let videoId = null;
@@ -950,7 +1557,66 @@
         }
         if (!videoId) return null;
         videoId = videoId.split('?')[0].split('&')[0];
-        return { type: 'youtube', src: `https://www.youtube.com/embed/${videoId}?enablejsapi=1` };
+        return { type: 'youtube', src: `https://www.youtube.com/embed/${videoId}?enablejsapi=1&origin=${encodeURIComponent(window.location.origin)}` };
+      }
+      // Spotify's oEmbed endpoint doesn't support CORS (confirmed: a direct
+      // fetch from browser JS fails), unlike SoundCloud/YouTube. But every
+      // Spotify embed is just https://open.spotify.com/embed/{type}/{id} —
+      // a predictable pattern we can build directly from the link itself,
+      // for the six embeddable types Spotify supports.
+      if (host === 'open.spotify.com') {
+        const match = u.pathname.match(/^\/(track|album|playlist|artist|show|episode)\/([a-zA-Z0-9]{22})/);
+        if (!match) return null;
+        const [, spotifyType, spotifyId] = match;
+        // Compact height for a single track; full-art height for anything
+        // else (albums/playlists/artists/shows/episodes), matching Spotify's
+        // own embed sizing guidance.
+        const height = spotifyType === 'track' ? 152 : 352;
+        return { type: 'spotify', src: `https://open.spotify.com/embed/${spotifyType}/${spotifyId}`, height };
+      }
+      // Google Drive: only the .../file/d/FILE_ID/view share format was
+      // recognized before — but Drive also hands out .../open?id=FILE_ID
+      // and .../uc?id=FILE_ID links (older "Get link" style, and links
+      // copied from some third-party tools), which all point at the exact
+      // same file. Whichever shape it's in, build the iframe-embeddable
+      // /preview URL the same way.
+      //
+      // The big one in practice: links copied while signed into Drive on
+      // anything other than your first/default Google account come back as
+      // .../u/0/file/d/FILE_ID/... (or /u/1/, /u/2/, etc.) — that account
+      // index sits BEFORE /file/d/, so the old regex (anchored to the very
+      // start of the path) never matched it at all and silently treated
+      // the link as non-embeddable. This is very likely what's been
+      // showing up as "Drive doesn't work."
+      if (host === 'drive.google.com') {
+        const pathMatch = u.pathname.match(/^\/(?:u\/\d+\/)?file\/d\/([\w-]+)/);
+        const fileId = pathMatch ? pathMatch[1] : u.searchParams.get('id');
+        if (!fileId) return null;
+        return { type: 'drive', src: `https://drive.google.com/file/d/${fileId}/preview` };
+      }
+      // Dropbox: shared links default to a landing page (?dl=0), and even
+      // with dl=1, www.dropbox.com still serves an HTML page that uses
+      // JAVASCRIPT to redirect to the real file — which works fine when a
+      // person navigates there directly in a browser tab, but an <audio
+      // src="..."> fetches the URL as a raw media resource and never
+      // executes that page's JS, so it just receives an HTML document with
+      // the wrong MIME type instead of audio. This is exactly the
+      // "Dropbox serves a preview page instead of the file" failure.
+      //
+      // The actual fix: rewrite the host to dl.dropboxusercontent.com,
+      // Dropbox's separate content-serving domain that returns the real
+      // file bytes directly with no redirect/JS involved at all. `st` (a
+      // page-session token for www.dropbox.com's preview UI) and `e` get
+      // dropped since they're meaningless there and can even interfere;
+      // `rlkey` (the actual access credential) and dl=1 are kept.
+      if (host === 'dropbox.com') {
+        if (!/\.(mp3|wav|m4a|aac|flac|ogg|opus)$/i.test(u.pathname)) return null; // only known audio file extensions
+        const direct = new URL(u.toString());
+        direct.hostname = 'dl.dropboxusercontent.com';
+        direct.searchParams.delete('st');
+        direct.searchParams.delete('e');
+        direct.searchParams.set('dl', '1');
+        return { type: 'dropbox-audio', src: direct.toString() };
       }
       return null;
     } catch {
@@ -965,6 +1631,7 @@
   // a human-readable name instead of the raw URL — e.g. the wheel's track
   // picker list).
   const soundcloudOembedCache = new Map(); // sourceUrl -> { html, title }
+  const youtubeOembedTitleCache = new Map(); // sourceUrl -> title string
 
   // Grows the SoundCloud iframe taller while it's actively playing (giving
   // enough room to comfortably grab and drag the waveform to seek), and
@@ -974,19 +1641,437 @@
   // Also tracks every connected widget so that starting one can pause all
   // the others — avoids overlapping audio from multiple tracks at once.
   const activeSoundcloudWidgets = new Map(); // iframe -> SC.Widget instance
-  const activeYoutubeIframes = new Set();
 
-  function pauseAllExcept(exceptIframe) {
+  function pauseAllExcept(exceptEl) {
     activeSoundcloudWidgets.forEach((widget, iframe) => {
-      if (iframe !== exceptIframe) widget.pause();
+      if (iframe === exceptEl) return;
+      try { widget.pause(); } catch (err) { console.error('Failed to pause a SoundCloud widget:', err); }
     });
-    activeYoutubeIframes.forEach(iframe => {
-      if (iframe !== exceptIframe && iframe.contentWindow) {
-        iframe.contentWindow.postMessage(
-          JSON.stringify({ event: 'command', func: 'pauseVideo', args: [] }),
-          'https://www.youtube.com'
-        );
+    youtubePlayers.forEach((player, iframe) => {
+      if (iframe === exceptEl || typeof player.pauseVideo !== 'function') return;
+      try { player.pauseVideo(); } catch (err) { console.error('Failed to pause a YouTube player:', err); }
+    });
+    activeDropboxAudios.forEach(audioEl => {
+      if (audioEl === exceptEl || audioEl.paused) return;
+      try { audioEl.pause(); } catch (err) { console.error('Failed to pause a Dropbox <audio>:', err); }
+    });
+  }
+
+  // Marks the card containing this iframe as "now playing" (full focus,
+  // everything else dimmed/blurred ONLY while that card is actually in
+  // view — see refreshFocusDimming()), and clears that mark from every
+  // other card. Shared between SoundCloud and YouTube's play handlers so
+  // both platforms get the same visual treatment.
+  let currentPlayingIframe = null; // tracks which iframe is "now playing", for the sticky bar's controls
+  let currentPlayingPaused = false; // true while currentPlayingIframe is paused (not ended) — lets the sticky bar resume it
+
+  function markNowPlaying(iframe) {
+    listEl.querySelectorAll('.submission-card.now-playing').forEach(c => {
+      c.classList.remove('now-playing');
+      c.classList.remove('is-paused');
+    });
+    const card = iframe.closest('.submission-card');
+    if (card) card.classList.add('now-playing');
+    currentPlayingIframe = iframe;
+    currentPlayingPaused = false;
+    updateStickyPlayer();
+  }
+  // Paused (not ended): keeps currentPlayingIframe set so the sticky bar's
+  // play/pause button can resume the SAME track from where it left off,
+  // instead of treating pause identically to "stopped" the way the old
+  // single clearNowPlaying() did for both PAUSE and FINISH events.
+  function markPaused(iframe) {
+    if (currentPlayingIframe !== iframe) return; // a background widget's own pause, not the active track
+    currentPlayingPaused = true;
+    const card = iframe.closest('.submission-card');
+    if (card) card.classList.add('is-paused');
+    updateStickyPlayer();
+  }
+  function clearNowPlaying(iframe) {
+    const card = iframe.closest('.submission-card');
+    if (card) {
+      card.classList.remove('now-playing');
+      card.classList.remove('is-paused');
+    }
+    if (currentPlayingIframe === iframe) {
+      currentPlayingIframe = null;
+      currentPlayingPaused = false;
+    }
+    updateStickyPlayer();
+  }
+
+  // The "everything else dims/blurs" focus effect only makes sense while
+  // you're actually looking at the playing card — once you've scrolled
+  // away to browse the rest of the list (which is exactly why you'd
+  // scroll), the other cards should read at full clarity. Also off
+  // entirely while paused, since nothing is actually sounding.
+  function refreshFocusDimming() {
+    const shouldDim = !!currentPlayingIframe && !currentPlayingPaused && nowPlayingCardVisible;
+    listEl.classList.toggle('has-playing', shouldDim);
+  }
+
+  // Sticky now-playing bar: shown only when the currently-playing card has
+  // scrolled out of view, so the admin always has stop/keep/delete controls
+  // (plus a seek bar) available without losing their place while browsing
+  // further down (or up) a long list of submissions.
+  const stickyPlayer = document.getElementById('sticky-player');
+  const stickyPlayerTrack = document.getElementById('sticky-player-track');
+  const stickyPlayerName = document.getElementById('sticky-player-name');
+  const stickyPlayerTimeCurrent = document.getElementById('sticky-player-time-current');
+  const stickyPlayerTimeTotal = document.getElementById('sticky-player-time-total');
+  const stickyPlayerProgress = document.getElementById('sticky-player-progress');
+  const stickyPlayerProgressFill = document.getElementById('sticky-player-progress-fill');
+  const stickyPlayerProgressHandle = document.getElementById('sticky-player-progress-handle');
+  const stickyPlayerPlayPause = document.getElementById('sticky-player-playpause');
+  const stickyPlayerKeep = document.getElementById('sticky-player-keep');
+  const stickyPlayerDelete = document.getElementById('sticky-player-delete');
+  const stickyPlayerJump = document.getElementById('sticky-player-jump');
+
+  const PAUSE_ICON_SVG = '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>';
+  const PLAY_ICON_SVG = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
+
+  function updateStickyPlayPauseIcon() {
+    const label = currentPlayingPaused ? 'Play' : 'Pause';
+    stickyPlayerPlayPause.innerHTML = currentPlayingPaused ? PLAY_ICON_SVG : PAUSE_ICON_SVG;
+    stickyPlayerPlayPause.title = label;
+    stickyPlayerPlayPause.setAttribute('aria-label', label);
+  }
+
+  // Resolves the actual track title (not just who submitted it) for the
+  // sticky bar — SoundCloud and YouTube both expose this via oEmbed, reusing
+  // the exact same caches the main list and wheel already populate, so this
+  // is instant for anything already resolved elsewhere this session.
+  // Dropbox has no title API, but the uploaded filename (pulled straight
+  // out of the URL) is a much better fallback than just showing
+  // "dropbox.com" — same fix as the stream view. Spotify/Drive still have
+  // no client-fetchable title at all, so those fall back to the domain.
+  async function resolveTrackTitle(link) {
+    const host = getLinkHost(link);
+    const u = normalizeUrl(link);
+    const absLink = u ? u.toString() : link;
+    if (host === 'dropbox.com') {
+      if (!u) return null;
+      const last = u.pathname.split('/').pop();
+      if (!last) return null;
+      try { return decodeURIComponent(last); } catch { return last; }
+    }
+    if (host === 'soundcloud.com' || host === 'on.soundcloud.com' || host === 'm.soundcloud.com') {
+      let cached = soundcloudOembedCache.get(absLink);
+      if (!cached) {
+        try {
+          const oembedUrl = `https://soundcloud.com/oembed?format=json&url=${encodeURIComponent(absLink)}&auto_play=false&color=%23a8c8ec&visual=false&show_comments=false&show_reposts=false`;
+          const res = await fetch(oembedUrl);
+          if (!res.ok) throw new Error('oEmbed request failed: ' + res.status);
+          const data = await res.json();
+          cached = { html: data.html, title: data.title || null };
+          soundcloudOembedCache.set(absLink, cached);
+        } catch { return null; }
       }
+      return cached.title || null;
+    }
+    if (host === 'youtube.com' || host === 'youtu.be' || host === 'music.youtube.com') {
+      let title = youtubeOembedTitleCache.get(absLink);
+      if (!title) {
+        try {
+          const oembedUrl = `https://www.youtube.com/oembed?format=json&url=${encodeURIComponent(absLink)}`;
+          const res = await fetch(oembedUrl);
+          if (!res.ok) throw new Error('YouTube oEmbed request failed: ' + res.status);
+          const data = await res.json();
+          title = data.title || null;
+          if (title) youtubeOembedTitleCache.set(absLink, title);
+        } catch { return null; }
+      }
+      return title;
+    }
+    return null;
+  }
+
+  let stickyTitleRequestId = 0; // guards against a slow fetch overwriting a NEWER track's title after a quick skip
+
+  // SoundCloud/YouTube oEmbed titles commonly come back as "Track Name by
+  // Whoever" — and the sender's name is already shown right below in the
+  // pill, so showing "by X" again in the title line is redundant. Strips
+  // everything from the last " by " onward, leaving just the track name.
+  function stripTrailingByline(title) {
+    if (!title) return title;
+    const idx = title.toLowerCase().lastIndexOf(' by ');
+    if (idx === -1) return title;
+    const stripped = title.slice(0, idx).trim();
+    return stripped || title; // don't return an empty string if "by " was the whole title
+  }
+
+  function setStickyTrackInfo(card) {
+    const senderEl = card.querySelector('[data-hook="title"]');
+    stickyPlayerName.textContent = senderEl ? senderEl.textContent : '';
+
+    const id = card.dataset.id;
+    const submission = allSubmissions.find(s => s.id === id);
+    const link = submission ? (submission.link || '') : '';
+    const host = getLinkHost(link);
+    const canResolve = host === 'soundcloud.com' || host === 'on.soundcloud.com' || host === 'm.soundcloud.com'
+      || host === 'youtube.com' || host === 'youtu.be' || host === 'music.youtube.com'
+      || host === 'dropbox.com';
+
+    const requestId = ++stickyTitleRequestId;
+    stickyPlayerTrack.textContent = canResolve ? 'Loading title…' : (placeholderLabelFor(link) || 'Now playing');
+    if (!canResolve) return;
+    resolveTrackTitle(link).then(title => {
+      if (requestId !== stickyTitleRequestId) return; // a different track took over before this resolved
+      stickyPlayerTrack.textContent = stripTrailingByline(title) || placeholderLabelFor(link) || 'Now playing';
+    });
+  }
+
+  let nowPlayingCardVisible = true; // whether the playing card is still prominently in the viewport
+  // THE "DIMMING WAITS TOO LONG" BUG: threshold:0 only flips isIntersecting
+  // once the card is 100% gone from the viewport — scroll it 99% off
+  // screen and everything else stayed dimmed/blurred the whole time.
+  // threshold:0.5 fires as soon as the card drops below half-visible,
+  // which is much closer to "no longer the thing I'm looking at" — and
+  // the sticky bar (driven by this same flag) appears right at that same
+  // point too, matching when it's actually needed.
+  const nowPlayingObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => { nowPlayingCardVisible = entry.isIntersecting; });
+    updateStickyPlayer();
+  }, { threshold: 0.5 });
+  let observedCard = null;
+
+  function updateStickyPlayer() {
+    if (!currentPlayingIframe) {
+      if (observedCard) { nowPlayingObserver.unobserve(observedCard); observedCard = null; }
+      stickyPlayer.classList.remove('visible');
+      document.body.classList.remove('has-sticky-player');
+      resetStickyProgress();
+      refreshFocusDimming();
+      return;
+    }
+    const card = currentPlayingIframe.closest('.submission-card');
+    if (!card) {
+      if (observedCard) { nowPlayingObserver.unobserve(observedCard); observedCard = null; }
+      stickyPlayer.classList.remove('visible');
+      document.body.classList.remove('has-sticky-player');
+      resetStickyProgress();
+      refreshFocusDimming();
+      return;
+    }
+    // Only (re)subscribe the observer when the playing card has actually
+    // changed. The old version unconditionally unobserved+re-observed on
+    // every single call — including calls made BY the observer's own
+    // callback — which re-triggered a synthetic intersection callback each
+    // time and made every scroll-driven visibility change cascade into
+    // redundant observer churn for no behavioral benefit.
+    if (observedCard !== card) {
+      if (observedCard) nowPlayingObserver.unobserve(observedCard);
+      observedCard = card;
+      nowPlayingObserver.observe(card);
+      resetStickyProgress(); // new track — old position/duration no longer apply
+      setStickyTrackInfo(card);
+    }
+    refreshFocusDimming();
+    const shouldShow = !nowPlayingCardVisible;
+    stickyPlayer.classList.toggle('visible', shouldShow);
+    stickyPlayer.classList.toggle('is-paused', currentPlayingPaused);
+    document.body.classList.toggle('has-sticky-player', shouldShow);
+    updateStickyPlayPauseIcon();
+  }
+
+  // ---- sticky-player seek bar ----------------------------------------
+  // Tracks the currently-playing track's position/duration (fed by the
+  // SoundCloud Widget API's PLAY_PROGRESS event and YouTube's IFrame API
+  // infoDelivery messages — see setupSoundcloudGrowOnPlay() and the global
+  // 'message' listener below) and lets the admin click or drag anywhere on
+  // the strip to seek, from wherever they are in the page.
+  let stickyTrackPosition = 0; // seconds
+  let stickyTrackDuration = 0; // seconds
+
+  function formatTime(seconds) {
+    if (!isFinite(seconds) || seconds < 0) seconds = 0;
+    const total = Math.floor(seconds);
+    const m = Math.floor(total / 60);
+    const s = total % 60;
+    return `${m}:${String(s).padStart(2, '0')}`;
+  }
+
+  function resetStickyProgress() {
+    stickyTrackPosition = 0;
+    stickyTrackDuration = 0;
+    stickyPlayerProgressFill.style.width = '0%';
+    stickyPlayerProgressHandle.style.left = '0%';
+    stickyPlayerProgress.classList.remove('seekable');
+    stickyPlayerProgress.setAttribute('aria-valuenow', '0');
+    stickyPlayerTimeCurrent.textContent = '0:00';
+    stickyPlayerTimeTotal.textContent = '0:00';
+  }
+
+  // Called from the SoundCloud PLAY_PROGRESS handler and the YouTube
+  // infoDelivery handler — both just report "here's where playback is now"
+  // in seconds, so a single shared function keeps the UI update logic (and
+  // the % math) in exactly one place regardless of which platform is
+  // playing.
+  function updateStickyProgress(positionSeconds, durationSeconds) {
+    stickyTrackPosition = Math.max(0, positionSeconds || 0);
+    stickyTrackDuration = Math.max(0, durationSeconds || 0);
+    const pct = stickyTrackDuration > 0 ? clamp((stickyTrackPosition / stickyTrackDuration) * 100, 0, 100) : 0;
+    stickyPlayerProgressFill.style.width = pct + '%';
+    stickyPlayerProgressHandle.style.left = pct + '%';
+    stickyPlayerProgress.classList.toggle('seekable', stickyTrackDuration > 0);
+    stickyPlayerProgress.setAttribute('aria-valuenow', String(Math.round(pct)));
+    stickyPlayerTimeCurrent.textContent = formatTime(stickyTrackPosition);
+    stickyPlayerTimeTotal.textContent = formatTime(stickyTrackDuration);
+  }
+
+  // Seeks the currently-playing track to a 0–1 ratio of its duration, using
+  // whichever platform API is actually backing the current iframe.
+  function seekCurrentTrackToRatio(ratio) {
+    if (!currentPlayingIframe || stickyTrackDuration <= 0) return;
+    const targetSeconds = clamp(ratio, 0, 1) * stickyTrackDuration;
+    const widget = activeSoundcloudWidgets.get(currentPlayingIframe);
+    if (widget) {
+      widget.seekTo(targetSeconds * 1000);
+      updateStickyProgress(targetSeconds, stickyTrackDuration); // optimistic UI; PLAY_PROGRESS confirms shortly after
+    } else if (currentPlayingIframe instanceof HTMLAudioElement) {
+      currentPlayingIframe.currentTime = targetSeconds;
+      updateStickyProgress(targetSeconds, stickyTrackDuration);
+    } else {
+      const player = youtubePlayers.get(currentPlayingIframe);
+      if (player && typeof player.seekTo === 'function') {
+        player.seekTo(targetSeconds, true);
+        updateStickyProgress(targetSeconds, stickyTrackDuration);
+      }
+    }
+  }
+
+  function ratioFromPointerEvent(e) {
+    const rect = stickyPlayerProgress.getBoundingClientRect();
+    const clientX = (e.touches && e.touches[0]) ? e.touches[0].clientX : e.clientX;
+    return rect.width > 0 ? (clientX - rect.left) / rect.width : 0;
+  }
+
+  let isDraggingStickyProgress = false;
+  stickyPlayerProgress.addEventListener('pointerdown', (e) => {
+    if (stickyTrackDuration <= 0) return;
+    isDraggingStickyProgress = true;
+    stickyPlayerProgress.setPointerCapture(e.pointerId);
+    seekCurrentTrackToRatio(ratioFromPointerEvent(e));
+  });
+  stickyPlayerProgress.addEventListener('pointermove', (e) => {
+    if (!isDraggingStickyProgress) return;
+    seekCurrentTrackToRatio(ratioFromPointerEvent(e));
+  });
+  ['pointerup', 'pointercancel'].forEach(evt => {
+    stickyPlayerProgress.addEventListener(evt, () => { isDraggingStickyProgress = false; });
+  });
+  // Keyboard access: left/right arrows nudge the seek position by 5s,
+  // Home/End jump to the start/end, matching native <input type="range">
+  // conventions so it behaves the way a slider role is expected to.
+  stickyPlayerProgress.addEventListener('keydown', (e) => {
+    if (stickyTrackDuration <= 0) return;
+    if (e.key === 'ArrowRight' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      seekCurrentTrackToRatio((stickyTrackPosition + 5) / stickyTrackDuration);
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      seekCurrentTrackToRatio((stickyTrackPosition - 5) / stickyTrackDuration);
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      seekCurrentTrackToRatio(0);
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      seekCurrentTrackToRatio(1);
+    }
+  });
+
+  // Toggles between pause and resume based on currentPlayingPaused — the
+  // actual icon/label swap happens in updateStickyPlayPauseIcon(), driven
+  // by the real PLAY/PAUSE events coming back from the platform (not
+  // guessed optimistically here), so it stays correct even if playback is
+  // paused/resumed from the embed's own controls instead of this button.
+  stickyPlayerPlayPause.addEventListener('click', () => {
+    if (!currentPlayingIframe) return;
+    const widget = activeSoundcloudWidgets.get(currentPlayingIframe);
+    if (widget) {
+      if (currentPlayingPaused) widget.play(); else widget.pause();
+    } else if (currentPlayingIframe instanceof HTMLAudioElement) {
+      if (currentPlayingPaused) currentPlayingIframe.play(); else currentPlayingIframe.pause();
+    } else {
+      const player = youtubePlayers.get(currentPlayingIframe);
+      if (player) {
+        if (currentPlayingPaused) player.playVideo(); else player.pauseVideo();
+      }
+    }
+  });
+  stickyPlayerJump.addEventListener('click', () => {
+    if (!currentPlayingIframe) return;
+    const card = currentPlayingIframe.closest('.submission-card');
+    if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  });
+  // Keep/Delete on the sticky bar act on whatever submission is currently
+  // playing — same Firestore update the regular card buttons trigger,
+  // just reachable without scrolling back to find that card.
+  stickyPlayerKeep.addEventListener('click', async () => {
+    if (!currentPlayingIframe) return;
+    const card = currentPlayingIframe.closest('.submission-card');
+    if (!card) return;
+    const isSaved = card.classList.contains('status-kept');
+    try {
+      await updateDoc(doc(db, 'submissions', card.dataset.id), { status: isSaved ? 'new' : 'kept' });
+    } catch (err) {
+      console.error('Sticky player Save/Unsave failed:', err);
+    }
+  });
+  stickyPlayerDelete.addEventListener('click', async () => {
+    if (!currentPlayingIframe) return;
+    const card = currentPlayingIframe.closest('.submission-card');
+    if (!card) return;
+    try {
+      await updateDoc(doc(db, 'submissions', card.dataset.id), { status: 'deleted', deletedAt: serverTimestamp() });
+    } catch (err) {
+      console.error('Sticky player Delete failed:', err);
+    }
+  });
+
+  // THE RANDOM-SCROLL-JUMP BUG: switching tracks changes TWO iframes at
+  // once — the new one grows, the old one shrinks (pauseAllExcept). Each
+  // used to independently measure its own before/after height and call
+  // window.scrollTo() in its own requestAnimationFrame. When both changes
+  // happen close together (which is every single track switch), the two
+  // scrollTo calls could stomp on each other — the second one computes its
+  // target from a beforeScrollY that's already stale, because the first
+  // one already moved the page. The combined result was an unpredictable
+  // "random" landing spot, and since it wasn't reliably keeping the
+  // clicked card in view, it could look like the new embed "didn't even
+  // open" (it did — the page just wasn't looking at it anymore).
+  //
+  // Fix: stop computing compensation per-iframe. Instead, anchor to
+  // whatever element is actually sitting at the top of the viewport right
+  // now, apply ALL pending layout changes, then in a single coordinated
+  // pass scroll by exactly however much that anchor moved. Multiple
+  // grow/shrink calls arriving close together share the SAME anchor
+  // measurement and get resolved together in one requestAnimationFrame,
+  // so there's nothing left to race.
+  let scrollAnchorEl = null;
+  let scrollAnchorTop = null;
+  let scrollAnchorRafId = null;
+
+  function growIframeWithScrollCompensation(iframe, grow, growClass = 'sc-playing') {
+    if (scrollAnchorEl === null) {
+      scrollAnchorEl = document.elementFromPoint(Math.floor(window.innerWidth / 2), 10);
+      scrollAnchorTop = scrollAnchorEl ? scrollAnchorEl.getBoundingClientRect().top : null;
+    }
+
+    if (grow) iframe.classList.add(growClass);
+    else iframe.classList.remove(growClass);
+
+    if (scrollAnchorRafId !== null) return; // a compensation pass for this batch is already scheduled
+    scrollAnchorRafId = requestAnimationFrame(() => {
+      scrollAnchorRafId = null;
+      const anchor = scrollAnchorEl;
+      const beforeTop = scrollAnchorTop;
+      scrollAnchorEl = null;
+      scrollAnchorTop = null;
+      if (!anchor || !anchor.isConnected || beforeTop === null) return;
+      const afterTop = anchor.getBoundingClientRect().top;
+      const delta = afterTop - beforeTop;
+      if (delta !== 0) window.scrollBy({ top: delta, left: 0, behavior: 'instant' });
     });
   }
 
@@ -995,18 +2080,67 @@
       const SC = await loadSoundcloudWidgetApi();
       const widget = SC.Widget(iframe);
       activeSoundcloudWidgets.set(iframe, widget);
+
+      let durationMs = 0; // cached once on READY; reused by every PLAY_PROGRESS tick below
+
+      // Centralized "this track started/paused/finished" handlers — used by
+      // the PLAY/PAUSE/FINISH events below AND by the isPaused() race-
+      // condition check, so there's exactly one code path for each
+      // transition instead of separate copies that could drift out of sync
+      // with each other (which is what caused the grow-on-play /
+      // overlapping-audio bugs originally).
+      //
+      // markNowPlaying() runs BEFORE pauseAllExcept() (not after, as it
+      // used to) — pausing the other widgets fires THEIR pause handlers
+      // synchronously, and those check "is this still the active track?"
+      // by comparing against currentPlayingIframe. If markNowPlaying ran
+      // afterward, that check would still see the OLD track as active for
+      // a moment and briefly (harmlessly, but pointlessly) mark it paused
+      // right before being overwritten anyway.
+      function onSoundcloudTrackStarted() {
+        widget.setVolume(panelVolume);
+        growIframeWithScrollCompensation(iframe, true);
+        markNowPlaying(iframe);
+        pauseAllExcept(iframe);
+      }
+      function onSoundcloudTrackPaused() {
+        growIframeWithScrollCompensation(iframe, false);
+        markPaused(iframe);
+      }
+      function onSoundcloudTrackFinished() {
+        growIframeWithScrollCompensation(iframe, false);
+        clearNowPlaying(iframe);
+      }
+
       // Wait for the widget's own READY event before binding PLAY/PAUSE —
       // the iframe's native 'load' event (which triggers this whole
       // function) fires once the HTML document loads, but SoundCloud's
       // internal widget JS can still be initializing after that. Binding
       // too early is what made grow-on-play silently fail to attach.
       widget.bind(SC.Widget.Events.READY, () => {
-        widget.bind(SC.Widget.Events.PLAY, () => {
-          iframe.classList.add('sc-playing');
-          pauseAllExcept(iframe);
+        widget.setVolume(panelVolume);
+        widget.getDuration((ms) => { durationMs = ms; });
+        widget.bind(SC.Widget.Events.PLAY, onSoundcloudTrackStarted);
+        widget.bind(SC.Widget.Events.PAUSE, onSoundcloudTrackPaused);
+        widget.bind(SC.Widget.Events.FINISH, onSoundcloudTrackFinished);
+        // Feeds the sticky bar's seek strip while this track is the one
+        // actually playing. PLAY_PROGRESS fires automatically roughly every
+        // 250ms during playback — no manual polling needed.
+        widget.bind(SC.Widget.Events.PLAY_PROGRESS, (e) => {
+          if (currentPlayingIframe === iframe) {
+            updateStickyProgress(e.currentPosition / 1000, durationMs / 1000);
+          }
         });
-        widget.bind(SC.Widget.Events.PAUSE, () => iframe.classList.remove('sc-playing'));
-        widget.bind(SC.Widget.Events.FINISH, () => iframe.classList.remove('sc-playing'));
+        // Race condition guard: if the admin clicked the widget's own play
+        // button in the brief window between the iframe loading and this
+        // READY handler attaching, that PLAY event already fired and was
+        // missed — leaving the embed stuck small with no way to recover
+        // until the track is paused/resumed. isPaused() lets us check the
+        // widget's actual current state right now and catch up immediately
+        // instead of waiting for a future PLAY that's never coming.
+        widget.isPaused((paused) => {
+          if (!paused) onSoundcloudTrackStarted();
+        });
       });
     } catch (err) {
       // Non-critical — the player still works at its normal compact size,
@@ -1021,6 +2155,19 @@
     try {
       let cached = soundcloudOembedCache.get(sourceUrl);
       if (!cached) {
+        // NOTE: hide_related/show_teaser were tried here to trim
+        // SoundCloud's own promotional UI, but they aren't part of
+        // SoundCloud's documented oEmbed/widget parameters, and at least
+        // one of them appears to put the widget into a state where
+        // widget.isPaused() incorrectly reports "not paused" immediately on
+        // READY — which made the isPaused() race-condition guard below
+        // treat every single embed as already playing the instant it
+        // loaded (auto-selecting random cards, growing every embed, no
+        // user interaction needed). Reverted. Per SoundCloud's own help
+        // docs, the post-first-pause "explore more" message can't be fully
+        // suppressed from the embedding side anyway (only the track owner,
+        // with an Artist Pro subscription, can hide it) — so there was no
+        // real upside being traded for that risk.
         const oembedUrl = `https://soundcloud.com/oembed?format=json&url=${encodeURIComponent(sourceUrl)}&auto_play=false&color=%23a8c8ec&visual=false&show_comments=false&show_reposts=false`;
         const res = await fetch(oembedUrl);
         if (!res.ok) throw new Error('oEmbed request failed: ' + res.status);
@@ -1076,13 +2223,22 @@
     const host = getLinkHost(rawLink);
     const escHost = host ? escapeHtml(host) : null;
     const escFullLink = escapeHtml(rawLink);
+    // The href needs a real absolute URL — a scheme-less rawLink (e.g.
+    // "dropbox.com/...", pasted without "https://") would otherwise resolve
+    // as a RELATIVE path on this panel's own domain instead of navigating
+    // out to the actual site. The displayed text stays as rawLink (exactly
+    // what was submitted) so nothing looks altered.
+    const hrefLink = (normalizeUrl(rawLink) || {}).href || rawLink;
     const linkRowHtml = escHost
       ? `<div class="submission-link-row">
-           <a href="${escapeAttr(rawLink)}" target="_blank" rel="noopener noreferrer">${escFullLink}</a>
-           <button type="button" class="link-copy-btn" data-copy="${escapeAttr(rawLink)}" aria-label="Copy link" title="Copy link">
+           <a href="${escapeAttr(hrefLink)}" target="_blank" rel="noopener noreferrer" class="link-text${visibleLinkIds.has(s.id) ? '' : ' link-hidden'}" data-link-text>${escFullLink}</a>
+           <button type="button" class="link-copy-btn" data-copy="${escapeAttr(hrefLink)}" aria-label="Copy link" title="Copy link">
              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 012-2h10"/></svg>
            </button>
-           <a href="${escapeAttr(rawLink)}" target="_blank" rel="noopener noreferrer" class="link-arrow" aria-label="Open link" title="Open link">↗</a>
+           <button type="button" class="link-hide-btn" data-toggle-hide-id="${s.id}" aria-label="${visibleLinkIds.has(s.id) ? 'Hide link' : 'Show link'}" title="${visibleLinkIds.has(s.id) ? 'Hide link' : 'Show link'}">
+             ${visibleLinkIds.has(s.id) ? EYE_SVG : EYE_OFF_SVG}
+           </button>
+           <a href="${escapeAttr(hrefLink)}" target="_blank" rel="noopener noreferrer" class="link-arrow" aria-label="Open link" title="Open link">↗</a>
          </div>`
       : `<div class="submission-link-row">
            <span class="link-invalid">Invalid link — not opening (${escFullLink || 'empty'})</span>
@@ -1090,9 +2246,11 @@
     const actionsHtml = inTrash
       ? `<button class="action-btn keep" data-action="restore">Restore</button>
          <button class="action-btn delete" data-action="delete-forever">Delete forever</button>`
-      : `<button class="action-btn keep" data-action="kept">Keep</button>
-         <button class="action-btn" data-action="new">Mark new</button>
-         <button class="action-btn delete" data-action="delete">Delete</button>`;
+      : status === 'kept'
+        ? `<button class="action-btn unsave" data-action="new">Unsave</button>
+           <button class="action-btn delete" data-action="delete">Delete</button>`
+        : `<button class="action-btn keep" data-action="kept">Save</button>
+           <button class="action-btn delete" data-action="delete">Delete</button>`;
     return `
         <div class="submission-top">
           <div>
@@ -1143,15 +2301,19 @@
     const host = getLinkHost(rawLink);
     const escHost = host ? escapeHtml(host) : null;
     const escFullLink = escapeHtml(rawLink);
+    const hrefLink = (normalizeUrl(rawLink) || {}).href || rawLink;
     const linkRowEl = card.querySelector('[data-hook="link-row"]');
     if (linkRowEl) {
       linkRowEl.innerHTML = escHost
         ? `<div class="submission-link-row">
-             <a href="${escapeAttr(rawLink)}" target="_blank" rel="noopener noreferrer">${escFullLink}</a>
-             <button type="button" class="link-copy-btn" data-copy="${escapeAttr(rawLink)}" aria-label="Copy link" title="Copy link">
+             <a href="${escapeAttr(hrefLink)}" target="_blank" rel="noopener noreferrer" class="link-text${visibleLinkIds.has(s.id) ? '' : ' link-hidden'}" data-link-text>${escFullLink}</a>
+             <button type="button" class="link-copy-btn" data-copy="${escapeAttr(hrefLink)}" aria-label="Copy link" title="Copy link">
                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 012-2h10"/></svg>
              </button>
-             <a href="${escapeAttr(rawLink)}" target="_blank" rel="noopener noreferrer" class="link-arrow" aria-label="Open link" title="Open link">↗</a>
+             <button type="button" class="link-hide-btn" data-toggle-hide-id="${s.id}" aria-label="${visibleLinkIds.has(s.id) ? 'Hide link' : 'Show link'}" title="${visibleLinkIds.has(s.id) ? 'Hide link' : 'Show link'}">
+               ${visibleLinkIds.has(s.id) ? EYE_SVG : EYE_OFF_SVG}
+             </button>
+             <a href="${escapeAttr(hrefLink)}" target="_blank" rel="noopener noreferrer" class="link-arrow" aria-label="Open link" title="Open link">↗</a>
            </div>`
         : `<div class="submission-link-row">
              <span class="link-invalid">Invalid link — not opening (${escFullLink || 'empty'})</span>
@@ -1176,10 +2338,64 @@
       actionsEl.innerHTML = inTrash
         ? `<button class="action-btn keep" data-action="restore">Restore</button>
            <button class="action-btn delete" data-action="delete-forever">Delete forever</button>`
-        : `<button class="action-btn keep" data-action="kept">Keep</button>
-           <button class="action-btn" data-action="new">Mark new</button>
-           <button class="action-btn delete" data-action="delete">Delete</button>`;
+        : status === 'kept'
+          ? `<button class="action-btn unsave" data-action="new">Unsave</button>
+             <button class="action-btn delete" data-action="delete">Delete</button>`
+          : `<button class="action-btn keep" data-action="kept">Save</button>
+             <button class="action-btn delete" data-action="delete">Delete</button>`;
     }
+  }
+
+  // If the direct-download URL 404s/403s (link set back to private, file
+  // moved/deleted, or it wasn't actually a direct file link), the <audio>
+  // element otherwise just sits there silently broken with no indication
+  // why. This swaps it for an explicit message + a link to open the
+  // original Dropbox URL directly, the first (and only — {once:true}) time
+  // it fails.
+  function setupDropboxAudioErrorFallback(audioEl) {
+    audioEl.addEventListener('error', () => {
+      const wrap = audioEl.closest('.embed-dropbox-audio');
+      if (!wrap) return;
+      const link = audioEl.dataset.fallbackLink || '';
+      wrap.innerHTML = link
+        ? `<p class="embed-error">Couldn't load this Dropbox file directly — it may be private, deleted, or not a direct-download link. <a href="${escapeAttr(link)}" target="_blank" rel="noopener noreferrer">Open it on Dropbox</a> instead.</p>`
+        : `<p class="embed-error">Couldn't load this Dropbox file directly — it may be private, deleted, or not a direct-download link.</p>`;
+    }, { once: true });
+  }
+
+  // THE "MULTIPLE TRACKS PLAYING AT ONCE" BUG: unlike SoundCloud (Widget
+  // SDK events) and YouTube (Player API events), Dropbox's plain <audio>
+  // element had ZERO wiring into the now-playing/pause-everything-else
+  // system — starting one never paused a SoundCloud or YouTube track that
+  // was playing, and starting a SoundCloud/YouTube track never paused a
+  // playing Dropbox one, since pauseAllExcept() didn't even know Dropbox
+  // audio elements existed. All three could end up playing simultaneously,
+  // and since Dropbox never called markNowPlaying()/clearNowPlaying(),
+  // whatever the sticky bar and "grow on play" last saw from SoundCloud/
+  // YouTube stayed stuck showing/expanded even after a Dropbox track took
+  // over the actual audio. A plain <audio> element is native, same-origin
+  // DOM — no postMessage/SDK needed, just real 'play'/'pause'/'ended'
+  // event listeners wired into the exact same functions the other two
+  // platforms use.
+  const activeDropboxAudios = new Set();
+
+  function setupDropboxAudioPlayback(audioEl) {
+    activeDropboxAudios.add(audioEl);
+    audioEl.addEventListener('play', () => {
+      markNowPlaying(audioEl);
+      pauseAllExcept(audioEl);
+    });
+    audioEl.addEventListener('pause', () => {
+      // A real end-of-track fires both 'pause' and 'ended' — only treat it
+      // as a genuine pause (resumable) if playback didn't actually finish.
+      if (!audioEl.ended) markPaused(audioEl);
+    });
+    audioEl.addEventListener('ended', () => clearNowPlaying(audioEl));
+    audioEl.addEventListener('timeupdate', () => {
+      if (audioEl === currentPlayingIframe && audioEl.duration > 0) {
+        updateStickyProgress(audioEl.currentTime, audioEl.duration);
+      }
+    });
   }
 
   function buildEmbedHtml(s) {
@@ -1190,23 +2406,136 @@
       // Placeholder shown immediately; resolveSoundcloudEmbed() fetches the
       // real player HTML right after this card is in the DOM (see below).
       return { html: `<div class="embed-wrap embed-soundcloud-oembed" id="embed-${s.id}"><p class="embed-loading">Loading player…</p></div>`, info: embedInfo };
-    } else if (embedInfo) {
+    } else if (embedInfo && embedInfo.type === 'dropbox-audio') {
+      // Dropbox has no hosted player to embed via iframe — a plain HTML5
+      // <audio> element pointed at the direct-download URL is the simplest
+      // reliable way to make it playable. data-fallback-link is read by
+      // setupDropboxAudioErrorFallback() below if the direct URL 404s/403s
+      // (private link, expired link, etc.) so the admin gets a clear
+      // message instead of a silently broken player.
       const embedId = `embed-${s.id}`;
       return {
-        html: `<div class="embed-wrap embed-${embedInfo.type}" data-embed-type="${embedInfo.type}" id="${embedId}"><iframe src="${escapeAttr(embedInfo.src)}" allow="autoplay" loading="lazy"></iframe></div>`,
+        html: `<div class="embed-wrap embed-dropbox-audio" data-embed-type="dropbox-audio" id="${embedId}"><audio controls preload="none" src="${escapeAttr(embedInfo.src)}" data-fallback-link="${escapeAttr(rawLink)}">Your browser doesn't support inline audio playback.</audio></div>`,
+        info: embedInfo
+      };
+    } else if (embedInfo) {
+      const embedId = `embed-${s.id}`;
+      // Spotify's own embed snippets request a broader `allow` set
+      // (encrypted-media + clipboard-write on top of autoplay) — using the
+      // same minimal "autoplay" for it as SoundCloud/YouTube can cause
+      // playback controls to silently misbehave inside the iframe.
+      const allowAttr = embedInfo.type === 'spotify'
+        ? 'autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture'
+        : 'autoplay';
+      const tallClass = (embedInfo.type === 'spotify' && embedInfo.height === 352) ? ' embed-spotify-tall' : '';
+      // Both of these are platform-side restrictions, not something this
+      // embed can configure around — surfaced directly under the player so
+      // it reads as expected behavior instead of a broken embed.
+      const hintHtml = embedInfo.type === 'spotify'
+        ? '<p class="embed-hint">Spotify only plays the 30s preview here unless you\'re signed into Spotify (with Premium) in this browser — that\'s a Spotify restriction on every embedded player, not specific to this page.</p>'
+        : embedInfo.type === 'drive'
+          ? '<p class="embed-hint">If this doesn\'t load, the file\'s Drive sharing needs to be set to "Anyone with the link".</p>'
+          : '';
+      return {
+        html: `<div class="embed-wrap embed-${embedInfo.type}${tallClass}" data-embed-type="${embedInfo.type}" id="${embedId}"><iframe src="${escapeAttr(embedInfo.src)}" allow="${allowAttr}" loading="lazy"></iframe></div>${hintHtml}`,
         info: embedInfo
       };
     }
     return { html: '', info: null };
   }
 
+  // Called right before a card is removed from the DOM (filtered out,
+  // deleted, search no longer matches) — stops its embed if playing and
+  // drops it from whichever tracking Map/Set it's in, so nothing ever
+  // tries to control a player whose iframe/audio element no longer exists.
+  function cleanupEmbedTracking(card) {
+    const ytIframe = card.querySelector('.embed-wrap[data-embed-type="youtube"] iframe');
+    if (ytIframe) {
+      const player = youtubePlayers.get(ytIframe);
+      if (player) {
+        try { if (typeof player.destroy === 'function') player.destroy(); } catch (err) { console.error('YT player cleanup failed:', err); }
+        youtubePlayers.delete(ytIframe);
+      }
+      if (currentPlayingIframe === ytIframe) clearNowPlaying(ytIframe);
+    }
+    const scIframe = card.querySelector('.embed-soundcloud-oembed iframe');
+    if (scIframe) {
+      activeSoundcloudWidgets.delete(scIframe);
+      if (currentPlayingIframe === scIframe) clearNowPlaying(scIframe);
+    }
+    const audioEl = card.querySelector('.embed-dropbox-audio audio');
+    if (audioEl) {
+      try { audioEl.pause(); } catch {}
+      activeDropboxAudios.delete(audioEl);
+      if (currentPlayingIframe === audioEl) clearNowPlaying(audioEl);
+    }
+  }
+
+  // Fades/scales a card out (reusing its own existing opacity/transform
+  // transitions — see .card-exiting CSS) instead of yanking it out of the
+  // DOM instantly. Falls back to a plain timeout if 'transitionend' never
+  // fires for some reason (e.g. the card had zero visible change to
+  // transition, or prefers-reduced-motion trims the duration to ~0).
+  function animateCardRemoval(card) {
+    card.classList.add('card-exiting');
+    let removed = false;
+    const doRemove = () => {
+      if (removed) return;
+      removed = true;
+      card.remove();
+    };
+    card.addEventListener('transitionend', doRemove, { once: true });
+    setTimeout(doRemove, 400);
+  }
+
+  // Runs once per render(): if two or more active (non-deleted)
+  // submissions share the exact same (normalized) link, silently keeps
+  // whichever was submitted FIRST and moves the rest straight to Trash —
+  // no prompt, no per-card warning, just handled. Checked globally (not
+  // just within the current filter/search), since a duplicate could land
+  // in a different tab than the original (e.g. one already Saved, the
+  // resend still sitting in New). Converges on its own: once the extras
+  // are marked deleted, they no longer show up as active duplicates on
+  // the next render, so this never re-processes the same group twice.
+  function autoCleanupDuplicateLinks() {
+    const byLink = new Map(); // normalized link -> submissions[]
+    allSubmissions.forEach(s => {
+      if (s.status === 'deleted') return;
+      const norm = (normalizeUrl(s.link) || {}).href;
+      if (!norm) return;
+      if (!byLink.has(norm)) byLink.set(norm, []);
+      byLink.get(norm).push(s);
+    });
+    const toTrash = [];
+    byLink.forEach(group => {
+      if (group.length < 2) return;
+      const sorted = [...group].sort((a, b) => {
+        const ams = a.submittedAt && a.submittedAt.toMillis ? a.submittedAt.toMillis() : 0;
+        const bms = b.submittedAt && b.submittedAt.toMillis ? b.submittedAt.toMillis() : 0;
+        return ams - bms;
+      });
+      sorted.slice(1).forEach(s => toTrash.push(s)); // keep the earliest, trash the rest
+    });
+    if (toTrash.length === 0) return;
+    const batch = writeBatch(db);
+    toTrash.forEach(s => batch.update(doc(db, 'submissions', s.id), { status: 'deleted', deletedAt: serverTimestamp() }));
+    batch.commit().catch(err => console.error('Auto duplicate cleanup failed:', err));
+  }
+
   function render() {
+    autoCleanupDuplicateLinks();
+
     // "trash" shows only deleted items; every other filter excludes them,
-    // so a soft-deleted submission never shows up mixed in with active ones.
+    // so a soft-deleted submission never shows up mixed in with active
+    // ones. "all" also excludes 'listened' — that status only comes from
+    // the stream view marking something handled there, which has its own
+    // Recently Listened recovery panel; without this exclusion they'd
+    // clutter this queue with an unstyled badge and a Save button that
+    // doesn't reflect what actually happened to them.
     let items = currentFilter === 'trash'
       ? allSubmissions.filter(s => s.status === 'deleted')
       : currentFilter === 'all'
-        ? allSubmissions.filter(s => s.status !== 'deleted')
+        ? allSubmissions.filter(s => s.status !== 'deleted' && s.status !== 'listened')
         : allSubmissions.filter(s => (s.status || 'new') === currentFilter);
 
     // "Empty trash" only makes sense while looking at Trash, and only if
@@ -1221,10 +2550,13 @@
       });
     }
 
-    // Firestore always delivers oldest-first (see the orderBy('asc') query
-    // below); flip in memory here when the admin wants newest-first instead
-    // — avoids re-subscribing to Firestore just to change display order.
-    if (sortReversed) items = [...items].reverse();
+    // DOM order is always built oldest-first, full stop — sort direction is
+    // applied purely visually via the .sort-reversed CSS class (flipping
+    // flex-direction), never by reordering items here. Reversing this array
+    // would mean almost every card needs to move to a new DOM position
+    // whenever the admin flips sort order, and moving an <iframe> in the
+    // DOM forces it to reload — see the sort-toggle click handler for the
+    // full explanation of the bug this caused.
 
     if (items.length === 0) {
       emptyState.textContent = searchQuery
@@ -1234,6 +2566,7 @@
           : currentFilter === 'all' ? 'No submissions yet.' : `Nothing in "${currentFilter}".`;
       emptyState.style.display = 'block';
       listEl.innerHTML = '';
+      queuePositionBadge.style.display = 'none';
       return;
     }
     emptyState.style.display = 'none';
@@ -1245,9 +2578,15 @@
     // Remove cards that no longer belong in this view (filtered out,
     // deleted, search no longer matches). This is the only case where a
     // card with a possibly-playing embed gets torn down — which is correct,
-    // since it's leaving the list entirely.
+    // since it's leaving the list entirely. Its tracked player/widget
+    // reference has to be cleaned up here too — leaving it in
+    // activeSoundcloudWidgets/youtubePlayers/activeDropboxAudios after the
+    // card (and its iframe/audio element) is gone from the DOM meant every
+    // future pauseAllExcept() call would try to control a dead reference.
     listEl.querySelectorAll('.submission-card').forEach(card => {
-      if (!wantedIdSet.has(card.dataset.id)) card.remove();
+      if (wantedIdSet.has(card.dataset.id)) return;
+      cleanupEmbedTracking(card);
+      animateCardRemoval(card);
     });
 
     const newlyAddedSubmissions = [];
@@ -1310,14 +2649,33 @@
     // resolves — see applyGlobalVolumeToEmbed, called from there too).
     listEl.querySelectorAll('.embed-wrap[data-embed-type="youtube"] iframe').forEach(applyGlobalVolumeToYoutubeIframe);
 
+    // Dropbox audio elements have no oEmbed step to report failure through —
+    // attach the error fallback directly so a private/expired/non-direct
+    // link surfaces a clear message instead of a silently broken player.
+    // Also apply the current panel volume immediately, same as YouTube
+    // above — otherwise a freshly-inserted Dropbox track would start at
+    // the <audio> element's own default (100%) until the admin happened to
+    // touch the slider.
+    newlyAddedSubmissions.forEach(s => {
+      const card = listEl.querySelector(`.submission-card[data-id="${s.id}"]`);
+      const audioEl = card && card.querySelector('.embed-dropbox-audio audio');
+      if (audioEl) {
+        setupDropboxAudioErrorFallback(audioEl);
+        setupDropboxAudioPlayback(audioEl);
+        applyGlobalVolumeToDropboxAudio(audioEl);
+      }
+    });
+
     // Wire up pause-the-others tracking only for YouTube iframes that are
     // actually new this render — existing ones are already tracked, and
     // re-registering would attach duplicate 'load' listeners.
     newlyAddedSubmissions.forEach(s => {
       const card = listEl.querySelector(`.submission-card[data-id="${s.id}"]`);
       const iframe = card && card.querySelector('.embed-wrap[data-embed-type="youtube"] iframe');
-      if (iframe) setupYoutubePauseTracking(iframe);
+      if (iframe) setupYoutubePlayer(iframe);
     });
+
+    updateQueuePosition();
   }
 
   listEl.addEventListener('click', async (e) => {
@@ -1337,6 +2695,23 @@
         console.error('Clipboard write failed:', err);
         alert("Couldn't copy automatically — select and copy the link manually.");
       }
+      return;
+    }
+
+    const hideBtn = e.target.closest('.link-hide-btn');
+    if (hideBtn) {
+      const id = hideBtn.dataset.toggleHideId;
+      const card = hideBtn.closest('.submission-card');
+      const linkTextEl = card && card.querySelector('[data-link-text]');
+      const nowVisible = !visibleLinkIds.has(id);
+      if (nowVisible) visibleLinkIds.add(id); else visibleLinkIds.delete(id);
+      // Toggle directly on the existing nodes rather than re-rendering the
+      // card — same reasoning as everywhere else in this file: touching
+      // innerHTML on a card with a playing embed would kill that playback.
+      if (linkTextEl) linkTextEl.classList.toggle('link-hidden', !nowVisible);
+      hideBtn.innerHTML = nowVisible ? EYE_SVG : EYE_OFF_SVG;
+      hideBtn.setAttribute('aria-label', nowVisible ? 'Hide link' : 'Show link');
+      hideBtn.setAttribute('title', nowVisible ? 'Hide link' : 'Show link');
       return;
     }
 
@@ -1714,7 +3089,7 @@
   // than someone who sent 1; it just means that if they ARE picked, the
   // admin chooses which of their tracks to listen to from a list.
   function getWheelCandidates() {
-    let items = allSubmissions.filter(s => s.status !== 'deleted' && s.status !== 'dismissed');
+    let items = allSubmissions.filter(s => s.status !== 'deleted' && s.status !== 'dismissed' && s.status !== 'listened');
     if (searchQuery) {
       items = items.filter(s => {
         const haystack = [s.name, s.link, s.note].filter(Boolean).join(' ').toLowerCase();
@@ -1735,7 +3110,7 @@
 
   function buildWheelSvg(entries) {
     const n = entries.length;
-    const size = 380, cx = size / 2, cy = size / 2, r = size / 2;
+    const size = 460, cx = size / 2, cy = size / 2, r = size / 2;
     const totalWeight = entries.reduce((sum, e) => sum + e.weight, 0);
     // Each slice's angular size is proportional to its weight (not equal
     // slices) — this is what actually makes someone with more tracks more
@@ -1749,6 +3124,25 @@
       cursor += sliceAngle;
       return { entry: e, startAngle, sliceAngle };
     });
+
+    // Font size scales down as the wheel gets more crowded, so labels
+    // still show even with a lot of entries instead of being skipped.
+    const fontSize = n > 30 ? 10 : n > 20 ? 11 : n > 12 ? 12.5 : 14;
+    // Every label anchors at the SAME outer (wide) radius and runs inward
+    // toward the narrow center — consistent spatial direction all the way
+    // around the wheel, and lets long names use the full radial length
+    // instead of being squeezed into a short horizontal strip. Keeping
+    // every one of them upright isn't possible with a single rotation
+    // formula (rotating "inward" by midAngle+180 reads upside-down for
+    // roughly half the circle) — flipping which END of the text sits at
+    // the anchor point (text-anchor start vs end) instead of flipping
+    // WHERE the anchor point itself is keeps both halves running the same
+    // wide-to-narrow direction while staying legible.
+    const innerR = r * 0.22;
+    const outerR = r * 0.94;
+    const charWidth = fontSize * 0.62;
+    const maxChars = Math.max(3, Math.floor((outerR - innerR) / charWidth));
+
     let svg = `<svg viewBox="0 0 ${size} ${size}">`;
     slices.forEach(({ entry, startAngle, sliceAngle }, i) => {
       const endAngle = startAngle + sliceAngle;
@@ -1760,22 +3154,18 @@
       const color = WHEEL_COLORS[i % WHEEL_COLORS.length];
       svg += `<path d="M${cx},${cy} L${x1},${y1} A${r},${r} 0 ${largeArc} 1 ${x2},${y2} Z" fill="${color}" stroke="#04070d" stroke-width="1"/>`;
 
-      // Label, placed along the slice's mid-angle, rotated to read outward
-      // from center. Skipped for slices too thin to fit readable text.
-      // Max character count scales with the slice's angular width (a narrow
-      // slice from a crowded wheel gets less room than a wide one in a
-      // 2-person wheel), and long names get a trailing ellipsis instead of
-      // being abruptly chopped mid-word.
-      if (n <= 16 && sliceAngle >= 12) {
+      if (sliceAngle >= 3) {
         const midAngle = startAngle + sliceAngle / 2;
-        const labelR = r * 0.62;
-        const lx = cx + labelR * Math.cos(midAngle * Math.PI / 180);
-        const ly = cy + labelR * Math.sin(midAngle * Math.PI / 180);
-        const maxChars = Math.max(6, Math.round(sliceAngle / 5)); // ~5deg per character, rough but works at this font size
+        const norm = ((midAngle % 360) + 360) % 360;
+        const needsFlip = norm > 90 && norm < 270; // would read upside-down without this
+        const anchorAngle = needsFlip ? midAngle + 180 : midAngle;
+        const textAnchorAttr = needsFlip ? 'start' : 'end';
+        const lx = cx + outerR * Math.cos(midAngle * Math.PI / 180);
+        const ly = cy + outerR * Math.sin(midAngle * Math.PI / 180);
         const fullLabel = entry.label || '';
-        const truncated = fullLabel.length > maxChars ? fullLabel.slice(0, maxChars - 1).trimEnd() + '…' : fullLabel;
+        const truncated = fullLabel.length > maxChars ? fullLabel.slice(0, Math.max(1, maxChars - 1)).trimEnd() + '…' : fullLabel;
         const text = escapeHtml(truncated);
-        svg += `<text x="${lx}" y="${ly}" fill="#eef3fa" font-size="14" font-family="JetBrains Mono, monospace" text-anchor="middle" dominant-baseline="middle" transform="rotate(${midAngle + 90}, ${lx}, ${ly})">${text}</text>`;
+        svg += `<text x="${lx}" y="${ly}" fill="#eef3fa" font-size="${fontSize}" font-family="JetBrains Mono, monospace" text-anchor="${textAnchorAttr}" dominant-baseline="middle" transform="rotate(${anchorAngle}, ${lx}, ${ly})">${text}</text>`;
       }
     });
     svg += '</svg>';
@@ -1811,12 +3201,121 @@
   function closeWheel() {
     wheelModal.classList.remove('open');
     document.body.style.overflow = '';
+    clearWheelTicks();
     openWheelBtn.focus();
   }
   openWheelBtn.addEventListener('click', openWheel);
   closeWheelBtn.addEventListener('click', closeWheel);
   wheelModal.addEventListener('click', (e) => { if (e.target === wheelModal) closeWheel(); });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && wheelModal.classList.contains('open')) closeWheel(); });
+
+  // ---- wheel spin sound ---------------------------------------------------
+  // Synthesized with the Web Audio API (a short clicky tick per wedge
+  // crossed) rather than an audio file — no asset to host, and it's easy
+  // to scale the tick's volume with the panel's own volume slider.
+  //
+  // Ticks are NOT pre-scheduled/predicted — every animation frame this
+  // reads the wheel's ACTUAL current rotation straight off the in-progress
+  // CSS transition (getComputedStyle returns the live interpolated value
+  // while a transition is running) and fires a tick exactly when that real
+  // angle crosses into a new wedge. It's reading the same motion the eye
+  // sees, so it can't drift out of sync with it.
+  let wheelAudioCtx = null;
+  let wheelTickRafId = null;
+  function getWheelAudioCtx() {
+    if (!wheelAudioCtx) wheelAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (wheelAudioCtx.state === 'suspended') wheelAudioCtx.resume();
+    return wheelAudioCtx;
+  }
+  function playWheelTick() {
+    const ctx = getWheelAudioCtx();
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(1100, now);
+    const peak = 0.16 * (panelVolume / 100);
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(Math.max(peak, 0.0001), now + 0.004);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.035);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.05);
+  }
+  // Restored: the single-oscillator rising glide (660Hz -> 880Hz) — this
+  // was "attempt #2" a few rounds back, and the one that actually landed
+  // after six other tries.
+  function playWheelWinnerSound() {
+    if (panelVolume <= 0) return;
+    const ctx = getWheelAudioCtx();
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(660, now);
+    osc.frequency.exponentialRampToValueAtTime(880, now + 0.18);
+    const peak = 0.4 * (panelVolume / 100);
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(Math.max(peak, 0.0001), now + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.45);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.5);
+  }
+  function clearWheelTicks() {
+    if (wheelTickRafId !== null) { cancelAnimationFrame(wheelTickRafId); wheelTickRafId = null; }
+  }
+  // Reads the wheel wrap's live CSS transform matrix and returns its
+  // current rotation in degrees (-180..180, same convention atan2 gives).
+  function readWheelRotationDeg() {
+    const transform = getComputedStyle(wheelSvgWrap).transform;
+    if (!transform || transform === 'none') return 0;
+    const match = transform.match(/matrix\(([^)]+)\)/);
+    if (!match) return 0;
+    const [a, b] = match[1].split(',').map(Number);
+    return Math.atan2(b, a) * (180 / Math.PI);
+  }
+  function trackWheelRotationForTicks(entryCount, expectedDurationMs) {
+    clearWheelTicks();
+    if (panelVolume <= 0 || entryCount < 2) return; // muted, or nothing meaningful to tick against
+    const wedgeWidth = 360 / entryCount;
+    const startTime = performance.now();
+    let lastRawAngle = readWheelRotationDeg();
+    let unwrapped = 0; // continuously-growing rotation, since atan2 wraps at ±180
+    let lastWedgeIndex = Math.floor(Math.abs(unwrapped) / wedgeWidth);
+
+    function frame(now) {
+      const raw = readWheelRotationDeg();
+      let delta = raw - lastRawAngle;
+      if (delta < -180) delta += 360;      // wrapped past +180 → -180
+      else if (delta > 180) delta -= 360;  // wrapped past -180 → +180
+      unwrapped += delta;
+      lastRawAngle = raw;
+
+      const wedgeIndex = Math.floor(Math.abs(unwrapped) / wedgeWidth);
+      if (wedgeIndex > lastWedgeIndex) {
+        // Cap how many ticks fire in a single frame — a very fast spin on
+        // a wheel with many thin wedges could otherwise cross several per
+        // frame and machine-gun the sound.
+        const crossed = Math.min(wedgeIndex - lastWedgeIndex, 3);
+        for (let i = 0; i < crossed; i++) playWheelTick();
+        lastWedgeIndex = wedgeIndex;
+      }
+
+      // Small buffer past the expected end in case the transitionend
+      // timing and this rAF loop's own timing drift apart slightly — the
+      // loop naturally stops producing ticks once the wheel's real
+      // rotation stops changing, this is just a hard backstop.
+      if (now - startTime < expectedDurationMs + 200) {
+        wheelTickRafId = requestAnimationFrame(frame);
+      } else {
+        wheelTickRafId = null;
+      }
+    }
+    wheelTickRafId = requestAnimationFrame(frame);
+  }
 
   wheelSpinBtn.addEventListener('click', () => {
     if (wheelSpinning || wheelEntries.length < 2) return;
@@ -1893,6 +3392,7 @@
     wheelSvgWrap.style.transition = `transform ${(durationMs / 1000).toFixed(2)}s cubic-bezier(0.17, 0.67, 0.12, 0.99)`;
     wheelSvgWrap.style.transform = `rotate(${targetRotation}deg)`;
     wheelCurrentRotation = targetRotation; // keep growing — never reduce mod 360 here
+    trackWheelRotationForTicks(n, durationMs);
 
     setTimeout(() => {
       wheelSpinning = false;
@@ -1902,6 +3402,7 @@
       wheelSvgWrap.classList.add('winner-pulse');
       setTimeout(() => wheelSvgWrap.classList.remove('winner-pulse'), 700);
       launchWheelConfetti();
+      playWheelWinnerSound();
 
       renderWheelResult(winner);
     }, durationMs + 100);
@@ -1935,17 +3436,19 @@
     } else {
       trackListHtml = `<div class="wheel-track-list">
              <p class="wheel-track-list-label">${winner.tracks.length} tracks from ${escapeHtml(winner.label)} — pick one:</p>
-             ${winner.tracks.map((t, i) => `
-               <div class="wheel-track-row">
-                 <button type="button" class="wheel-track-item" data-track-id="${t.id}">
-                   <span class="wheel-track-item-num">${i + 1}</span>
-                   <span class="wheel-track-item-link" id="wheel-track-label-${t.id}">${escapeHtml(placeholderLabelFor(t.link))}</span>
-                 </button>
-                 <button type="button" class="wheel-track-delete-btn" data-delete-track-id="${t.id}" aria-label="Delete this track" title="Delete this track">
-                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14z"/></svg>
-                 </button>
-               </div>
-             `).join('')}
+             <div class="wheel-track-rows">
+               ${winner.tracks.map((t, i) => `
+                 <div class="wheel-track-row">
+                   <button type="button" class="wheel-track-item" data-track-id="${t.id}">
+                     <span class="wheel-track-item-num">${i + 1}</span>
+                     <span class="wheel-track-item-link" id="wheel-track-label-${t.id}">${escapeHtml(placeholderLabelFor(t.link))}</span>
+                   </button>
+                   <button type="button" class="wheel-track-delete-btn" data-delete-track-id="${t.id}" aria-label="Delete this track" title="Delete this track">
+                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14z"/></svg>
+                   </button>
+                 </div>
+               `).join('')}
+             </div>
            </div>`;
     }
 
@@ -2001,23 +3504,53 @@
 
   async function resolveWheelTrackTitle(track) {
     const host = getLinkHost(track.link);
-    // Only SoundCloud's oEmbed gives us a usable title; other hosts
-    // (YouTube, Drive, etc.) keep showing their domain via the placeholder
-    // set above — no extra request needed for those.
-    if (host !== 'soundcloud.com' && host !== 'on.soundcloud.com' && host !== 'm.soundcloud.com') return;
+    const isSoundcloud = host === 'soundcloud.com' || host === 'on.soundcloud.com' || host === 'm.soundcloud.com';
+    const isYoutube = host === 'youtube.com' || host === 'youtu.be' || host === 'music.youtube.com';
+    const isDropbox = host === 'dropbox.com';
+    // Spotify links keep showing their domain — its oEmbed doesn't support
+    // CORS from browser JS, so there's no way to fetch its title client-side
+    // (confirmed: same restriction that required building its iframe URL
+    // by hand instead of via oEmbed). Everything else without a usable
+    // oEmbed (Drive, etc.) also just keeps the domain placeholder.
+    if (!isSoundcloud && !isYoutube && !isDropbox) return;
     try {
-      let cached = soundcloudOembedCache.get(track.link);
-      if (!cached) {
-        const oembedUrl = `https://soundcloud.com/oembed?format=json&url=${encodeURIComponent(track.link)}&auto_play=false&color=%23a8c8ec&visual=false&show_comments=false&show_reposts=false`;
-        const res = await fetch(oembedUrl);
-        if (!res.ok) throw new Error('oEmbed request failed: ' + res.status);
-        const data = await res.json();
-        cached = { html: data.html, title: data.title || null };
-        soundcloudOembedCache.set(track.link, cached);
-      }
-      if (!cached.title) return; // nothing better to show than the placeholder
       const target = document.getElementById(`wheel-track-label-${track.id}`) || document.getElementById('wheel-single-track-label');
-      if (target) target.textContent = cached.title + (target.id === 'wheel-single-track-label' ? ' →' : '');
+      if (!target) return;
+      if (isDropbox) {
+        // No title API for Dropbox — the actual uploaded filename, pulled
+        // straight out of the URL, is a much better placeholder than the
+        // bare domain.
+        const u = normalizeUrl(track.link);
+        const last = u ? u.pathname.split('/').pop() : null;
+        if (!last) return;
+        let filename = last;
+        try { filename = decodeURIComponent(last); } catch {}
+        target.textContent = filename + (target.id === 'wheel-single-track-label' ? ' →' : '');
+      } else if (isSoundcloud) {
+        let cached = soundcloudOembedCache.get(track.link);
+        if (!cached) {
+          const oembedUrl = `https://soundcloud.com/oembed?format=json&url=${encodeURIComponent(track.link)}&auto_play=false&color=%23a8c8ec&visual=false&show_comments=false&show_reposts=false`;
+          const res = await fetch(oembedUrl);
+          if (!res.ok) throw new Error('oEmbed request failed: ' + res.status);
+          const data = await res.json();
+          cached = { html: data.html, title: data.title || null };
+          soundcloudOembedCache.set(track.link, cached);
+        }
+        if (!cached.title) return; // nothing better to show than the placeholder
+        target.textContent = cached.title + (target.id === 'wheel-single-track-label' ? ' →' : '');
+      } else if (isYoutube) {
+        let title = youtubeOembedTitleCache.get(track.link);
+        if (!title) {
+          const oembedUrl = `https://www.youtube.com/oembed?format=json&url=${encodeURIComponent(track.link)}`;
+          const res = await fetch(oembedUrl);
+          if (!res.ok) throw new Error('YouTube oEmbed request failed: ' + res.status);
+          const data = await res.json();
+          title = data.title || null;
+          if (title) youtubeOembedTitleCache.set(track.link, title);
+        }
+        if (!title) return;
+        target.textContent = title + (target.id === 'wheel-single-track-label' ? ' →' : '');
+      }
     } catch (err) {
       // Leave the domain placeholder in place — not worth surfacing an
       // error for what's purely a cosmetic upgrade (the link still works).
@@ -2149,11 +3682,65 @@
   </div>
 </div>
 
+<!-- ================== QUEUE POSITION BADGE ================== -->
+<div class="queue-position-badge" id="queue-position-badge" style="display:none">
+  <span id="queue-position-text"></span>
+</div>
+
 <!-- ================== FLOATING VOLUME WIDGET ================== -->
 <div class="floating-volume" id="floating-volume">
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M19.07 4.93a10 10 0 010 14.14M15.54 8.46a5 5 0 010 7.07"/></svg>
+  <button type="button" class="floating-volume-mute-btn" id="floating-volume-mute-btn" title="Mute" aria-label="Mute">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M11 5L6 9H2v6h4l5 4V5z" fill="currentColor" stroke="none"/>
+      <path class="vol-wave vol-wave-1" d="M15.5 8.5a5 5 0 010 7"/>
+      <path class="vol-wave vol-wave-2" d="M19 5a10 10 0 010 14"/>
+      <path class="vol-mute-x" d="M16.5 9.5l5 5M21.5 9.5l-5 5"/>
+    </svg>
+  </button>
   <input type="range" id="global-volume-slider" min="0" max="100" value="80">
   <span class="global-volume-value" id="global-volume-value">80%</span>
+</div>
+
+<!-- ================== STICKY NOW-PLAYING BAR ================== -->
+<!-- Shown only while something is playing AND its card has scrolled out of
+     view — gives the admin a way to stop/keep/delete the track they're
+     listening to without losing their place while browsing other
+     submissions further down (or up) the list. -->
+<div class="sticky-player" id="sticky-player">
+  <div class="sticky-player-row">
+    <div class="sticky-player-info">
+      <div class="sticky-player-eq" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+      <div class="sticky-player-text">
+        <div class="sticky-player-track" id="sticky-player-track">Now playing</div>
+        <div class="sticky-player-name" id="sticky-player-name"></div>
+      </div>
+    </div>
+    <div class="sticky-player-actions">
+      <button type="button" class="sticky-player-btn" id="sticky-player-playpause" title="Pause" aria-label="Pause">
+        <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
+      </button>
+      <button type="button" class="sticky-player-btn" id="sticky-player-keep" title="Save" aria-label="Save">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20 6L9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <button type="button" class="sticky-player-btn sticky-player-delete" id="sticky-player-delete" title="Delete" aria-label="Delete">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <button type="button" class="sticky-player-btn" id="sticky-player-jump" title="Jump to track" aria-label="Jump to track">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/></svg>
+      </button>
+    </div>
+  </div>
+  <div class="sticky-player-seek">
+    <span class="sticky-player-time-current" id="sticky-player-time-current">0:00</span>
+    <div class="sticky-player-progress" id="sticky-player-progress" role="slider" tabindex="0"
+         aria-label="Seek within track" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+      <div class="sticky-player-progress-track">
+        <div class="sticky-player-progress-fill" id="sticky-player-progress-fill"></div>
+        <div class="sticky-player-progress-handle" id="sticky-player-progress-handle"></div>
+      </div>
+    </div>
+    <span class="sticky-player-time-total" id="sticky-player-time-total">0:00</span>
+  </div>
 </div>
 
 </body>

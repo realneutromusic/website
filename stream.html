@@ -1,0 +1,1713 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Neutro — Stream Mode</title>
+<link rel="icon" type="image/x-icon" href="./favicon.ico">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;600;700;800;900&family=Sora:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+  :root {
+    --bg: #04070d;
+    --surface: #0c1424;
+    --surface-2: #16263f;
+    --line: #1d3050;
+    --ink: #eef3fa;
+    --ink-dim: #9fb4cf;
+    --ink-faint: #5b7299;
+    --steel: #4f7bb0;
+    --steel-bright: #a8c8ec;
+    --steel-soft: rgba(79,123,176,0.16);
+    --ease: cubic-bezier(.22, 1, .36, 1);
+    --ease-spring: cubic-bezier(.34, 1.45, .64, 1);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg); color: var(--ink); font-family: 'Sora', sans-serif;
+    -webkit-font-smoothing: antialiased; height: 100vh; overflow: hidden;
+  }
+  a { color: inherit; }
+  ::-webkit-scrollbar { width: 8px; }
+  ::-webkit-scrollbar-thumb { background: var(--line); border-radius: 999px; }
+
+  /* ---------- ambient background: plain static grid ---------- */
+  #stream-bg {
+    position: fixed; inset: 0; z-index: -1; pointer-events: none;
+    background-image:
+      linear-gradient(rgba(168,200,236,0.06) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(168,200,236,0.06) 1px, transparent 1px);
+    background-size: 48px 48px;
+  }
+
+  /* ---------- login gate ---------- */
+  #login-gate {
+    min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px;
+  }
+  .login-card {
+    max-width: 360px; width: 100%; text-align: center;
+    border-radius: 18px; border: 1px solid var(--line); background: var(--surface);
+    padding: 36px 28px;
+  }
+  .login-card h1 { font-family: 'Unbounded', sans-serif; font-size: 21px; margin-bottom: 10px; }
+  .login-card p { font-size: 13.5px; color: var(--ink-dim); margin-bottom: 22px; }
+  .login-card .form-row { margin-bottom: 12px; }
+  .login-card input {
+    width: 100%; background: rgba(4,7,13,0.4); border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px 14px; font-size: 14px; color: var(--ink); font-family: inherit;
+  }
+  .login-card input:focus { border-color: var(--steel); outline: none; }
+  .email-btn {
+    width: 100%; background: var(--steel); color: #04070d; border: none; border-radius: 999px;
+    padding: 13px 26px; font-size: 14px; font-weight: 700; cursor: pointer; font-family: inherit;
+    transition: background 0.2s var(--ease);
+  }
+  .email-btn:hover { background: var(--steel-bright); }
+  .login-error { font-size: 12.5px; color: #ff8080; margin-top: 14px; min-height: 16px; }
+
+  /* ---------- stream shell: sidebar + main ---------- */
+  #stream-shell { display: none; height: 100vh; }
+  .stream-layout { display: flex; height: 100%; }
+
+  .stream-sidebar {
+    width: 340px; flex-shrink: 0; height: 100%; display: flex; flex-direction: column;
+    border-right: 1px solid var(--line); background: var(--surface);
+    transition: margin-left 0.25s var(--ease);
+  }
+  .stream-sidebar.hidden { margin-left: -340px; }
+  .stream-sidebar-header {
+    padding: 20px 18px 14px; display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  }
+  .stream-sidebar-header h1 { font-family: 'Unbounded', sans-serif; font-size: 17px; }
+  .stream-total-count {
+    padding: 0 18px 12px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--ink-faint);
+  }
+  .stream-total-count strong { color: var(--steel-bright); font-weight: 700; }
+  .wheel-trigger-btn {
+    display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;
+    font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: var(--ink);
+    background: transparent; border: 1px solid var(--line); border-radius: 999px;
+    padding: 7px 13px; cursor: pointer; transition: all 0.2s var(--ease);
+  }
+  .wheel-trigger-btn:hover { border-color: var(--steel-bright); color: var(--steel-bright); }
+  .wheel-trigger-btn svg { width: 13px; height: 13px; }
+
+  /* Collapses the whole sidebar out of view, leaving just the big display
+     — for whenever the admin wants a completely clean, list-free frame on
+     camera. Attached to the sidebar's own right edge, vertically centered
+     — NOT pinned to the top-left corner, which used to sit right on top
+     of the "Queue" heading and make it unreadable. Slides to the screen's
+     left edge when the sidebar is hidden, so it's still just as easy to
+     bring back. */
+  .stream-hide-toggle {
+    position: fixed; top: 50%; left: 340px; z-index: 95; transform: translateY(-50%);
+    width: 22px; height: 46px; border-radius: 0 10px 10px 0;
+    background: rgba(12,20,36,0.92); backdrop-filter: blur(10px);
+    border: 1px solid var(--line); border-left: none; color: var(--ink-dim);
+    display: flex; align-items: center; justify-content: center; cursor: pointer;
+    transition: left 0.25s var(--ease), border-color 0.2s var(--ease), color 0.2s var(--ease);
+  }
+  .stream-hide-toggle:hover { border-color: var(--steel-bright); color: var(--steel-bright); }
+  .stream-hide-toggle svg { width: 13px; height: 13px; transition: transform 0.25s var(--ease); }
+  body.sidebar-hidden .stream-hide-toggle { left: 0; }
+  body.sidebar-hidden .stream-hide-toggle svg { transform: rotate(180deg); }
+
+  .stream-search-row {
+    margin: 0 18px 10px; display: flex; align-items: center; gap: 8px;
+    background: rgba(4,7,13,0.4); border: 1px solid var(--line); border-radius: 10px; padding: 9px 12px;
+  }
+  .stream-search-row svg { width: 15px; height: 15px; color: var(--ink-faint); flex-shrink: 0; }
+  .stream-search-row input {
+    flex: 1; background: none; border: none; outline: none; color: var(--ink);
+    font-family: inherit; font-size: 13px;
+  }
+  .stream-search-row input::placeholder { color: var(--ink-faint); }
+  .stream-search-clear {
+    background: none; border: none; color: var(--ink-faint); cursor: pointer; font-size: 13px; padding: 2px;
+  }
+  .stream-search-clear:hover { color: var(--ink); }
+
+  .stream-sort-row { margin: 0 18px 14px; }
+  .stream-sort-btn {
+    display: inline-flex; align-items: center; gap: 7px; width: 100%; justify-content: center;
+    font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: var(--ink-dim);
+    background: transparent; border: 1px solid var(--line); border-radius: 999px;
+    padding: 8px 14px; cursor: pointer; transition: all 0.2s var(--ease);
+  }
+  .stream-sort-btn:hover { border-color: var(--ink-faint); color: var(--ink); }
+  .stream-sort-btn svg { width: 13px; height: 13px; }
+
+  .stream-list { flex: 1; overflow-y: auto; padding: 0 10px 16px; }
+  .stream-list-empty { padding: 30px 20px; text-align: center; font-size: 12.5px; color: var(--ink-faint); }
+  .stream-list-item {
+    display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+    background: transparent; border: 1px solid transparent; border-radius: 10px;
+    padding: 10px 10px; margin-bottom: 3px; cursor: pointer; transition: all 0.15s var(--ease);
+  }
+  .stream-list-item:hover { background: rgba(79,123,176,0.1); }
+  .stream-list-item.active { background: var(--steel-soft); border-color: rgba(79,123,176,0.4); }
+  /* The wheel's "this one won" spotlight — a bright pulse that fades out
+     over ~2s, visible on camera as the pick lands in the list. */
+  @keyframes streamWheelHighlightPulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(168,200,236,0); }
+    20% { box-shadow: 0 0 0 4px rgba(168,200,236,0.55); }
+  }
+  .stream-list-item.wheel-highlight {
+    animation: streamWheelHighlightPulse 1.1s ease-out 2;
+    border-color: var(--steel-bright); background: var(--steel-soft);
+  }
+  .stream-list-item-num {
+    font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--ink-faint);
+    width: 24px; flex-shrink: 0; text-align: right;
+  }
+  .stream-list-item.active .stream-list-item-num { color: var(--steel-bright); }
+  .stream-list-item-text { min-width: 0; flex: 1; }
+  .stream-list-item-name {
+    font-size: 13px; font-weight: 600; color: var(--ink);
+    white-space: normal; word-break: break-word; overflow-wrap: break-word;
+  }
+  .stream-list-item-sub {
+    font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--ink-faint);
+    white-space: normal; word-break: break-word; overflow-wrap: break-word;
+  }
+
+  /* ---------- main display ---------- */
+  .stream-main {
+    flex: 1; height: 100%; overflow-y: auto; position: relative;
+    display: flex; align-items: center; justify-content: center; padding: 40px 32px;
+  }
+  .stream-card {
+    width: 100%; max-width: 980px; text-align: center;
+    transition: opacity 0.25s var(--ease), transform 0.25s var(--ease);
+    opacity: 1; transform: scale(1) translateY(0);
+  }
+  /* Exit: plays right when "Listened" is clicked, before the Firestore
+     write even resolves — pure client-side feel, no waiting on a
+     round-trip to feel responsive. Enter: plays the moment the NEXT track
+     renders in the same spot (detected by a change in track id), sliding
+     up from slightly below into place. */
+  .stream-card.card-exiting { opacity: 0; transform: scale(0.96) translateY(-14px); }
+  .stream-card.card-entering { opacity: 0; transform: scale(0.97) translateY(14px); }
+  .stream-artist {
+    font-family: 'JetBrains Mono', monospace; font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--steel-bright); margin-bottom: 10px;
+  }
+  .stream-title {
+    font-family: 'Unbounded', sans-serif; font-weight: 800; font-size: clamp(1.6rem, 4vw, 2.6rem);
+    letter-spacing: -0.02em; line-height: 1.15; margin-bottom: 8px; word-break: break-word;
+  }
+  .stream-note {
+    font-size: 14px; color: var(--ink-dim); max-width: 600px; margin: 0 auto 26px; line-height: 1.5;
+  }
+  .stream-embed-wrap {
+    border-radius: 18px; overflow: hidden; border: 1px solid var(--line); background: var(--surface);
+    min-height: 80px;
+  }
+  .stream-embed-wrap iframe { display: block; width: 100%; border: none; }
+  .stream-embed-wrap audio { display: block; width: 100%; height: 64px; }
+  /* Bigger than the admin panel's embeds on purpose — this is the main
+     event on a much wider screen, no tight sidebar constraints here. */
+  .stream-embed-youtube iframe { aspect-ratio: 16 / 9; height: auto; }
+  .stream-embed-soundcloud iframe { height: 300px; }
+  .stream-embed-spotify iframe { height: 452px; }
+  .stream-embed-drive iframe { height: 320px; }
+  .stream-embed-invalid, .stream-embed-loading { padding: 30px; color: var(--ink-faint); font-size: 13.5px; }
+  .stream-embed-invalid a { color: var(--steel-bright); }
+
+  .stream-listened-btn {
+    display: inline-flex; align-items: center; gap: 10px; margin-top: 28px;
+    background: var(--steel); color: #04070d; border: none; border-radius: 999px;
+    padding: 14px 32px; font-size: 15px; font-weight: 700; cursor: pointer; font-family: inherit;
+    transition: all 0.2s var(--ease-spring);
+  }
+  .stream-listened-btn svg { width: 18px; height: 18px; }
+  .stream-listened-btn:hover:not(:disabled) { background: var(--steel-bright); transform: translateY(-2px); }
+  .stream-listened-btn:disabled { opacity: 0.5; cursor: default; transform: none; }
+
+  /* "Marked as listened" toast with an Undo button — the immediate,
+     no-need-to-hunt-for-it way to recover from an accidental click,
+     backed up by the persistent Recently Listened panel for anything
+     caught too late. */
+  .stream-toast {
+    position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%);
+    z-index: 20; display: flex; align-items: center; gap: 16px;
+    background: rgba(12,20,36,0.96); backdrop-filter: blur(10px);
+    border: 1px solid var(--line); border-radius: 999px;
+    padding: 12px 14px 12px 20px; box-shadow: 0 14px 36px -10px rgba(0,0,0,0.6);
+    font-size: 13.5px; color: var(--ink-dim);
+    animation: toastIn 0.25s var(--ease-spring);
+  }
+  @keyframes toastIn { from { opacity: 0; transform: translateX(-50%) translateY(10px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+  .stream-toast-undo {
+    font-family: 'JetBrains Mono', monospace; font-size: 12.5px; font-weight: 700; color: var(--steel-bright);
+    background: var(--steel-soft); border: 1px solid rgba(79,123,176,0.4); border-radius: 999px;
+    padding: 7px 16px; cursor: pointer; transition: all 0.2s var(--ease); flex-shrink: 0;
+  }
+  .stream-toast-undo:hover { background: var(--steel-bright); color: #04070d; }
+
+  .stream-listened-history-btn {
+    display: flex; align-items: center; gap: 7px; width: calc(100% - 36px); margin: 0 18px 14px;
+    font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: var(--ink-faint);
+    background: transparent; border: 1px solid var(--line); border-radius: 999px;
+    padding: 8px 14px; cursor: pointer; transition: all 0.2s var(--ease); justify-content: center;
+  }
+  .stream-listened-history-btn:hover { border-color: var(--ink-faint); color: var(--ink); }
+  .stream-listened-history-btn svg { width: 13px; height: 13px; flex-shrink: 0; }
+
+  .listened-history-inner { max-width: 480px; text-align: left; }
+  .listened-history-inner h2 { text-align: center; }
+  .listened-history-inner .desc { text-align: center; }
+  .listened-history-clear-btn {
+    display: block; margin: 0 0 16px auto;
+    font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: #ff8080;
+    background: rgba(255,128,128,0.08); border: 1px solid rgba(255,128,128,0.3); border-radius: 999px;
+    padding: 8px 16px; cursor: pointer; transition: all 0.2s var(--ease);
+  }
+  .listened-history-clear-btn:hover { background: rgba(255,128,128,0.18); border-color: #ff8080; }
+  .listened-history-rows { display: flex; flex-direction: column; gap: 8px; max-height: 50vh; overflow-y: auto; }
+  .listened-history-empty { text-align: center; color: var(--ink-faint); font-size: 13px; padding: 20px 0; }
+  .listened-history-row {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px;
+  }
+  .listened-history-row-text { min-width: 0; flex: 1; }
+  .listened-history-row-name { font-size: 13px; font-weight: 600; color: var(--ink); }
+  .listened-history-row-sub { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--ink-faint); }
+  .listened-history-restore-btn {
+    flex-shrink: 0; font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: var(--steel-bright);
+    background: var(--steel-soft); border: 1px solid rgba(79,123,176,0.4); border-radius: 999px;
+    padding: 7px 14px; cursor: pointer; transition: all 0.2s var(--ease);
+  }
+  .listened-history-restore-btn:hover { background: var(--steel-bright); color: #04070d; }
+
+  .stream-empty { text-align: center; max-width: 480px; }
+  .stream-empty .big-check {
+    width: 64px; height: 64px; border-radius: 50%; background: var(--steel-soft);
+    display: flex; align-items: center; justify-content: center; margin: 0 auto 22px;
+  }
+  .stream-empty .big-check svg { width: 28px; height: 28px; stroke: var(--steel-bright); fill: none; stroke-width: 2; }
+  .stream-empty h2 { font-family: 'Unbounded', sans-serif; font-size: 24px; margin-bottom: 10px; }
+  .stream-empty p { font-size: 14px; color: var(--ink-dim); }
+  .stream-load-error {
+    max-width: 480px; text-align: center; font-size: 13.5px; color: #ff8080; line-height: 1.6;
+  }
+
+  @media (max-width: 860px) {
+    .stream-layout { flex-direction: column; }
+    .stream-sidebar { width: 100%; height: 40%; border-right: none; border-bottom: 1px solid var(--line); }
+    .stream-main { height: 60%; padding: 24px 18px; }
+  }
+
+  /* ---------- wheel modal (ported from the admin panel) ---------- */
+  .wheel-modal {
+    position: fixed; inset: 0; z-index: 100; display: none;
+    background: rgba(4,7,13,0.85); backdrop-filter: blur(8px);
+    padding: 24px 16px; overflow-y: auto;
+    box-sizing: border-box;
+  }
+  .wheel-modal.open { display: flex; align-items: flex-start; justify-content: center; }
+  .wheel-modal-inner {
+    width: 100%; max-width: 620px; max-height: calc(100vh - 48px); margin: 0;
+    background: var(--bg); border: 1px solid var(--line);
+    border-radius: 24px; padding: 32px 24px; position: relative; text-align: center;
+    overflow-y: auto; box-sizing: border-box;
+    scrollbar-width: none; -ms-overflow-style: none; /* Firefox / old Edge */
+  }
+  .wheel-modal-inner::-webkit-scrollbar { display: none; width: 0; } /* Chrome/Safari */
+  .wheel-modal-close {
+    position: absolute; top: 16px; right: 16px; width: 32px; height: 32px; border-radius: 50%;
+    background: var(--surface); border: 1px solid var(--line); color: var(--ink);
+    display: flex; align-items: center; justify-content: center; font-size: 15px; cursor: pointer;
+    z-index: 3;
+  }
+  .wheel-modal-close:hover { background: var(--steel); border-color: var(--steel); color: #060a12; }
+  .wheel-modal h2 { font-family: 'Unbounded', sans-serif; font-size: 1.5rem; font-weight: 800; margin-bottom: 6px; padding-right: 30px; }
+  .wheel-modal .desc { font-size: 12.5px; color: var(--ink-dim); margin-bottom: 22px; line-height: 1.5; }
+
+  .wheel-stage {
+    position: relative; margin: 0 auto 22px;
+    width: min(400px, 100%, 52vh);
+    height: min(400px, 100%, 52vh);
+    aspect-ratio: 1 / 1;
+  }
+  .wheel-pointer {
+    position: absolute; top: -6px; left: 50%; transform: translateX(-50%);
+    width: 0; height: 0; border-left: 13px solid transparent; border-right: 13px solid transparent;
+    border-top: 20px solid var(--steel-bright); z-index: 2;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.4));
+  }
+  .wheel-hub {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    width: 38px; height: 38px; border-radius: 50%; background: var(--bg);
+    border: 3px solid var(--steel-bright); z-index: 2;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .wheel-hub svg { width: 16px; height: 16px; color: var(--steel-bright); }
+  .wheel-svg-wrap {
+    width: 100%; height: 100%; border-radius: 50%; border: 4px solid var(--line); overflow: hidden;
+    transition: transform 4.5s cubic-bezier(0.12, 0.66, 0.2, 1);
+    box-shadow: 0 0 0 6px rgba(4,7,13,0.6), 0 14px 40px -10px rgba(0,0,0,0.6);
+  }
+  .wheel-svg-wrap.winner-pulse { animation: wheelWinnerPulse 0.7s ease-out; }
+  @keyframes wheelWinnerPulse {
+    0% { box-shadow: 0 0 0 6px rgba(4,7,13,0.6), 0 14px 40px -10px rgba(0,0,0,0.6); }
+    40% { box-shadow: 0 0 0 6px rgba(4,7,13,0.6), 0 0 0 14px rgba(168,200,236,0.45), 0 14px 40px -10px rgba(0,0,0,0.6); }
+    100% { box-shadow: 0 0 0 6px rgba(4,7,13,0.6), 0 14px 40px -10px rgba(0,0,0,0.6); }
+  }
+  .wheel-svg-wrap svg { display: block; width: 100%; height: 100%; }
+  .wheel-empty-msg { font-size: 13px; color: var(--ink-faint); padding: 80px 20px; }
+
+  .wheel-confetti { position: absolute; inset: 0; pointer-events: none; overflow: visible; z-index: 4; }
+  .wheel-confetti span {
+    position: absolute; top: 50%; left: 50%; width: 8px; height: 8px; border-radius: 2px;
+    animation: confettiBurst 1.1s cubic-bezier(0.15, 0.7, 0.3, 1) forwards;
+  }
+  @keyframes confettiBurst {
+    0% { transform: translate(-50%, -50%) rotate(0deg) scale(1); opacity: 1; }
+    100% { transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) rotate(var(--rot)) scale(0.4); opacity: 0; }
+  }
+
+  .wheel-spin-btn {
+    width: 100%; background: var(--steel); color: #04070d; border: none; border-radius: 999px;
+    padding: 15px 26px; font-size: 15px; font-weight: 700; cursor: pointer; font-family: inherit;
+    transition: all 0.2s var(--ease-spring); margin-bottom: 16px;
+  }
+  .wheel-spin-btn:hover:not(:disabled) { background: var(--steel-bright); transform: translateY(-1px); }
+  .wheel-spin-btn:disabled { opacity: 0.5; cursor: default; }
+
+  .wheel-result { min-height: 20px; font-size: 13.5px; color: var(--ink-dim); }
+  .wheel-result-name { font-family: 'Unbounded', sans-serif; font-weight: 700; font-size: 17px; margin-bottom: 12px; }
+  .wheel-goto-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--steel-soft); color: var(--steel-bright); border: 1px solid rgba(79,123,176,0.4);
+    border-radius: 999px; padding: 10px 20px; font-family: 'JetBrains Mono', monospace; font-size: 13px;
+    cursor: pointer; transition: all 0.2s var(--ease);
+  }
+  .wheel-goto-btn:hover { background: var(--steel-bright); }
+  .wheel-track-list { text-align: left; }
+  .wheel-track-list-label { font-size: 12px; color: var(--ink-faint); margin-bottom: 10px; text-align: center; }
+  .wheel-track-rows {
+    max-height: 220px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px;
+    scrollbar-width: none; -ms-overflow-style: none;
+  }
+  .wheel-track-rows::-webkit-scrollbar { display: none; width: 0; }
+  .wheel-track-row { display: flex; align-items: center; gap: 6px; }
+  .wheel-track-item {
+    flex: 1; display: flex; align-items: center; gap: 10px; text-align: left;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+    padding: 10px 12px; cursor: pointer; transition: all 0.15s var(--ease); min-width: 0;
+  }
+  .wheel-track-item:hover { border-color: var(--steel-bright); background: var(--steel-soft); }
+  .wheel-track-item-num {
+    font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--ink-faint); flex-shrink: 0;
+  }
+  .wheel-track-item-link { font-size: 13px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .wheel-track-delete-btn {
+    width: 34px; height: 34px; flex-shrink: 0; border-radius: 10px;
+    background: transparent; border: 1px solid var(--line); color: var(--ink-faint);
+    display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.15s var(--ease);
+  }
+  .wheel-track-delete-btn svg { width: 15px; height: 15px; }
+  .wheel-track-delete-btn:hover { border-color: #ff8080; color: #ff8080; }
+  .wheel-secondary-actions { margin-top: 16px; }
+  .wheel-secondary-btn {
+    font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: var(--ink-faint);
+    background: transparent; border: 1px solid var(--line); border-radius: 999px;
+    padding: 7px 14px; cursor: pointer; transition: all 0.2s var(--ease);
+  }
+  .wheel-secondary-btn:hover { border-color: var(--ink-faint); color: var(--ink); }
+
+  /* ---------- floating volume widget (ported from the admin panel) ---------- */
+  .floating-volume {
+    position: fixed; bottom: 20px; right: 20px; z-index: 90;
+    display: flex; align-items: center; gap: 4px;
+    background: rgba(12,20,36,0.92); backdrop-filter: blur(10px);
+    border: 1px solid var(--line); border-radius: 999px;
+    padding: 4px 16px 4px 4px; box-shadow: 0 10px 30px -8px rgba(0,0,0,0.55);
+    transition: transform 0.2s var(--ease), box-shadow 0.2s var(--ease), border-color 0.2s var(--ease);
+  }
+  .floating-volume:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 14px 36px -8px rgba(0,0,0,0.65);
+    border-color: var(--steel-bright);
+  }
+  .floating-volume-mute-btn {
+    width: 36px; height: 36px; flex-shrink: 0; border-radius: 50%;
+    background: transparent; border: none; color: var(--ink-dim); cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: color 0.2s var(--ease), background 0.2s var(--ease);
+  }
+  .floating-volume-mute-btn:hover { color: var(--steel-bright); background: rgba(168,200,236,0.1); }
+  .floating-volume-mute-btn svg { width: 18px; height: 18px; overflow: visible; }
+  .vol-wave { transform-origin: 7px 12px; animation: volWavePulse 1.8s ease-in-out infinite; }
+  .vol-wave-2 { animation-delay: 0.2s; }
+  @keyframes volWavePulse {
+    0%, 100% { opacity: 0.4; transform: scale(0.92); }
+    50% { opacity: 1; transform: scale(1); }
+  }
+  .vol-mute-x { display: none; }
+  .floating-volume.is-muted .vol-wave { display: none; }
+  .floating-volume.is-muted .vol-mute-x { display: block; stroke: #ff8a8a; }
+  .floating-volume.is-muted .floating-volume-mute-btn { color: #ff8a8a; }
+  .floating-volume input[type="range"] {
+    width: 100px; height: 4px; -webkit-appearance: none; appearance: none;
+    border-radius: 999px; outline: none; cursor: pointer; flex-shrink: 0;
+  }
+  .floating-volume input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none; width: 13px; height: 13px; border-radius: 50%;
+    background: var(--steel-bright); cursor: pointer; box-shadow: 0 0 0 3px rgba(12,20,36,0.92);
+    transition: transform 0.15s var(--ease);
+  }
+  .floating-volume input[type="range"]:hover::-webkit-slider-thumb,
+  .floating-volume input[type="range"]:active::-webkit-slider-thumb { transform: scale(1.2); }
+  .floating-volume input[type="range"]::-moz-range-thumb {
+    width: 13px; height: 13px; border-radius: 50%; background: var(--steel-bright); border: none; cursor: pointer;
+    box-shadow: 0 0 0 3px rgba(12,20,36,0.92);
+  }
+  .global-volume-value {
+    font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--ink-faint);
+    width: 30px; text-align: right; flex-shrink: 0;
+  }
+</style>
+</head>
+<body>
+
+<div id="stream-bg" aria-hidden="true"></div>
+
+<div id="login-gate">
+  <div class="login-card">
+    <h1>Neutro — Stream Mode</h1>
+    <p>Sign in with your admin account.</p>
+    <form id="email-login-form">
+      <div class="form-row">
+        <input type="email" id="email-input" placeholder="Email" required autocomplete="username">
+      </div>
+      <div class="form-row">
+        <input type="password" id="password-input" placeholder="Password" required autocomplete="current-password">
+      </div>
+      <button type="submit" class="email-btn" id="email-signin-btn">Sign in</button>
+    </form>
+    <p class="login-error" id="login-error"></p>
+  </div>
+</div>
+
+<button type="button" class="stream-hide-toggle" id="stream-hide-toggle" title="Hide/show the queue sidebar" style="display:none">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M15 6l-6 6 6 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+</button>
+
+<div id="stream-shell">
+  <div class="stream-layout">
+    <aside class="stream-sidebar" id="stream-sidebar">
+      <div class="stream-sidebar-header">
+        <h1>Queue</h1>
+        <button type="button" class="wheel-trigger-btn" id="open-wheel">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 3v9l6 3"/></svg>
+          Wheel
+        </button>
+      </div>
+      <p class="stream-total-count" id="stream-total-count"></p>
+      <button type="button" class="stream-listened-history-btn" id="open-listened-history">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12a9 9 0 109-9 9.75 9.75 0 00-6.74 2.74L3 8"/><path d="M3 3v5h5M12 7v5l4 2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span id="listened-history-label">Recently listened</span>
+      </button>
+      <div class="stream-search-row">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3" stroke-linecap="round"/></svg>
+        <input type="text" id="stream-search-input" placeholder="Search by name, link, or note…" autocomplete="off">
+        <button type="button" class="stream-search-clear" id="stream-search-clear" style="display:none" aria-label="Clear search">✕</button>
+      </div>
+      <div class="stream-sort-row">
+        <button type="button" class="stream-sort-btn" id="stream-sort-toggle">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 7h13M3 12h9M3 17h5M17 7v13M17 7l-4 4M17 7l4 4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span id="stream-sort-label">Newest first</span>
+        </button>
+      </div>
+      <div class="stream-list" id="stream-list"></div>
+    </aside>
+
+    <main class="stream-main">
+      <div class="stream-card" id="stream-card" style="display:none">
+        <div class="stream-artist" id="stream-artist"></div>
+        <div class="stream-title" id="stream-title">Loading title…</div>
+        <p class="stream-note" id="stream-note" style="display:none"></p>
+        <div class="stream-embed-wrap" id="stream-embed-wrap"></div>
+        <button type="button" class="stream-listened-btn" id="stream-listened-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Listened
+        </button>
+      </div>
+
+      <div class="stream-empty" id="stream-empty" style="display:none">
+        <div class="big-check"><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <h2>All caught up.</h2>
+        <p>Nothing left in the New queue right now — new submissions will show up here automatically.</p>
+      </div>
+
+      <p class="stream-load-error" id="stream-load-error" style="display:none"></p>
+
+      <div class="stream-toast" id="stream-toast" style="display:none">
+        <span id="stream-toast-text"></span>
+        <button type="button" class="stream-toast-undo" id="stream-toast-undo">Undo</button>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- ================== FLOATING VOLUME WIDGET ================== -->
+<div class="floating-volume" id="floating-volume" style="display:none">
+  <button type="button" class="floating-volume-mute-btn" id="floating-volume-mute-btn" title="Mute" aria-label="Mute">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M11 5L6 9H2v6h4l5 4V5z" fill="currentColor" stroke="none"/>
+      <path class="vol-wave vol-wave-1" d="M15.5 8.5a5 5 0 010 7"/>
+      <path class="vol-wave vol-wave-2" d="M19 5a10 10 0 010 14"/>
+      <path class="vol-mute-x" d="M16.5 9.5l5 5M21.5 9.5l-5 5"/>
+    </svg>
+  </button>
+  <input type="range" id="global-volume-slider" min="0" max="100" value="80">
+  <span class="global-volume-value" id="global-volume-value">80%</span>
+</div>
+
+<!-- ================== RECENTLY LISTENED MODAL ================== -->
+<div class="wheel-modal" id="listened-history-modal" role="dialog" aria-modal="true" aria-labelledby="listened-history-title">
+  <div class="wheel-modal-inner listened-history-inner">
+    <button class="wheel-modal-close" id="close-listened-history" aria-label="Close">✕</button>
+    <h2 id="listened-history-title">Recently listened</h2>
+    <p class="desc">Marked "Listened" by accident? Restore it here and it goes right back into the queue.</p>
+    <button type="button" class="listened-history-clear-btn" id="listened-history-clear-btn" style="display:none">Clear all</button>
+    <div class="listened-history-rows" id="listened-history-rows"></div>
+  </div>
+</div>
+
+<!-- ================== WHEEL MODAL ================== -->
+<div class="wheel-modal" id="wheel-modal" role="dialog" aria-modal="true" aria-labelledby="wheel-modal-title">
+  <div class="wheel-modal-inner">
+    <button class="wheel-modal-close" id="close-wheel" aria-label="Close wheel">✕</button>
+    <h2 id="wheel-modal-title">Pick a track</h2>
+    <p class="desc">Spins through everyone in the current queue (matching your search, if any). Everyone has equal odds, no matter how many tracks they sent — if their name wins, you pick which of their tracks to view.</p>
+
+    <div class="wheel-stage" id="wheel-stage">
+      <div class="wheel-pointer"></div>
+      <div class="wheel-svg-wrap" id="wheel-svg-wrap"></div>
+      <div class="wheel-hub">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+      </div>
+      <div class="wheel-confetti" id="wheel-confetti"></div>
+    </div>
+
+    <button class="wheel-spin-btn" id="wheel-spin-btn">Spin</button>
+    <div class="wheel-result" id="wheel-result"></div>
+  </div>
+</div>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
+  import {
+    getAuth, signOut, onAuthStateChanged, signInWithEmailAndPassword
+  } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
+  import {
+    getFirestore, collection, query, where, onSnapshot, doc, updateDoc, serverTimestamp, writeBatch
+  } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyCphqIMmkws58VaFE1Y8T1ikWE5vmDhQhA",
+    authDomain: "neutro-adm.firebaseapp.com",
+    projectId: "neutro-adm",
+    storageBucket: "neutro-adm.firebasestorage.app",
+    messagingSenderId: "481335512836",
+    appId: "1:481335512836:web:bfff64c4cd41407dd78a51"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+
+  // Lazily-loaded platform SDKs — only needed here for volume control of
+  // whichever single track is currently showing (unlike the admin panel,
+  // this view never has more than one embed alive at once, so there's no
+  // need to track multiple simultaneous widgets/players).
+  let scWidgetApiPromise = null;
+  function loadSoundcloudWidgetApi() {
+    if (scWidgetApiPromise) return scWidgetApiPromise;
+    scWidgetApiPromise = new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = 'https://w.soundcloud.com/player/api.js';
+      script.onload = () => resolve(window.SC);
+      script.onerror = () => reject(new Error('Failed to load SoundCloud Widget API'));
+      document.head.appendChild(script);
+    });
+    return scWidgetApiPromise;
+  }
+  let youtubeApiPromise = null;
+  function loadYoutubeApi() {
+    if (youtubeApiPromise) return youtubeApiPromise;
+    youtubeApiPromise = new Promise((resolve) => {
+      if (window.YT && window.YT.Player) { resolve(); return; }
+      const previous = window.onYouTubeIframeAPIReady;
+      window.onYouTubeIframeAPIReady = () => {
+        if (typeof previous === 'function') previous();
+        resolve();
+      };
+      const tag = document.createElement('script');
+      tag.src = 'https://www.youtube.com/iframe_api';
+      document.head.appendChild(tag);
+    });
+    return youtubeApiPromise;
+  }
+
+  function escapeHtml(str) {
+    return String(str).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+  function escapeAttr(str) { return String(str).replace(/"/g, '&quot;'); }
+
+  // ---- login ----------------------------------------------------------
+  const loginGate = document.getElementById('login-gate');
+  const streamShell = document.getElementById('stream-shell');
+  const emailForm = document.getElementById('email-login-form');
+  const emailInput = document.getElementById('email-input');
+  const passwordInput = document.getElementById('password-input');
+  const emailSigninBtn = document.getElementById('email-signin-btn');
+  const loginError = document.getElementById('login-error');
+
+  emailForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    loginError.textContent = '';
+    emailSigninBtn.disabled = true;
+    emailSigninBtn.textContent = 'Signing in…';
+    try {
+      await signInWithEmailAndPassword(auth, emailInput.value.trim(), passwordInput.value);
+    } catch (err) {
+      loginError.textContent = "Couldn't sign in — check your email/password.";
+    } finally {
+      emailSigninBtn.disabled = false;
+      emailSigninBtn.textContent = 'Sign in';
+    }
+  });
+
+  onAuthStateChanged(auth, (user) => {
+    if (user) {
+      loginGate.style.display = 'none';
+      streamShell.style.display = 'block';
+      streamHideToggle.style.display = 'flex';
+      floatingVolume.style.display = 'flex';
+      startListening();
+    } else {
+      loginGate.style.display = 'flex';
+      streamShell.style.display = 'none';
+      streamHideToggle.style.display = 'none';
+      floatingVolume.style.display = 'none';
+      if (unsubscribe) { unsubscribe(); unsubscribe = null; }
+      if (unsubscribeListened) { unsubscribeListened(); unsubscribeListened = null; }
+    }
+  });
+
+  // ---- queue ------------------------------------------------------------
+  let unsubscribe = null;
+  let unsubscribeListened = null;
+  let queue = []; // live "New" submissions, unsorted (sorted at render time)
+  let listenedItems = []; // live "listened" submissions, for the recovery panel
+  let selectedId = null;
+  let searchQuery = '';
+  let sortReversed = false; // false = oldest first, true = newest first
+  let panelVolume = 80;
+
+  function clamp(v, min, max) { return Math.min(max, Math.max(min, v)); }
+
+  function startListening() {
+    // No orderBy here on purpose: combined with where(), it needs a
+    // Firestore COMPOSITE index that may not exist — sorting is done
+    // client-side instead, which only needs the automatic single-field
+    // index that where() alone always has.
+    const q = query(collection(db, 'submissions'), where('status', '==', 'new'));
+    unsubscribe = onSnapshot(q, (snapshot) => {
+      queue = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      streamLoadError.style.display = 'none';
+      renderList();
+    }, (err) => {
+      console.error('Failed to load queue:', err);
+      streamCard.style.display = 'none';
+      streamEmpty.style.display = 'none';
+      streamLoadError.style.display = 'block';
+      streamLoadError.textContent = "Couldn't load the queue — check your connection, or check the browser console for a Firestore error (e.g. a missing index).";
+    });
+
+    // "Recently listened" recovery list — same single-field-where,
+    // sort-client-side approach as the main queue, so it doesn't need its
+    // own composite index either.
+    const listenedQ = query(collection(db, 'submissions'), where('status', '==', 'listened'));
+    unsubscribeListened = onSnapshot(listenedQ, (snapshot) => {
+      listenedItems = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      listenedItems.sort((a, b) => {
+        const ams = a.listenedAt && a.listenedAt.toMillis ? a.listenedAt.toMillis() : 0;
+        const bms = b.listenedAt && b.listenedAt.toMillis ? b.listenedAt.toMillis() : 0;
+        return bms - ams; // most recently listened first
+      });
+      listenedHistoryLabel.textContent = `Recently listened${listenedItems.length ? ` (${listenedItems.length})` : ''}`;
+      if (listenedHistoryModal.classList.contains('open')) renderListenedHistory();
+    }, (err) => {
+      console.error('Failed to load listened history:', err);
+    });
+  }
+
+  function getOrderedQueue() {
+    const sorted = [...queue].sort((a, b) => {
+      const ams = a.submittedAt && a.submittedAt.toMillis ? a.submittedAt.toMillis() : 0;
+      const bms = b.submittedAt && b.submittedAt.toMillis ? b.submittedAt.toMillis() : 0;
+      return ams - bms;
+    });
+    if (sortReversed) sorted.reverse();
+    let items = sorted;
+    if (searchQuery) {
+      items = items.filter(s => {
+        const haystack = [s.name, s.link, s.note].filter(Boolean).join(' ').toLowerCase();
+        return haystack.includes(searchQuery);
+      });
+    }
+    return items;
+  }
+
+  // ---- element refs ------------------------------------------------------
+  const streamList = document.getElementById('stream-list');
+  const streamCard = document.getElementById('stream-card');
+  const streamEmpty = document.getElementById('stream-empty');
+  const streamLoadError = document.getElementById('stream-load-error');
+  const streamArtist = document.getElementById('stream-artist');
+  const streamTitle = document.getElementById('stream-title');
+  const streamNote = document.getElementById('stream-note');
+  const streamEmbedWrap = document.getElementById('stream-embed-wrap');
+  const streamTotalCount = document.getElementById('stream-total-count');
+  const streamBg = document.getElementById('stream-bg');
+
+  // Background is a plain static grid now (pure CSS, see #stream-bg) —
+  // no reactivity of any kind. Kept as a no-op so the play/pause event
+  // bindings elsewhere that still call it don't need to be hunted down
+  // and removed one by one.
+  function setBgPlaying() {}
+
+  const searchInput = document.getElementById('stream-search-input');
+  const searchClear = document.getElementById('stream-search-clear');
+  const sortToggleBtn = document.getElementById('stream-sort-toggle');
+  const sortToggleLabel = document.getElementById('stream-sort-label');
+  const streamSidebar = document.getElementById('stream-sidebar');
+  const streamHideToggle = document.getElementById('stream-hide-toggle');
+  const floatingVolume = document.getElementById('floating-volume');
+  const floatingVolumeMuteBtn = document.getElementById('floating-volume-mute-btn');
+  const globalVolumeSlider = document.getElementById('global-volume-slider');
+  const globalVolumeValue = document.getElementById('global-volume-value');
+  const streamListenedBtn = document.getElementById('stream-listened-btn');
+  const streamToast = document.getElementById('stream-toast');
+  const streamToastText = document.getElementById('stream-toast-text');
+  const streamToastUndo = document.getElementById('stream-toast-undo');
+  const openListenedHistoryBtn = document.getElementById('open-listened-history');
+  const listenedHistoryLabel = document.getElementById('listened-history-label');
+  const listenedHistoryModal = document.getElementById('listened-history-modal');
+  const closeListenedHistoryBtn = document.getElementById('close-listened-history');
+  const listenedHistoryRows = document.getElementById('listened-history-rows');
+  const listenedHistoryClearBtn = document.getElementById('listened-history-clear-btn');
+
+  // Hide/show the sidebar entirely — for a clean, list-free frame on camera.
+  streamHideToggle.addEventListener('click', () => {
+    const hidden = streamSidebar.classList.toggle('hidden');
+    document.body.classList.toggle('sidebar-hidden', hidden);
+  });
+
+  // ---- volume (ported from the admin panel) ------------------------------
+  function updateVolumeSliderFill() {
+    globalVolumeSlider.style.background =
+      `linear-gradient(to right, var(--steel-bright) ${panelVolume}%, var(--line) ${panelVolume}%)`;
+  }
+  function setPanelVolume(value) {
+    panelVolume = clamp(Math.round(value), 0, 100);
+    globalVolumeSlider.value = panelVolume;
+    globalVolumeValue.textContent = panelVolume + '%';
+    floatingVolume.classList.toggle('is-muted', panelVolume === 0);
+    updateVolumeSliderFill();
+    applyVolumeToCurrentEmbed();
+  }
+  globalVolumeSlider.addEventListener('input', (e) => setPanelVolume(Number(e.target.value)));
+  let volumeBeforeMute = panelVolume;
+  floatingVolumeMuteBtn.addEventListener('click', () => {
+    if (panelVolume > 0) {
+      volumeBeforeMute = panelVolume;
+      setPanelVolume(0);
+    } else {
+      setPanelVolume(volumeBeforeMute || 80);
+    }
+  });
+  updateVolumeSliderFill();
+
+  // Whichever platform SDK object is currently backing the on-screen embed
+  // (only ever one at a time here) — reset every time a new track renders.
+  let currentSoundcloudWidget = null;
+  let currentYoutubePlayer = null;
+  let currentDropboxAudio = null;
+  function applyVolumeToCurrentEmbed() {
+    if (currentSoundcloudWidget) { try { currentSoundcloudWidget.setVolume(panelVolume); } catch {} }
+    if (currentYoutubePlayer) { try { currentYoutubePlayer.setVolume(panelVolume); } catch {} }
+    if (currentDropboxAudio) { currentDropboxAudio.volume = panelVolume / 100; }
+  }
+
+  searchInput.addEventListener('input', () => {
+    searchQuery = searchInput.value.trim().toLowerCase();
+    searchClear.style.display = searchQuery ? 'inline-flex' : 'none';
+    renderList();
+  });
+  searchClear.addEventListener('click', () => {
+    searchInput.value = '';
+    searchQuery = '';
+    searchClear.style.display = 'none';
+    renderList();
+  });
+  sortToggleBtn.addEventListener('click', () => {
+    sortReversed = !sortReversed;
+    sortToggleLabel.textContent = sortReversed ? 'Oldest first' : 'Newest first';
+    renderList();
+  });
+
+  // Renders the sidebar list (numbered in whatever order is currently
+  // active — reversing the sort updates both the numbers and the visual
+  // order together, same idea as the admin panel's own sort toggle) and
+  // keeps whichever track is selected showing in the main area, picking a
+  // sensible default if nothing (or something no longer in the queue) is
+  // selected.
+  function renderList() {
+    const items = getOrderedQueue();
+
+    streamTotalCount.textContent = `${queue.length} track${queue.length === 1 ? '' : 's'} in queue`;
+
+    if (items.length === 0) {
+      streamList.innerHTML = `<p class="stream-list-empty">${searchQuery ? 'No matches.' : 'Nothing in the queue yet.'}</p>`;
+    } else {
+      streamList.innerHTML = items.map((s, i) => `
+        <button type="button" class="stream-list-item${s.id === selectedId ? ' active' : ''}" data-select-id="${s.id}">
+          <span class="stream-list-item-num">${i + 1}</span>
+          <span class="stream-list-item-text">
+            <span class="stream-list-item-name">${escapeHtml(s.name || 'Unnamed')}</span><br>
+            <span class="stream-list-item-sub" id="stream-list-sub-${s.id}">${escapeHtml(getLinkHost(s.link || '') || 'invalid link')}</span>
+          </span>
+        </button>
+      `).join('');
+      streamList.querySelectorAll('[data-select-id]').forEach(btn => {
+        btn.addEventListener('click', () => selectTrack(btn.dataset.selectId));
+      });
+      // Resolve each row's actual track title in the background (cached,
+      // so this is instant for anything already resolved elsewhere this
+      // session) — falls back to staying on the link host for platforms
+      // that can't be resolved (Spotify, Drive).
+      items.forEach(s => {
+        const host = getLinkHost(s.link || '');
+        const canResolve = host === 'soundcloud.com' || host === 'on.soundcloud.com' || host === 'm.soundcloud.com'
+          || host === 'youtube.com' || host === 'youtu.be' || host === 'music.youtube.com'
+          || host === 'dropbox.com';
+        if (!canResolve) return;
+        resolveTrackTitle(s.link || '').then(title => {
+          if (!title) return;
+          const el = document.getElementById(`stream-list-sub-${s.id}`);
+          if (el) el.textContent = stripTrailingByline(title);
+        });
+      });
+    }
+
+    // Keep showing the same selection if it's still around; otherwise
+    // default to the first item in the current order, or show empty state.
+    if (!items.some(s => s.id === selectedId)) {
+      selectedId = items[0] ? items[0].id : null;
+    }
+    renderSelected();
+  }
+
+  function selectTrack(id) {
+    selectedId = id;
+    renderList();
+  }
+
+  let titleRequestId = 0;
+  let lastRenderedTrackId = null;
+
+  function renderSelected() {
+    const s = queue.find(x => x.id === selectedId);
+    if (!s) {
+      streamCard.style.display = 'none';
+      streamEmpty.style.display = 'block';
+      lastRenderedTrackId = null;
+      setBgPlaying(false);
+      return;
+    }
+    streamEmpty.style.display = 'none';
+    streamCard.style.display = 'block';
+    streamListenedBtn.disabled = false;
+
+    const isNewTrack = s.id !== lastRenderedTrackId;
+    lastRenderedTrackId = s.id;
+    streamCard.classList.remove('card-exiting');
+    if (isNewTrack) {
+      // Enter from the "just below" offset — added, then removed on the
+      // next frame so the browser actually paints the offset state first
+      // and has something to transition FROM (adding+immediately-removing
+      // in the same tick would just skip straight to the end state).
+      streamCard.classList.add('card-entering');
+      requestAnimationFrame(() => requestAnimationFrame(() => streamCard.classList.remove('card-entering')));
+    }
+
+    streamArtist.textContent = s.name || 'Unnamed';
+    streamNote.style.display = s.note ? 'block' : 'none';
+    streamNote.textContent = s.note || '';
+
+    const requestId = ++titleRequestId;
+    const host = getLinkHost(s.link || '');
+    const canResolveTitle = host === 'soundcloud.com' || host === 'on.soundcloud.com' || host === 'm.soundcloud.com'
+      || host === 'youtube.com' || host === 'youtu.be' || host === 'music.youtube.com'
+      || host === 'dropbox.com';
+    streamTitle.textContent = canResolveTitle ? 'Loading title…' : (host || 'Untitled');
+    if (canResolveTitle) {
+      resolveTrackTitle(s.link || '').then(title => {
+        if (requestId !== titleRequestId) return;
+        streamTitle.textContent = stripTrailingByline(title) || host || 'Untitled';
+      });
+    }
+
+    renderEmbed(s);
+  }
+
+  function stripTrailingByline(title) {
+    if (!title) return title;
+    const idx = title.toLowerCase().lastIndexOf(' by ');
+    if (idx === -1) return title;
+    const stripped = title.slice(0, idx).trim();
+    return stripped || title;
+  }
+
+  // Dropbox has no oEmbed/title API — the closest thing to a "track title"
+  // is just the actual uploaded filename, pulled straight out of the URL
+  // path instead of falling back to showing "dropbox.com".
+  function getDropboxFilename(link) {
+    const u = normalizeUrl(link);
+    if (!u) return null;
+    const last = u.pathname.split('/').pop();
+    if (!last) return null;
+    try { return decodeURIComponent(last); } catch { return last; }
+  }
+
+  const soundcloudOembedCache = new Map();
+  const youtubeOembedTitleCache = new Map();
+  async function resolveTrackTitle(link) {
+    const host = getLinkHost(link);
+    const u = normalizeUrl(link);
+    const absLink = u ? u.toString() : link;
+    if (host === 'dropbox.com') {
+      return getDropboxFilename(link);
+    }
+    if (host === 'soundcloud.com' || host === 'on.soundcloud.com' || host === 'm.soundcloud.com') {
+      let cached = soundcloudOembedCache.get(absLink);
+      if (!cached) {
+        try {
+          const res = await fetch(`https://soundcloud.com/oembed?format=json&url=${encodeURIComponent(absLink)}`);
+          if (!res.ok) throw new Error('oEmbed failed');
+          const data = await res.json();
+          cached = { html: data.html, title: data.title || null };
+          soundcloudOembedCache.set(absLink, cached);
+        } catch { return null; }
+      }
+      return cached.title || null;
+    }
+    if (host === 'youtube.com' || host === 'youtu.be' || host === 'music.youtube.com') {
+      if (youtubeOembedTitleCache.has(absLink)) return youtubeOembedTitleCache.get(absLink);
+      try {
+        const res = await fetch(`https://www.youtube.com/oembed?format=json&url=${encodeURIComponent(absLink)}`);
+        if (!res.ok) throw new Error('oEmbed failed');
+        const data = await res.json();
+        youtubeOembedTitleCache.set(absLink, data.title || null);
+        return data.title || null;
+      } catch { return null; }
+    }
+    return null;
+  }
+
+  // ---- embed building (ported from the main panel's getEmbedInfo) -----
+  function normalizeUrl(raw) {
+    if (!raw) return null;
+    const trimmed = String(raw).trim();
+    if (!trimmed) return null;
+    try { return new URL(trimmed); }
+    catch {
+      try { return new URL('https://' + trimmed); }
+      catch { return null; }
+    }
+  }
+  function getLinkHost(url) {
+    const u = normalizeUrl(url);
+    return u ? u.hostname.replace(/^www\./, '') : null;
+  }
+  function getEmbedInfo(url, host) {
+    if (!host) return null;
+    try {
+      const u = normalizeUrl(url);
+      if (!u) return null;
+      if (host === 'soundcloud.com' || host === 'on.soundcloud.com' || host === 'm.soundcloud.com') {
+        return { type: 'soundcloud-oembed', sourceUrl: u.toString() };
+      }
+      if (host === 'youtube.com' || host === 'youtu.be' || host === 'music.youtube.com') {
+        let videoId = null;
+        if (host === 'youtu.be') videoId = u.pathname.slice(1);
+        else if (u.pathname === '/watch') videoId = u.searchParams.get('v');
+        else if (u.pathname.startsWith('/embed/')) videoId = u.pathname.split('/embed/')[1];
+        else if (u.pathname.startsWith('/shorts/')) videoId = u.pathname.split('/shorts/')[1];
+        if (!videoId) return null;
+        videoId = videoId.split('?')[0].split('&')[0];
+        return { type: 'youtube', src: `https://www.youtube.com/embed/${videoId}?autoplay=0&enablejsapi=1&origin=${encodeURIComponent(window.location.origin)}` };
+      }
+      if (host === 'open.spotify.com') {
+        const match = u.pathname.match(/^\/(track|album|playlist|artist|show|episode)\/([a-zA-Z0-9]{22})/);
+        if (!match) return null;
+        const [, spotifyType, spotifyId] = match;
+        return { type: 'spotify', src: `https://open.spotify.com/embed/${spotifyType}/${spotifyId}` };
+      }
+      if (host === 'drive.google.com') {
+        const pathMatch = u.pathname.match(/^\/(?:u\/\d+\/)?file\/d\/([\w-]+)/);
+        const fileId = pathMatch ? pathMatch[1] : u.searchParams.get('id');
+        if (!fileId) return null;
+        return { type: 'drive', src: `https://drive.google.com/file/d/${fileId}/preview` };
+      }
+      if (host === 'dropbox.com') {
+        if (!/\.(mp3|wav|m4a|aac|flac|ogg|opus)$/i.test(u.pathname)) return null;
+        const direct = new URL(u.toString());
+        direct.hostname = 'dl.dropboxusercontent.com';
+        direct.searchParams.delete('st');
+        direct.searchParams.delete('e');
+        direct.searchParams.set('dl', '1');
+        return { type: 'dropbox-audio', src: direct.toString() };
+      }
+      return null;
+    } catch { return null; }
+  }
+
+  async function renderEmbed(s) {
+    const link = s.link || '';
+    const host = getLinkHost(link);
+    const info = getEmbedInfo(link, host);
+    streamEmbedWrap.className = 'stream-embed-wrap';
+
+    // A new track is about to take over the display — drop the volume
+    // control references to whatever was showing before, so a stray
+    // volume-slider drag can't reach out and touch an embed that's no
+    // longer the one on screen.
+    currentSoundcloudWidget = null;
+    currentYoutubePlayer = null;
+    currentDropboxAudio = null;
+    setBgPlaying(false); // new track isn't playing yet until something actually starts it
+
+    if (!info) {
+      const hrefLink = (normalizeUrl(link) || {}).href || link;
+      streamEmbedWrap.innerHTML = host
+        ? `<p class="stream-embed-invalid">No inline player for this link — <a href="${escapeAttr(hrefLink)}" target="_blank" rel="noopener noreferrer">open it directly</a>.</p>`
+        : `<p class="stream-embed-invalid">Invalid link.</p>`;
+      return;
+    }
+
+    if (info.type === 'soundcloud-oembed') {
+      streamEmbedWrap.classList.add('stream-embed-soundcloud');
+      let html = null;
+      if (soundcloudOembedCache.has(info.sourceUrl) && soundcloudOembedCache.get(info.sourceUrl).html) {
+        html = soundcloudOembedCache.get(info.sourceUrl).html;
+        streamEmbedWrap.innerHTML = html;
+      } else {
+        streamEmbedWrap.innerHTML = '<p class="stream-embed-loading">Loading player…</p>';
+        try {
+          const res = await fetch(`https://soundcloud.com/oembed?format=json&url=${encodeURIComponent(info.sourceUrl)}&auto_play=false&color=%23a8c8ec`);
+          if (!res.ok) throw new Error('oEmbed failed');
+          const data = await res.json();
+          soundcloudOembedCache.set(info.sourceUrl, { html: data.html, title: data.title || null });
+          if (selectedId !== s.id) return; // moved on to something else while this was loading
+          html = data.html;
+          streamEmbedWrap.innerHTML = html;
+        } catch {
+          const hrefLink = (normalizeUrl(link) || {}).href || link;
+          streamEmbedWrap.innerHTML = `<p class="stream-embed-invalid">Couldn't load the SoundCloud player — <a href="${escapeAttr(hrefLink)}" target="_blank" rel="noopener noreferrer">open it directly</a>.</p>`;
+          return;
+        }
+      }
+      // Wrap the freshly-inserted iframe with the Widget SDK so the volume
+      // slider can actually reach it, and so the background can react to
+      // real PLAY/PAUSE/FINISH events instead of just "a track is loaded".
+      const iframe = streamEmbedWrap.querySelector('iframe');
+      if (iframe) {
+        try {
+          const SC = await loadSoundcloudWidgetApi();
+          if (selectedId !== s.id) return;
+          const widget = SC.Widget(iframe);
+          widget.bind(SC.Widget.Events.READY, () => {
+            if (selectedId !== s.id) return;
+            currentSoundcloudWidget = widget;
+            widget.setVolume(panelVolume);
+          });
+          widget.bind(SC.Widget.Events.PLAY, () => { if (selectedId === s.id) setBgPlaying(true); });
+          widget.bind(SC.Widget.Events.PAUSE, () => { if (selectedId === s.id) setBgPlaying(false); });
+          widget.bind(SC.Widget.Events.FINISH, () => { if (selectedId === s.id) setBgPlaying(false); });
+        } catch (err) {
+          console.error('SoundCloud Widget API failed to load:', err);
+        }
+      }
+      return;
+    }
+
+    if (info.type === 'dropbox-audio') {
+      streamEmbedWrap.innerHTML = `<audio controls preload="none" src="${escapeAttr(info.src)}">Your browser doesn't support inline audio playback.</audio>`;
+      const audioEl = streamEmbedWrap.querySelector('audio');
+      if (audioEl) {
+        currentDropboxAudio = audioEl;
+        audioEl.volume = panelVolume / 100;
+        audioEl.addEventListener('play', () => { if (selectedId === s.id) setBgPlaying(true); });
+        audioEl.addEventListener('pause', () => { if (selectedId === s.id) setBgPlaying(false); });
+        audioEl.addEventListener('ended', () => { if (selectedId === s.id) setBgPlaying(false); });
+      }
+      return;
+    }
+
+    const classForType = { youtube: 'stream-embed-youtube', spotify: 'stream-embed-spotify', drive: 'stream-embed-drive' }[info.type] || '';
+    if (classForType) streamEmbedWrap.classList.add(classForType);
+    streamEmbedWrap.innerHTML = `<iframe src="${escapeAttr(info.src)}" allow="autoplay" loading="lazy"></iframe>`;
+
+    if (info.type === 'youtube') {
+      const iframe = streamEmbedWrap.querySelector('iframe');
+      if (iframe) {
+        if (!iframe.id) iframe.id = `yt-stream-${Math.random().toString(36).slice(2)}`;
+        try {
+          await loadYoutubeApi();
+          if (selectedId !== s.id || !iframe.isConnected) return;
+          const player = new YT.Player(iframe.id, {
+            events: {
+              onReady: () => {
+                if (selectedId !== s.id) return;
+                currentYoutubePlayer = player;
+                player.setVolume(panelVolume);
+              },
+              onStateChange: (e) => {
+                if (selectedId !== s.id) return;
+                if (e.data === 1) setBgPlaying(true); // playing
+                else if (e.data === 2 || e.data === 0) setBgPlaying(false); // paused / ended
+              }
+            }
+          });
+        } catch (err) {
+          console.error('YouTube IFrame API failed to load:', err);
+        }
+      }
+    }
+    // Spotify and Drive don't expose any play-state API to us at all — the
+    // background just won't react for those two, same honest limitation
+    // as everywhere else in this app that touches playback state.
+  }
+
+  // ======================================================================
+  // ---- listened: mark done, animate out, show next, offer undo ---------
+  // ======================================================================
+  let listenedActionPending = false;
+  let toastHideTimeout = null;
+
+  streamListenedBtn.addEventListener('click', () => {
+    if (listenedActionPending) return;
+    const s = queue.find(x => x.id === selectedId);
+    if (!s) return;
+    listenedActionPending = true;
+    streamListenedBtn.disabled = true;
+
+    // Exit animation plays immediately, client-side — doesn't wait on the
+    // Firestore round-trip to feel responsive. renderSelected() picks up
+    // the entrance animation for whatever comes next once the write
+    // actually lands and the live query drops this one out of `queue`.
+    streamCard.classList.add('card-exiting');
+    const idToMark = s.id;
+    // Captured from what's actually on screen right now — by the time the
+    // admin is looking at a track and deciding to mark it listened, its
+    // title has already resolved and rendered, so this is reliable
+    // without needing to re-resolve it here.
+    const undoInfo = {
+      id: s.id,
+      title: (streamTitle.textContent && streamTitle.textContent !== 'Loading title…') ? streamTitle.textContent : (s.name || 'this track')
+    };
+
+    setTimeout(async () => {
+      try {
+        await updateDoc(doc(db, 'submissions', idToMark), { status: 'listened', listenedAt: serverTimestamp() });
+        showListenedToast(undoInfo);
+      } catch (err) {
+        console.error('Mark listened failed:', err);
+        streamCard.classList.remove('card-exiting');
+      }
+      listenedActionPending = false;
+    }, 260);
+  });
+
+  function showListenedToast(info) {
+    if (toastHideTimeout) clearTimeout(toastHideTimeout);
+    streamToastText.textContent = `Marked "${info.title}" as listened.`;
+    streamToast.style.display = 'flex';
+    streamToastUndo.onclick = async () => {
+      clearTimeout(toastHideTimeout);
+      streamToast.style.display = 'none';
+      try {
+        await updateDoc(doc(db, 'submissions', info.id), { status: 'new', listenedAt: null });
+      } catch (err) {
+        console.error('Undo listened failed:', err);
+      }
+    };
+    toastHideTimeout = setTimeout(() => { streamToast.style.display = 'none'; }, 7000);
+  }
+
+  // ---- Recently Listened recovery panel ----------------------------------
+  openListenedHistoryBtn.addEventListener('click', () => {
+    listenedHistoryModal.classList.add('open');
+    document.body.style.overflow = 'hidden';
+    renderListenedHistory();
+    closeListenedHistoryBtn.focus();
+  });
+  function closeListenedHistory() {
+    listenedHistoryModal.classList.remove('open');
+    document.body.style.overflow = '';
+    openListenedHistoryBtn.focus();
+  }
+  closeListenedHistoryBtn.addEventListener('click', closeListenedHistory);
+  listenedHistoryModal.addEventListener('click', (e) => { if (e.target === listenedHistoryModal) closeListenedHistory(); });
+
+  function renderListenedHistory() {
+    listenedHistoryClearBtn.style.display = listenedItems.length > 0 ? 'block' : 'none';
+    if (listenedItems.length === 0) {
+      listenedHistoryRows.innerHTML = '<p class="listened-history-empty">Nothing marked as listened yet.</p>';
+      return;
+    }
+    listenedHistoryRows.innerHTML = listenedItems.map(s => `
+      <div class="listened-history-row">
+        <div class="listened-history-row-text">
+          <div class="listened-history-row-name">${escapeHtml(s.name || 'Unnamed')}</div>
+          <div class="listened-history-row-sub" id="listened-history-sub-${s.id}">${escapeHtml(getLinkHost(s.link || '') || 'invalid link')}</div>
+        </div>
+        <button type="button" class="listened-history-restore-btn" data-restore-id="${s.id}">Restore</button>
+      </div>
+    `).join('');
+    listenedHistoryRows.querySelectorAll('[data-restore-id]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        try {
+          await updateDoc(doc(db, 'submissions', btn.dataset.restoreId), { status: 'new', listenedAt: null });
+        } catch (err) {
+          console.error('Restore from history failed:', err);
+          btn.disabled = false;
+        }
+      });
+    });
+    // Same title-resolution as the main queue list — cached, so instant
+    // for anything already resolved elsewhere this session.
+    listenedItems.forEach(s => {
+      const host = getLinkHost(s.link || '');
+      const canResolve = host === 'soundcloud.com' || host === 'on.soundcloud.com' || host === 'm.soundcloud.com'
+        || host === 'youtube.com' || host === 'youtu.be' || host === 'music.youtube.com'
+        || host === 'dropbox.com';
+      if (!canResolve) return;
+      resolveTrackTitle(s.link || '').then(title => {
+        if (!title) return;
+        const el = document.getElementById(`listened-history-sub-${s.id}`);
+        if (el) el.textContent = stripTrailingByline(title);
+      });
+    });
+  }
+
+  listenedHistoryClearBtn.addEventListener('click', async () => {
+    if (listenedItems.length === 0) return;
+    if (!confirm(`Clear all ${listenedItems.length} listened track(s) from this list? They'll move to Trash in the admin panel, not be destroyed.`)) return;
+    listenedHistoryClearBtn.disabled = true;
+    try {
+      const chunkSize = 450; // Firestore batch write limit
+      for (let i = 0; i < listenedItems.length; i += chunkSize) {
+        const batch = writeBatch(db);
+        listenedItems.slice(i, i + chunkSize).forEach(s => batch.update(doc(db, 'submissions', s.id), { status: 'deleted', deletedAt: serverTimestamp() }));
+        await batch.commit();
+      }
+    } catch (err) {
+      console.error('Clear listened history failed:', err);
+      alert("Couldn't clear the list completely — try again.");
+    } finally {
+      listenedHistoryClearBtn.disabled = false;
+    }
+  });
+
+  // ======================================================================
+  // ---- wheel (ported from the admin panel) ------------------------------
+  // ======================================================================
+  const WHEEL_COLORS = ['#4f7bb0', '#a8c8ec', '#16263f', '#6f93c2', '#1d3050', '#8fb1da'];
+  const wheelModal = document.getElementById('wheel-modal');
+  const openWheelBtn = document.getElementById('open-wheel');
+  const closeWheelBtn = document.getElementById('close-wheel');
+  const wheelStage = document.getElementById('wheel-stage');
+  const wheelSvgWrap = document.getElementById('wheel-svg-wrap');
+  const wheelSpinBtn = document.getElementById('wheel-spin-btn');
+  const wheelResultEl = document.getElementById('wheel-result');
+
+  let wheelEntries = [];
+  let wheelSpinning = false;
+  let wheelCurrentRotation = 0;
+  let wheelSkippedNames = new Set();
+
+  function getWheelCandidates() {
+    let items = [...queue];
+    if (searchQuery) {
+      items = items.filter(s => {
+        const haystack = [s.name, s.link, s.note].filter(Boolean).join(' ').toLowerCase();
+        return haystack.includes(searchQuery);
+      });
+    }
+    const groups = new Map();
+    items.forEach(s => {
+      const label = (s.name || 'Unnamed').trim() || 'Unnamed';
+      const key = label.toLowerCase();
+      if (!groups.has(key)) groups.set(key, { label, tracks: [] });
+      groups.get(key).tracks.push({ id: s.id, name: label, link: s.link || '' });
+    });
+    return Array.from(groups.values())
+      .filter(g => !wheelSkippedNames.has(g.label.toLowerCase()))
+      .map(g => ({ label: g.label, tracks: g.tracks, weight: 1 }));
+  }
+
+  function buildWheelSvg(entries) {
+    const n = entries.length;
+    const size = 460, cx = size / 2, cy = size / 2, r = size / 2;
+    const totalWeight = entries.reduce((sum, e) => sum + e.weight, 0);
+    let cursor = 0;
+    const slices = entries.map(e => {
+      const sliceAngle = (e.weight / totalWeight) * 360;
+      const startAngle = cursor - 90;
+      cursor += sliceAngle;
+      return { entry: e, startAngle, sliceAngle };
+    });
+    const fontSize = n > 30 ? 10 : n > 20 ? 11 : n > 12 ? 12.5 : 14;
+    const innerR = r * 0.22;
+    const outerR = r * 0.94;
+    const charWidth = fontSize * 0.62;
+    const maxChars = Math.max(3, Math.floor((outerR - innerR) / charWidth));
+    let svg = `<svg viewBox="0 0 ${size} ${size}">`;
+    slices.forEach(({ entry, startAngle, sliceAngle }, i) => {
+      const endAngle = startAngle + sliceAngle;
+      const x1 = cx + r * Math.cos(startAngle * Math.PI / 180);
+      const y1 = cy + r * Math.sin(startAngle * Math.PI / 180);
+      const x2 = cx + r * Math.cos(endAngle * Math.PI / 180);
+      const y2 = cy + r * Math.sin(endAngle * Math.PI / 180);
+      const largeArc = sliceAngle > 180 ? 1 : 0;
+      const color = WHEEL_COLORS[i % WHEEL_COLORS.length];
+      svg += `<path d="M${cx},${cy} L${x1},${y1} A${r},${r} 0 ${largeArc} 1 ${x2},${y2} Z" fill="${color}" stroke="#04070d" stroke-width="1"/>`;
+      if (sliceAngle >= 3) {
+        const midAngle = startAngle + sliceAngle / 2;
+        const norm = ((midAngle % 360) + 360) % 360;
+        const needsFlip = norm > 90 && norm < 270;
+        const anchorAngle = needsFlip ? midAngle + 180 : midAngle;
+        const textAnchorAttr = needsFlip ? 'start' : 'end';
+        const lx = cx + outerR * Math.cos(midAngle * Math.PI / 180);
+        const ly = cy + outerR * Math.sin(midAngle * Math.PI / 180);
+        const fullLabel = entry.label || '';
+        const truncated = fullLabel.length > maxChars ? fullLabel.slice(0, Math.max(1, maxChars - 1)).trimEnd() + '…' : fullLabel;
+        const text = escapeHtml(truncated);
+        svg += `<text x="${lx}" y="${ly}" fill="#eef3fa" font-size="${fontSize}" font-family="JetBrains Mono, monospace" text-anchor="${textAnchorAttr}" dominant-baseline="middle" transform="rotate(${anchorAngle}, ${lx}, ${ly})">${text}</text>`;
+      }
+    });
+    svg += '</svg>';
+    return svg;
+  }
+
+  function renderWheel() {
+    wheelEntries = getWheelCandidates();
+    wheelResultEl.textContent = '';
+    wheelCurrentRotation = 0;
+    wheelSvgWrap.style.transition = 'none';
+    wheelSvgWrap.style.transform = 'rotate(0deg)';
+    if (wheelEntries.length === 0) {
+      wheelSvgWrap.innerHTML = '<div class="wheel-empty-msg">Nothing to spin — no submissions match the current queue/search.</div>';
+      wheelSpinBtn.disabled = true;
+    } else {
+      wheelSvgWrap.innerHTML = buildWheelSvg(wheelEntries);
+      wheelSpinBtn.disabled = wheelEntries.length < 2;
+      if (wheelEntries.length < 2) {
+        wheelResultEl.textContent = wheelEntries.length === 1 ? `Only one option: ${wheelEntries[0].label}` : '';
+      }
+    }
+  }
+
+  function openWheel() {
+    wheelModal.classList.add('open');
+    document.body.style.overflow = 'hidden';
+    wheelSkippedNames = new Set();
+    renderWheel();
+    closeWheelBtn.focus();
+  }
+  function closeWheel() {
+    wheelModal.classList.remove('open');
+    document.body.style.overflow = '';
+    clearWheelTicks();
+    openWheelBtn.focus();
+  }
+  openWheelBtn.addEventListener('click', openWheel);
+  closeWheelBtn.addEventListener('click', closeWheel);
+  wheelModal.addEventListener('click', (e) => { if (e.target === wheelModal) closeWheel(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && wheelModal.classList.contains('open')) closeWheel(); });
+
+  // ---- wheel spin sound (ticks synced to the real live rotation) --------
+  let wheelAudioCtx = null;
+  let wheelTickRafId = null;
+  function getWheelAudioCtx() {
+    if (!wheelAudioCtx) wheelAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (wheelAudioCtx.state === 'suspended') wheelAudioCtx.resume();
+    return wheelAudioCtx;
+  }
+  function playWheelTick() {
+    const ctx = getWheelAudioCtx();
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(1100, now);
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.16, now + 0.004);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.035);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.05);
+  }
+  // Restored: the single-oscillator rising glide (660Hz -> 880Hz).
+  function playWheelWinnerSound() {
+    if (panelVolume <= 0) return;
+    const ctx = getWheelAudioCtx();
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(660, now);
+    osc.frequency.exponentialRampToValueAtTime(880, now + 0.18);
+    const peak = 0.4 * (panelVolume / 100);
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(Math.max(peak, 0.0001), now + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.45);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.5);
+  }
+  function clearWheelTicks() {
+    if (wheelTickRafId !== null) { cancelAnimationFrame(wheelTickRafId); wheelTickRafId = null; }
+  }
+  function readWheelRotationDeg() {
+    const transform = getComputedStyle(wheelSvgWrap).transform;
+    if (!transform || transform === 'none') return 0;
+    const match = transform.match(/matrix\(([^)]+)\)/);
+    if (!match) return 0;
+    const [a, b] = match[1].split(',').map(Number);
+    return Math.atan2(b, a) * (180 / Math.PI);
+  }
+  function trackWheelRotationForTicks(entryCount, expectedDurationMs) {
+    clearWheelTicks();
+    if (entryCount < 2) return;
+    const wedgeWidth = 360 / entryCount;
+    const startTime = performance.now();
+    let lastRawAngle = readWheelRotationDeg();
+    let unwrapped = 0;
+    let lastWedgeIndex = Math.floor(Math.abs(unwrapped) / wedgeWidth);
+    function frame(now) {
+      const raw = readWheelRotationDeg();
+      let delta = raw - lastRawAngle;
+      if (delta < -180) delta += 360;
+      else if (delta > 180) delta -= 360;
+      unwrapped += delta;
+      lastRawAngle = raw;
+      const wedgeIndex = Math.floor(Math.abs(unwrapped) / wedgeWidth);
+      if (wedgeIndex > lastWedgeIndex) {
+        const crossed = Math.min(wedgeIndex - lastWedgeIndex, 3);
+        for (let i = 0; i < crossed; i++) playWheelTick();
+        lastWedgeIndex = wedgeIndex;
+      }
+      if (now - startTime < expectedDurationMs + 200) {
+        wheelTickRafId = requestAnimationFrame(frame);
+      } else {
+        wheelTickRafId = null;
+      }
+    }
+    wheelTickRafId = requestAnimationFrame(frame);
+  }
+
+  function launchWheelConfetti() {
+    const container = document.getElementById('wheel-confetti');
+    if (!container) return;
+    container.innerHTML = '';
+    const colors = ['#a8c8ec', '#4f7bb0', '#eef3fa', '#f0c97a', '#8fb1da'];
+    const pieceCount = 28;
+    for (let i = 0; i < pieceCount; i++) {
+      const span = document.createElement('span');
+      const angle = Math.random() * Math.PI * 2;
+      const distance = 110 + Math.random() * 90;
+      span.style.setProperty('--dx', `${Math.cos(angle) * distance}px`);
+      span.style.setProperty('--dy', `${Math.sin(angle) * distance}px`);
+      span.style.setProperty('--rot', `${(Math.random() * 720 - 360).toFixed(0)}deg`);
+      span.style.background = colors[i % colors.length];
+      span.style.animationDelay = (Math.random() * 0.12).toFixed(2) + 's';
+      container.appendChild(span);
+    }
+    setTimeout(() => { container.innerHTML = ''; }, 1300);
+  }
+
+  wheelSpinBtn.addEventListener('click', () => {
+    if (wheelSpinning || wheelEntries.length < 2) return;
+    wheelEntries = getWheelCandidates(); // re-fetch in case the queue changed while the modal was open
+    if (wheelEntries.length < 2) { renderWheel(); return; }
+    wheelSpinning = true;
+    wheelSpinBtn.disabled = true;
+    wheelResultEl.textContent = '';
+
+    const n = wheelEntries.length;
+    const totalWeight = wheelEntries.reduce((sum, e) => sum + e.weight, 0);
+    const winnerIndex = (() => {
+      let r = Math.random() * totalWeight;
+      for (let i = 0; i < n; i++) {
+        r -= wheelEntries[i].weight;
+        if (r <= 0) return i;
+      }
+      return n - 1;
+    })();
+
+    let cursor = 0;
+    let winnerMidAngleInSvgSpace = 0;
+    for (let i = 0; i < n; i++) {
+      const sliceAngle = (wheelEntries[i].weight / totalWeight) * 360;
+      if (i === winnerIndex) {
+        winnerMidAngleInSvgSpace = (cursor - 90) + sliceAngle / 2;
+        break;
+      }
+      cursor += sliceAngle;
+    }
+    const targetLogicalAngle = ((-90 - winnerMidAngleInSvgSpace) % 360 + 360) % 360;
+    const currentLogicalAngle = ((wheelCurrentRotation % 360) + 360) % 360;
+    let deltaToTarget = targetLogicalAngle - currentLogicalAngle;
+    if (deltaToTarget < 0) deltaToTarget += 360;
+
+    const FULL_SPINS = 5;
+    const durationMs = 3000 + Math.random() * 2000;
+    const targetRotation = wheelCurrentRotation + FULL_SPINS * 360 + deltaToTarget;
+
+    wheelSvgWrap.style.transition = `transform ${(durationMs / 1000).toFixed(2)}s cubic-bezier(0.17, 0.67, 0.12, 0.99)`;
+    wheelSvgWrap.style.transform = `rotate(${targetRotation}deg)`;
+    wheelCurrentRotation = targetRotation;
+    trackWheelRotationForTicks(n, durationMs);
+
+    setTimeout(() => {
+      wheelSpinning = false;
+      wheelSpinBtn.disabled = false;
+      const winner = wheelEntries[winnerIndex];
+      wheelSvgWrap.classList.add('winner-pulse');
+      setTimeout(() => wheelSvgWrap.classList.remove('winner-pulse'), 700);
+      launchWheelConfetti();
+      playWheelWinnerSound();
+      renderWheelResult(winner);
+    }, durationMs + 100);
+  });
+
+  function placeholderLabelFor(link) {
+    const host = getLinkHost(link);
+    return host || 'Unknown link';
+  }
+
+  function renderWheelResult(winner) {
+    let trackListHtml;
+    if (winner.tracks.length === 0) {
+      trackListHtml = `<p class="wheel-track-list-label">No tracks left from ${escapeHtml(winner.label)}.</p>`;
+    } else if (winner.tracks.length === 1) {
+      trackListHtml = `<button type="button" class="wheel-goto-btn" data-track-id="${winner.tracks[0].id}" id="wheel-single-track-label">${escapeHtml(placeholderLabelFor(winner.tracks[0].link))} →</button>`;
+    } else {
+      trackListHtml = `<div class="wheel-track-list">
+             <p class="wheel-track-list-label">${winner.tracks.length} tracks from ${escapeHtml(winner.label)} — pick one:</p>
+             <div class="wheel-track-rows">
+               ${winner.tracks.map((t, i) => `
+                 <div class="wheel-track-row">
+                   <button type="button" class="wheel-track-item" data-track-id="${t.id}">
+                     <span class="wheel-track-item-num">${i + 1}</span>
+                     <span class="wheel-track-item-link" id="wheel-track-label-${t.id}">${escapeHtml(placeholderLabelFor(t.link))}</span>
+                   </button>
+                   <button type="button" class="wheel-track-delete-btn" data-delete-track-id="${t.id}" aria-label="Delete this track" title="Delete this track">
+                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14z"/></svg>
+                   </button>
+                 </div>
+               `).join('')}
+             </div>
+           </div>`;
+    }
+
+    wheelResultEl.innerHTML = `
+        <div class="wheel-result-name">🎯 ${escapeHtml(winner.label)}</div>
+        ${trackListHtml}
+        <div class="wheel-secondary-actions">
+          <button type="button" class="wheel-secondary-btn" id="wheel-remove-btn">Remove from wheel</button>
+        </div>
+      `;
+    wheelResultEl.querySelectorAll('[data-track-id]').forEach(btn => {
+      btn.addEventListener('click', () => goToTrack(btn.dataset.trackId));
+    });
+    winner.tracks.forEach(t => resolveWheelTrackTitle(t));
+
+    wheelResultEl.querySelectorAll('[data-delete-track-id]').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const trackId = btn.dataset.deleteTrackId;
+        btn.disabled = true;
+        try {
+          await updateDoc(doc(db, 'submissions', trackId), { status: 'deleted', deletedAt: serverTimestamp() });
+        } catch (err) {
+          console.error('Could not delete track from wheel result:', err);
+          alert("That didn't work — try again.");
+          btn.disabled = false;
+          return;
+        }
+        winner.tracks = winner.tracks.filter(t => t.id !== trackId);
+        renderWheelResult(winner);
+      });
+    });
+
+    document.getElementById('wheel-remove-btn').addEventListener('click', () => {
+      wheelSkippedNames.add(winner.label.toLowerCase());
+      renderWheel();
+    });
+  }
+
+  async function resolveWheelTrackTitle(track) {
+    const host = getLinkHost(track.link);
+    const isSoundcloud = host === 'soundcloud.com' || host === 'on.soundcloud.com' || host === 'm.soundcloud.com';
+    const isYoutube = host === 'youtube.com' || host === 'youtu.be' || host === 'music.youtube.com';
+    if (!isSoundcloud && !isYoutube) return;
+    try {
+      const target = document.getElementById(`wheel-track-label-${track.id}`) || document.getElementById('wheel-single-track-label');
+      if (!target) return;
+      const title = await resolveTrackTitle(track.link);
+      if (!title) return;
+      target.textContent = title + (target.id === 'wheel-single-track-label' ? ' →' : '');
+    } catch (err) {
+      console.error('Could not resolve track title for wheel list:', err);
+    }
+  }
+
+  // Closes the wheel and selects the winning track in the sidebar list —
+  // the stream-view equivalent of the admin panel's "scroll to this card"
+  // — with the same temporary spotlight pulse so it's visible on camera
+  // which one just got picked.
+  function goToTrack(trackId) {
+    closeWheel();
+    if (searchQuery) {
+      searchInput.value = '';
+      searchQuery = '';
+      searchClear.style.display = 'none';
+    }
+    selectTrack(trackId);
+    const row = streamList.querySelector(`[data-select-id="${trackId}"]`);
+    if (row) {
+      row.classList.add('wheel-highlight');
+      row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setTimeout(() => row.classList.remove('wheel-highlight'), 2200);
+    }
+  }
+</script>
+
+</body>
+</html>

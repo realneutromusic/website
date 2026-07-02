@@ -55,13 +55,19 @@
 
   body {
     background-color: var(--bg);
-    background-image: radial-gradient(circle, rgba(159,180,207,0.18) 1px, transparent 1px);
-    background-size: 28px 28px;
-    background-position: -1px -1px;
     color: var(--ink);
     font-family: 'Sora', sans-serif;
     -webkit-font-smoothing: antialiased;
     overflow-x: hidden;
+  }
+
+  /* Background dot grid lives on a <canvas> (#bg-dots-canvas, see the
+     script at the end of the page) instead of a static CSS pattern — it
+     drifts down-right on its own, and dots near the cursor get pushed
+     outward from it. Matches the same effect used in the admin panel. */
+  #bg-dots-canvas {
+    position: fixed; inset: 0; z-index: -1; pointer-events: none;
+    width: 100%; height: 100%; display: block;
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -1033,6 +1039,9 @@
 </style>
 </head>
 <body>
+
+<canvas id="bg-dots-canvas" aria-hidden="true"></canvas>
+
 
 <a href="#main" class="skip-link">Skip to content</a>
 
@@ -2383,6 +2392,65 @@
     });
 
 })();
+</script>
+
+<script>
+  // ---- background dot grid: auto-drift only ------------------------------
+  // Just the constant down-right drift — no cursor interaction here (kept
+  // only on the submit page).
+  (function setupBackgroundDots() {
+    const canvas = document.getElementById('bg-dots-canvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    const SPACING = 28;
+    const DOT_RADIUS = 1;
+    const DOT_ALPHA = 0.2;
+    const DRIFT_SPEED = 2.5; // px/sec, down-right — slow and calm
+
+    let dpr = Math.min(window.devicePixelRatio || 1, 2);
+    let width = 0, height = 0;
+    let driftOffset = 0;
+
+    function resize() {
+      width = window.innerWidth;
+      height = window.innerHeight;
+      canvas.width = Math.round(width * dpr);
+      canvas.height = Math.round(height * dpr);
+      canvas.style.width = width + 'px';
+      canvas.style.height = height + 'px';
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+
+    function drawFrame() {
+      ctx.clearRect(0, 0, width, height);
+      const offset = driftOffset % SPACING;
+      ctx.fillStyle = `rgba(168, 200, 236, ${DOT_ALPHA})`;
+      for (let x = offset - SPACING; x < width + SPACING; x += SPACING) {
+        for (let y = offset - SPACING; y < height + SPACING; y += SPACING) {
+          ctx.beginPath();
+          ctx.arc(x, y, DOT_RADIUS, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
+
+    resize();
+    drawFrame();
+    window.addEventListener('resize', () => { resize(); drawFrame(); });
+
+    if (!prefersReducedMotion) {
+      let lastTime = performance.now();
+      requestAnimationFrame(function tick(now) {
+        const dt = (now - lastTime) / 1000;
+        lastTime = now;
+        driftOffset += DRIFT_SPEED * dt;
+        drawFrame();
+        requestAnimationFrame(tick);
+      });
+    }
+  })();
 </script>
 
 </body>
