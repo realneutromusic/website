@@ -843,7 +843,7 @@
   }
   .release-modal-backdrop.visible { opacity: 1; pointer-events: auto; }
   .release-modal {
-    position: relative; width: 100%; max-width: 460px;
+    position: relative; width: 100%; max-width: 520px;
     background: var(--surface-solid, #0c1424);
     border: 1px solid var(--line); border-radius: 18px;
     overflow: hidden;
@@ -854,12 +854,21 @@
   }
   .release-modal-backdrop.visible .release-modal { transform: translateY(0) scale(1); }
   .release-modal-art {
-    position: relative; width: 100%; aspect-ratio: 16 / 10;
+    position: relative; width: 100%; aspect-ratio: 5 / 4;
     background-size: cover; background-position: center;
   }
   .release-modal-art::after {
     content: ''; position: absolute; inset: 0;
-    background: linear-gradient(0deg, rgba(4,7,13,0.55) 0%, transparent 45%);
+    background: linear-gradient(to bottom,
+      transparent 0%,
+      transparent 20%,
+      rgba(12,20,36,0.08) 40%,
+      rgba(12,20,36,0.22) 55%,
+      rgba(12,20,36,0.45) 68%,
+      rgba(12,20,36,0.7) 80%,
+      rgba(12,20,36,0.88) 90%,
+      var(--surface-solid, #0c1424) 100%
+    );
   }
   .release-modal-close {
     position: absolute; top: 14px; right: 14px; z-index: 2;
@@ -1495,6 +1504,27 @@
   const COLLAB_ICON = '<svg class="person-icon" viewBox="0 0 24 24"><path d="M12 2a5 5 0 110 10 5 5 0 010-10zm0 12c4.4 0 8 2.2 8 5v3H4v-3c0-2.8 3.6-5 8-5z"/></svg>';
   const EXT_ICON = '<svg class="ext-icon" viewBox="0 0 24 24"><path d="M7 17L17 7M7 7h10v10" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
+  // ---------- perceptual volume curve, shared by every volume slider ----------
+  // <audio>.volume is linear amplitude (0–1), but human hearing perceives
+  // loudness roughly logarithmically — doubling perceived loudness takes
+  // roughly +10dB, not +0.1 of linear amplitude. Feeding a linear slider
+  // straight into audio.volume packs almost all of the *useful, audible*
+  // range into the bottom ~20% of the slider, and the top 80% barely
+  // sounds different. Instead, treat the slider position as a position on
+  // a decibel scale (VOLUME_FLOOR_DB at 0%% up to 0dB at 100%%) and convert
+  // that to linear gain — equal slider distance then reads as roughly
+  // equal steps in perceived loudness, the way real mixing-desk faders work.
+  const VOLUME_FLOOR_DB = -40;
+  function sliderToGain(t) {
+    if (t <= 0) return 0;
+    return Math.pow(10, (VOLUME_FLOOR_DB * (1 - t)) / 20);
+  }
+  function gainToSlider(g) {
+    if (g <= 0) return 0;
+    const dB = 20 * Math.log10(g);
+    return Math.min(1, Math.max(0, 1 - dB / VOLUME_FLOOR_DB));
+  }
+
   // ---------- icon library ----------
   const ICONS = {
     spotify: '<svg viewBox="0 0 24 24"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.52 17.34c-.24.36-.66.48-1.02.24-2.82-1.74-6.36-2.1-10.56-1.14-.42.12-.78-.18-.9-.54-.12-.42.18-.78.54-.9 4.56-1.02 8.52-.6 11.64 1.32.42.18.48.66.3 1.02zm1.44-3.3c-.3.42-.84.6-1.26.3-3.24-1.98-8.16-2.58-11.94-1.404-.48.12-1.02-.12-1.14-.6-.12-.48.12-1.02.6-1.14C9.6 9.9 15 10.56 18.66 12.78c.36.24.54.78.3 1.26zm.12-3.42C15.84 8.4 9.6 8.16 6 9.3c-.6.18-1.2-.18-1.38-.72-.18-.6.18-1.2.72-1.38 4.2-1.26 11.04-1.02 15.36 1.56.54.3.72 1.02.42 1.56-.3.42-1.02.6-1.56.3z"/></svg>',
@@ -1761,9 +1791,9 @@
       const rect = npCard.getBoundingClientRect();
       const px = (e.clientX - rect.left) / rect.width;
       const py = (e.clientY - rect.top) / rect.height;
-      const tiltX = (py - 0.5) * -14;
-      const tiltY = (px - 0.5) * 14;
-      npCard.style.transform = `perspective(1200px) rotateX(${tiltX}deg) rotateY(${tiltY}deg) translateY(-4px)`;
+      const tiltX = (py - 0.5) * -3.5;
+      const tiltY = (px - 0.5) * 3.5;
+      npCard.style.transform = `perspective(1800px) rotateX(${tiltX}deg) rotateY(${tiltY}deg) translateY(-3px)`;
       npCardGlow.style.setProperty('--mx', (px * 100) + '%');
       npCardGlow.style.setProperty('--my', (py * 100) + '%');
     });
@@ -1833,7 +1863,7 @@
     const audio = new Audio();
     audio.preload = 'metadata';
     audio.src = './assets/LATESTRELEASE.mp3';
-    audio.volume = 0.7; // default to a comfortable level instead of blasting at 100%
+    audio.volume = sliderToGain(0.7); // slider starts at 70% — comfortable, not blasting
 
     let isPlaying = false;
     let hasErrored = false;
@@ -1847,7 +1877,7 @@
     const ICON_VOLUME_LOW = '<svg viewBox="0 0 24 24"><path d="M5 9v6h4l5 5V4l-5 5H5z"/></svg>';
     const ICON_MUTED = '<svg viewBox="0 0 24 24"><path d="M5 9v6h4l5 5V4l-5 5H5z" opacity="0.5"/><path d="M19.5 7.5l-1.4 1.4 2.6 2.6-2.6 2.6 1.4 1.4 2.6-2.6 2.6 2.6 1.4-1.4-2.6-2.6 2.6-2.6-1.4-1.4-2.6 2.6z" transform="translate(-3)"/></svg>';
     let lastVolume = 0.7;
-    if (volumeSlider) volumeSlider.value = Math.round(audio.volume * 100);
+    if (volumeSlider) volumeSlider.value = Math.round(gainToSlider(audio.volume) * 100);
 
     function refreshVolumeIcon() {
       if (!volumeIcon) return;
@@ -1858,17 +1888,18 @@
     refreshVolumeIcon();
 
     volumeSlider && volumeSlider.addEventListener('input', () => {
-      const v = Number(volumeSlider.value) / 100;
-      audio.volume = v;
+      const t = Number(volumeSlider.value) / 100;
+      const gain = sliderToGain(t);
+      audio.volume = gain;
       audio.muted = false;
-      if (v > 0) lastVolume = v;
+      if (gain > 0) lastVolume = gain;
       refreshVolumeIcon();
     });
     muteBtn && muteBtn.addEventListener('click', () => {
       if (audio.volume === 0 || audio.muted) {
         audio.muted = false;
         audio.volume = lastVolume || 0.7;
-        if (volumeSlider) volumeSlider.value = Math.round(audio.volume * 100);
+        if (volumeSlider) volumeSlider.value = Math.round(gainToSlider(audio.volume) * 100);
       } else {
         lastVolume = audio.volume;
         audio.muted = true;
@@ -2063,8 +2094,7 @@
 
     const audio = new Audio();
     audio.preload = 'none';
-    audio.src = './assets/HIDDEN.mp3';
-    audio.volume = 0.7;
+    audio.volume = sliderToGain(0.7); // slider starts at 70%
 
     const playBtn = reveal.querySelector('#mystery-reveal-play');
     const playIcon = reveal.querySelector('#mystery-reveal-play-icon');
@@ -2081,7 +2111,7 @@
     const ICON_VOLUME_LOW = '<svg viewBox="0 0 24 24"><path d="M5 9v6h4l5 5V4l-5 5H5z"/></svg>';
     const ICON_MUTED = '<svg viewBox="0 0 24 24"><path d="M5 9v6h4l5 5V4l-5 5H5z" opacity="0.5"/><path d="M19.5 7.5l-1.4 1.4 2.6 2.6-2.6 2.6 1.4 1.4 2.6-2.6 2.6 2.6 1.4-1.4-2.6-2.6 2.6-2.6-1.4-1.4-2.6 2.6z" transform="translate(-3)"/></svg>';
     let lastVolume = 0.7;
-    if (volumeSlider) volumeSlider.value = Math.round(audio.volume * 100);
+    if (volumeSlider) volumeSlider.value = Math.round(gainToSlider(audio.volume) * 100);
 
     function refreshVolumeIcon() {
       if (!volumeIcon) return;
@@ -2092,17 +2122,18 @@
     refreshVolumeIcon();
 
     volumeSlider && volumeSlider.addEventListener('input', () => {
-      const v = Number(volumeSlider.value) / 100;
-      audio.volume = v;
+      const t = Number(volumeSlider.value) / 100;
+      const gain = sliderToGain(t);
+      audio.volume = gain;
       audio.muted = false;
-      if (v > 0) lastVolume = v;
+      if (gain > 0) lastVolume = gain;
       refreshVolumeIcon();
     });
     muteBtn && muteBtn.addEventListener('click', () => {
       if (audio.volume === 0 || audio.muted) {
         audio.muted = false;
         audio.volume = lastVolume || 0.7;
-        if (volumeSlider) volumeSlider.value = Math.round(audio.volume * 100);
+        if (volumeSlider) volumeSlider.value = Math.round(gainToSlider(audio.volume) * 100);
       } else {
         lastVolume = audio.volume;
         audio.muted = true;
