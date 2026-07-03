@@ -218,11 +218,11 @@
     margin-left: 4px;
     background: var(--steel); color: #04070d !important;
     border-radius: 999px;
-    padding: 9px 16px 9px 14px; font-size: 12.5px; font-weight: 700;
+    padding: 9px 16px 9px 14px; font-size: 12.5px; font-weight: 700; line-height: 1;
     transition: all 0.3s var(--ease-spring);
   }
   .tools-trigger:hover { transform: translateY(-1px) scale(1.03); background: var(--steel-bright); }
-  .tools-trigger svg { width: 13px; height: 13px; }
+  .tools-trigger svg { width: 13px; height: 13px; display: block; flex-shrink: 0; }
 
   @media (max-width: 640px) { .topbar nav a:not(.tools-trigger) { display: none; } }
   @media (max-width: 480px) {
@@ -244,7 +244,7 @@
   .hero {
     min-height: 100vh;
     position: relative;
-    display: flex; align-items: center;
+    display: flex; align-items: flex-start;
     overflow: hidden;
     background: var(--bg);
   }
@@ -492,39 +492,11 @@
     cursor: pointer; transition: all 0.25s var(--ease);
   }
   .now-playing-skip:hover { border-color: var(--ink-faint); color: var(--ink); }
-  .now-playing-skip svg { width: 11px; height: 11px; fill: currentColor; }
-
-  .now-playing-volume {
-    margin-top: 14px; display: flex; align-items: center; gap: 10px;
+  .now-playing-skip svg { width: 11px; height: 11px; fill: currentColor; display: block; }
+  .now-playing-skip #now-playing-volume-icon,
+  .now-playing-skip #mystery-reveal-volume-icon {
+    display: flex; align-items: center; justify-content: center;
   }
-  .now-playing-mute {
-    flex-shrink: 0; width: 26px; height: 26px; border-radius: 50%;
-    border: none; background: transparent; color: var(--ink-faint);
-    cursor: pointer; display: flex; align-items: center; justify-content: center;
-    transition: color 0.2s var(--ease);
-  }
-  .now-playing-mute:hover { color: var(--steel-bright); }
-  .now-playing-mute svg { width: 16px; height: 16px; fill: currentColor; }
-  .now-playing-volume-slider {
-    -webkit-appearance: none; appearance: none;
-    flex: 1; height: 3px; border-radius: 999px;
-    background: var(--line);
-    cursor: pointer;
-  }
-  .now-playing-volume-slider::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    width: 11px; height: 11px; border-radius: 50%;
-    background: var(--steel-bright);
-    box-shadow: 0 0 0 4px rgba(168,200,236,0.18);
-    transition: transform 0.15s var(--ease-spring);
-  }
-  .now-playing-volume-slider::-webkit-slider-thumb:hover { transform: scale(1.15); }
-  .now-playing-volume-slider::-moz-range-thumb {
-    width: 11px; height: 11px; border-radius: 50%; border: none;
-    background: var(--steel-bright);
-    box-shadow: 0 0 0 4px rgba(168,200,236,0.18);
-  }
-  .now-playing-volume-slider::-moz-range-track { height: 3px; border-radius: 999px; background: var(--line); }
 
   /* "Listen on" — a small grid of platform buttons instead of a plain
      text row of links, so the card ends on the same clean note it starts on */
@@ -551,11 +523,6 @@
   .now-playing-links a svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2; flex-shrink: 0; opacity: 0.6; }
 
   .now-playing-embed { position: absolute; width: 1px; height: 1px; overflow: hidden; opacity: 0; pointer-events: none; }
-  .now-playing-note {
-    font-size: 12px; color: var(--ink-faint); margin-top: 12px; display: none; line-height: 1.5;
-  }
-  .now-playing-note.visible { display: block; }
-  .now-playing-note a { color: var(--steel-bright); text-decoration: underline; text-underline-offset: 2px; }
   @media (max-width: 560px) {
     .now-playing-card.card { padding: 14px; }
     .now-playing-title { font-size: 19px; }
@@ -653,66 +620,142 @@
   }
   .mystery-reveal.open { display: flex; }
   .mystery-reveal-inner {
-    max-width: 420px; width: 100%;
+    max-width: 440px; width: 100%;
     border-radius: 20px;
     border: 1px solid var(--line);
-    background: var(--bg);
-    padding: 28px;
+    background: var(--surface-solid, #0c1424);
+    overflow: hidden;
     position: relative;
     opacity: 0; transform: translateY(16px) scale(0.97);
     animation: modalIn 0.4s var(--ease) forwards;
+    max-height: 88vh; overflow-y: auto;
   }
   .mystery-reveal-close {
-    position: absolute; top: 16px; right: 16px; z-index: 2;
-    width: 32px; height: 32px; border-radius: 50%;
-    border: 1px solid var(--line); background: var(--bg); color: var(--ink-dim);
-    cursor: pointer; font-size: 15px; display: flex; align-items: center; justify-content: center;
+    position: absolute; top: 14px; right: 14px; z-index: 2;
+    width: 34px; height: 34px; border-radius: 50%;
+    background: rgba(4,7,13,0.6); backdrop-filter: blur(4px);
+    border: 1px solid rgba(238,243,250,0.2);
+    cursor: pointer; color: var(--ink); font-size: 15px;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.2s var(--ease);
+  }
+  .mystery-reveal-close:hover { background: var(--steel); border-color: var(--steel); color: #04070d; }
+  .mystery-reveal-art-stage {
+    position: relative; width: 100%; aspect-ratio: 1 / 1;
+    overflow: hidden;
   }
   .mystery-reveal-art {
-    position: relative; z-index: 1;
-    width: 100%; aspect-ratio: 1/1; border-radius: 14px; overflow: hidden;
+    position: absolute; inset: 0;
     background-size: cover; background-position: center;
-    filter: blur(3px) saturate(1.02) brightness(0.88);
-    transform: scale(1.015);
+    filter: blur(5px) saturate(1.05) brightness(0.72);
+    transform: scale(1.1);
   }
+  .mystery-reveal-art-stage::after {
+    content: ''; position: absolute; inset: 0;
+    background: linear-gradient(to bottom,
+      transparent 0%,
+      transparent 28%,
+      rgba(12,20,36,0.25) 52%,
+      rgba(12,20,36,0.62) 74%,
+      rgba(12,20,36,0.88) 88%,
+      var(--surface-solid, #0c1424) 100%
+    );
+  }
+  .mystery-reveal-body { padding: 0 26px 26px; margin-top: -18px; position: relative; z-index: 1; }
   .mystery-reveal-eyebrow {
-    margin-top: 18px;
     display: inline-flex; align-items: center; gap: 8px;
-    font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase;
+    font-family: 'JetBrains Mono', monospace; font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
     color: var(--steel-bright);
+    background: var(--steel-soft);
+    border: 1px solid rgba(168,200,236,0.28);
+    padding: 5px 12px 5px 10px;
+    border-radius: 999px;
   }
   .mystery-reveal-eyebrow .pulse {
     width: 6px; height: 6px; border-radius: 50%; background: var(--steel-bright);
     box-shadow: 0 0 0 0 rgba(168,200,236,0.55); animation: eyebrowPing 2.4s ease-out infinite;
   }
-  .mystery-reveal-title { font-family: 'Unbounded', sans-serif; font-weight: 700; font-size: 19px; margin-top: 8px; }
-  .mystery-reveal-sub { font-size: 13px; color: var(--ink-dim); margin-top: 5px; }
+  .mystery-reveal-title { font-family: 'Unbounded', sans-serif; font-weight: 800; font-size: 24px; letter-spacing: -0.01em; line-height: 1.15; margin-top: 12px; }
+  .mystery-reveal-sub { font-size: 13.5px; color: var(--ink-dim); margin-top: 7px; line-height: 1.5; }
 
   /* custom dark mini-player — replaces the browser's native <audio> controls,
      which render as a stark white bar that clashes with the rest of the UI */
-  .mystery-reveal-player {
-    margin-top: 18px; padding: 14px;
-    display: flex; align-items: center; gap: 12px;
-    border-radius: 12px; border: 1px solid var(--line); background: var(--surface);
-  }
+  .mystery-reveal-player { margin-top: 22px; }
+  .mystery-reveal-player-row { display: flex; align-items: center; gap: 12px; }
   .mystery-reveal-play {
-    flex-shrink: 0; width: 38px; height: 38px; border-radius: 50%;
+    flex-shrink: 0; width: 46px; height: 46px; border-radius: 50%;
     background: var(--steel); border: none; cursor: pointer;
+    box-shadow: 0 10px 26px -8px rgba(79,123,176,0.6);
     display: flex; align-items: center; justify-content: center;
     transition: all 0.3s var(--ease-spring);
   }
-  .mystery-reveal-play:hover { background: var(--steel-bright); transform: scale(1.06); }
-  .mystery-reveal-play svg { width: 14px; height: 14px; fill: #04070d; margin-left: 1px; }
+  .mystery-reveal-play:hover {
+    background: var(--steel-bright);
+    transform: scale(1.06);
+    box-shadow: 0 12px 30px -6px rgba(168,200,236,0.55);
+  }
+  .mystery-reveal-play svg { width: 16px; height: 16px; fill: #04070d; margin-left: 1px; }
   .mystery-reveal-play.is-playing svg { margin-left: 0; }
-  .mystery-reveal-progress { flex: 1; min-width: 0; }
   .mystery-reveal-scrub {
-    position: relative; height: 4px; border-radius: 999px; background: var(--line); cursor: pointer;
+    position: relative; flex: 1; min-width: 0; height: 4px; border-radius: 999px;
+    background: rgba(238,243,250,0.12);
+    cursor: pointer;
+    transition: height 0.15s var(--ease);
   }
-  .mystery-reveal-scrub-fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0%; background: var(--steel-bright); border-radius: 999px; }
+  .mystery-reveal-scrub:hover { height: 6px; }
+  .mystery-reveal-scrub-fill {
+    position: absolute; left: 0; top: 0; bottom: 0; width: 0%;
+    background: linear-gradient(90deg, var(--steel), var(--steel-bright));
+    border-radius: 999px;
+  }
+  .mystery-reveal-scrub-thumb {
+    position: absolute; top: 50%; left: 0%;
+    width: 12px; height: 12px; border-radius: 50%;
+    background: var(--ink);
+    box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+    transform: translate(-50%, -50%) scale(0);
+    transition: transform 0.2s var(--ease);
+    pointer-events: none;
+  }
+  .mystery-reveal-scrub:hover .mystery-reveal-scrub-thumb { transform: translate(-50%, -50%) scale(1); }
   .mystery-reveal-times {
-    margin-top: 7px; display: flex; justify-content: space-between;
-    font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--ink-faint);
+    margin-top: 9px; display: flex; justify-content: space-between;
+    font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--ink-faint); letter-spacing: 0.02em;
   }
+
+  /* mute + a short slider sit together in the existing transport row — no
+     extra row, no popover. (History here: a full-width row felt like it
+     added too much height and looked "giant"; a floating popover broke
+     because dragging focuses the <input> and :focus-within doesn't clear
+     on its own, leaving it stuck open; mute-only with no slider at all
+     left no way to actually adjust volume. This is the middle ground —
+     compact, plain, always there, nothing to get stuck.) */
+  .now-playing-skip:focus-visible {
+    outline: 2px solid var(--steel-bright); outline-offset: 2px;
+  }
+  .now-playing-volume-slider {
+    -webkit-appearance: none; appearance: none;
+    width: 60px; height: 3px; border-radius: 999px; flex-shrink: 0;
+    background: var(--line);
+    cursor: pointer;
+  }
+  .now-playing-volume-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 11px; height: 11px; border-radius: 50%;
+    background: var(--steel-bright);
+    box-shadow: 0 0 0 4px rgba(168,200,236,0.18);
+    transition: transform 0.15s var(--ease-spring);
+  }
+  .now-playing-volume-slider::-webkit-slider-thumb:hover { transform: scale(1.15); }
+  .now-playing-volume-slider::-moz-range-thumb {
+    width: 11px; height: 11px; border-radius: 50%; border: none;
+    background: var(--steel-bright);
+    box-shadow: 0 0 0 4px rgba(168,200,236,0.18);
+  }
+  .now-playing-volume-slider::-moz-range-track { height: 3px; border-radius: 999px; background: var(--line); }
+  .now-playing-volume-slider:focus-visible { outline: none; }
+  .now-playing-volume-slider:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 4px rgba(168,200,236,0.4); }
+  .now-playing-volume-slider:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 4px rgba(168,200,236,0.4); }
 
   .release-card.card {
     padding: 0;
@@ -1271,20 +1314,17 @@
               <button class="now-playing-skip" id="now-playing-back" type="button" aria-label="Restart preview">
                 <svg viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
               </button>
+              <button class="now-playing-skip" id="now-playing-mute" type="button" aria-label="Mute">
+                <span id="now-playing-volume-icon">
+                  <svg viewBox="0 0 24 24"><path d="M5 9v6h4l5 5V4l-5 5H5z"/><path d="M16.5 12a4.5 4.5 0 0 0-1.77-3.59l1.06-1.06A6 6 0 0 1 18.5 12a6 6 0 0 1-2.71 4.65l-1.06-1.06A4.5 4.5 0 0 0 16.5 12z"/></svg>
+                </span>
+              </button>
+              <input type="range" id="now-playing-volume-slider" class="now-playing-volume-slider" min="0" max="100" value="70" aria-label="Volume">
               <button class="now-playing-skip" id="now-playing-forward" type="button" aria-label="Open full track on SoundCloud">
                 <svg viewBox="0 0 24 24"><path d="M16 6h2v12h-2zM6 6l8.5 6L6 18z"/></svg>
               </button>
             </div>
             <span class="mono" id="now-playing-duration">0:30</span>
-          </div>
-
-          <div class="now-playing-volume" id="now-playing-volume">
-            <button class="now-playing-mute" id="now-playing-mute" type="button" aria-label="Mute">
-              <span id="now-playing-volume-icon">
-                <svg viewBox="0 0 24 24"><path d="M5 9v6h4l5 5V4l-5 5H5z"/><path d="M16.5 12a4.5 4.5 0 0 0-1.77-3.59l1.06-1.06A6 6 0 0 1 18.5 12a6 6 0 0 1-2.71 4.65l-1.06-1.06A4.5 4.5 0 0 0 16.5 12z"/></svg>
-              </span>
-            </button>
-            <input type="range" id="now-playing-volume-slider" class="now-playing-volume-slider" min="0" max="100" value="70" aria-label="Volume">
           </div>
 
           <div class="now-playing-footer">
@@ -1295,10 +1335,6 @@
               <a id="now-playing-applemusic-link" href="#" target="_blank" rel="noopener" style="display:none">Apple Music<svg viewBox="0 0 24 24"><path d="M7 17L17 7M7 7h10v10" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
               <a id="now-playing-youtubemusic-link" href="#" target="_blank" rel="noopener" style="display:none">YouTube Music<svg viewBox="0 0 24 24"><path d="M7 17L17 7M7 7h10v10" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
             </div>
-          </div>
-
-          <div class="now-playing-note" id="now-playing-note">
-            Taking a moment to load — if nothing plays in a few seconds, the audio file may be missing. <a id="now-playing-fallback-link" href="#" target="_blank" rel="noopener">Listen on SoundCloud instead ↗</a>
           </div>
         </div>
       </div>
@@ -1506,27 +1542,6 @@
   const STOP_ICON = '<svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg>';
   const COLLAB_ICON = '<svg class="person-icon" viewBox="0 0 24 24"><path d="M12 2a5 5 0 110 10 5 5 0 010-10zm0 12c4.4 0 8 2.2 8 5v3H4v-3c0-2.8 3.6-5 8-5z"/></svg>';
   const EXT_ICON = '<svg class="ext-icon" viewBox="0 0 24 24"><path d="M7 17L17 7M7 7h10v10" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-
-  // ---------- perceptual volume curve, shared by every volume slider ----------
-  // <audio>.volume is linear amplitude (0–1), but human hearing perceives
-  // loudness roughly logarithmically — doubling perceived loudness takes
-  // roughly +10dB, not +0.1 of linear amplitude. Feeding a linear slider
-  // straight into audio.volume packs almost all of the *useful, audible*
-  // range into the bottom ~20% of the slider, and the top 80% barely
-  // sounds different. Instead, treat the slider position as a position on
-  // a decibel scale (VOLUME_FLOOR_DB at 0%% up to 0dB at 100%%) and convert
-  // that to linear gain — equal slider distance then reads as roughly
-  // equal steps in perceived loudness, the way real mixing-desk faders work.
-  const VOLUME_FLOOR_DB = -40;
-  function sliderToGain(t) {
-    if (t <= 0) return 0;
-    return Math.pow(10, (VOLUME_FLOOR_DB * (1 - t)) / 20);
-  }
-  function gainToSlider(g) {
-    if (g <= 0) return 0;
-    const dB = 20 * Math.log10(g);
-    return Math.min(1, Math.max(0, 1 - dB / VOLUME_FLOOR_DB));
-  }
 
   // ---------- icon library ----------
   const ICONS = {
@@ -1808,8 +1823,6 @@
   const npBack = document.getElementById('now-playing-back');
   const npForward = document.getElementById('now-playing-forward');
   const npIcon = document.getElementById('now-playing-icon');
-  const npNote = document.getElementById('now-playing-note');
-  const npFallbackLink = document.getElementById('now-playing-fallback-link');
   const npWave = document.getElementById('now-playing-wave');
   const npElapsed = document.getElementById('now-playing-elapsed');
   const npDuration = document.getElementById('now-playing-duration');
@@ -1831,7 +1844,6 @@
     npTitle.textContent = latest.title;
     if (npSub && latest.artist) npSub.textContent = latest.artist;
     if (npCatalog && latest.catalog) npCatalog.textContent = ' · ' + latest.catalog;
-    if (npFallbackLink) npFallbackLink.href = latest.soundcloud;
     if (npSpotifyLink && latest.spotify) npSpotifyLink.href = latest.spotify;
     if (npSoundcloudLink && latest.soundcloud) npSoundcloudLink.href = latest.soundcloud;
     if (npAppleLink) {
@@ -1875,43 +1887,38 @@
     const audio = new Audio();
     audio.preload = 'metadata';
     audio.src = './assets/LATESTRELEASE.mp3';
-    audio.volume = sliderToGain(0.7); // slider starts at 70% — comfortable, not blasting
 
     let isPlaying = false;
     let hasErrored = false;
-    let fallbackTimer = setTimeout(() => { if (!audio.duration && npNote) npNote.classList.add('visible'); }, 7000);
 
-    // ---------- volume control ----------
-    const volumeSlider = document.getElementById('now-playing-volume-slider');
+    // ---------- volume control: mute + a compact slider ----------
     const muteBtn = document.getElementById('now-playing-mute');
     const volumeIcon = document.getElementById('now-playing-volume-icon');
+    const volumeSlider = document.getElementById('now-playing-volume-slider');
     const ICON_VOLUME_UP = '<svg viewBox="0 0 24 24"><path d="M5 9v6h4l5 5V4l-5 5H5z"/><path d="M16.5 12a4.5 4.5 0 0 0-1.77-3.59l1.06-1.06A6 6 0 0 1 18.5 12a6 6 0 0 1-2.71 4.65l-1.06-1.06A4.5 4.5 0 0 0 16.5 12z"/></svg>';
-    const ICON_VOLUME_LOW = '<svg viewBox="0 0 24 24"><path d="M5 9v6h4l5 5V4l-5 5H5z"/></svg>';
     const ICON_MUTED = '<svg viewBox="0 0 24 24"><path d="M5 9v6h4l5 5V4l-5 5H5z" opacity="0.5"/><path d="M19.5 7.5l-1.4 1.4 2.6 2.6-2.6 2.6 1.4 1.4 2.6-2.6 2.6 2.6 1.4-1.4-2.6-2.6 2.6-2.6-1.4-1.4-2.6 2.6z" transform="translate(-3)"/></svg>';
+    audio.volume = 0.7;
     let lastVolume = 0.7;
-    if (volumeSlider) volumeSlider.value = Math.round(gainToSlider(audio.volume) * 100);
+    if (volumeSlider) volumeSlider.value = 70;
 
     function refreshVolumeIcon() {
       if (!volumeIcon) return;
-      if (audio.muted || audio.volume === 0) volumeIcon.innerHTML = ICON_MUTED;
-      else if (audio.volume < 0.5) volumeIcon.innerHTML = ICON_VOLUME_LOW;
-      else volumeIcon.innerHTML = ICON_VOLUME_UP;
+      volumeIcon.innerHTML = (audio.muted || audio.volume === 0) ? ICON_MUTED : ICON_VOLUME_UP;
     }
     refreshVolumeIcon();
 
     volumeSlider && volumeSlider.addEventListener('input', () => {
-      const t = Number(volumeSlider.value) / 100;
-      const gain = sliderToGain(t);
-      audio.volume = gain;
+      const v = Number(volumeSlider.value) / 100;
+      audio.volume = v;
       audio.muted = false;
-      if (gain > 0) lastVolume = gain;
+      if (v > 0) lastVolume = v;
       refreshVolumeIcon();
     });
     muteBtn && muteBtn.addEventListener('click', () => {
-      if (audio.volume === 0 || audio.muted) {
+      if (audio.muted || audio.volume === 0) {
         audio.muted = false;
         audio.volume = lastVolume || 0.7;
-        if (volumeSlider) volumeSlider.value = Math.round(gainToSlider(audio.volume) * 100);
+        if (volumeSlider) volumeSlider.value = Math.round(audio.volume * 100);
       } else {
         lastVolume = audio.volume;
         audio.muted = true;
@@ -1933,8 +1940,6 @@
     }
 
     audio.addEventListener('loadedmetadata', () => {
-      clearTimeout(fallbackTimer);
-      if (npNote) npNote.classList.remove('visible');
       npDuration.textContent = formatTime(audio.duration);
       setLoading(false);
     });
@@ -1954,7 +1959,6 @@
     audio.addEventListener('error', () => {
       hasErrored = true;
       setLoading(false);
-      if (npNote) npNote.classList.add('visible');
     });
 
     window.closeNowPlaying = function() {
@@ -1966,7 +1970,7 @@
       if (hasErrored) { window.open(latest.soundcloud, '_blank', 'noopener'); return; }
       if (isPlaying) { audio.pause(); return; }
       setLoading(true);
-      audio.play().catch(() => { setLoading(false); if (npNote) npNote.classList.add('visible'); });
+      audio.play().catch(() => { setLoading(false); });
     });
 
     npBack && npBack.addEventListener('click', (e) => {
@@ -2073,34 +2077,34 @@
     reveal.innerHTML = `
       <div class="mystery-reveal-inner">
         <button type="button" class="mystery-reveal-close" id="mystery-reveal-close" aria-label="Close">✕</button>
-        <div class="mystery-reveal-art" style="background-image:url(./assets/HIDDEN.jpg)"></div>
-        <div class="mystery-reveal-eyebrow"><span class="pulse"></span>Coming soon</div>
-        <div class="mystery-reveal-title">Something's brewing</div>
-        <div class="mystery-reveal-sub">A first listen at the next release — still under wraps.</div>
-        <div class="mystery-reveal-player">
-          <button type="button" class="mystery-reveal-play" id="mystery-reveal-play" aria-label="Play preview">
-            <svg id="mystery-reveal-play-icon" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-          </button>
-          <div class="mystery-reveal-progress">
-            <div class="mystery-reveal-scrub" id="mystery-reveal-scrub">
-              <span class="mystery-reveal-scrub-fill" id="mystery-reveal-scrub-fill"></span>
+        <div class="mystery-reveal-art-stage">
+          <div class="mystery-reveal-art" style="background-image:url(./assets/HIDDEN.jpg)"></div>
+        </div>
+        <div class="mystery-reveal-body">
+          <div class="mystery-reveal-eyebrow"><span class="pulse"></span>Coming soon</div>
+          <div class="mystery-reveal-title">Something's brewing</div>
+          <div class="mystery-reveal-sub">A first listen at the next release — still under wraps.</div>
+          <div class="mystery-reveal-player">
+            <div class="mystery-reveal-player-row">
+              <button type="button" class="mystery-reveal-play" id="mystery-reveal-play" aria-label="Play preview">
+                <svg id="mystery-reveal-play-icon" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+              </button>
+              <div class="mystery-reveal-scrub" id="mystery-reveal-scrub">
+                <span class="mystery-reveal-scrub-fill" id="mystery-reveal-scrub-fill"></span>
+                <span class="mystery-reveal-scrub-thumb" id="mystery-reveal-scrub-thumb" aria-hidden="true"></span>
+              </div>
+              <button class="now-playing-skip" id="mystery-reveal-mute" type="button" aria-label="Mute">
+                <span id="mystery-reveal-volume-icon">
+                  <svg viewBox="0 0 24 24"><path d="M5 9v6h4l5 5V4l-5 5H5z"/><path d="M16.5 12a4.5 4.5 0 0 0-1.77-3.59l1.06-1.06A6 6 0 0 1 18.5 12a6 6 0 0 1-2.71 4.65l-1.06-1.06A4.5 4.5 0 0 0 16.5 12z"/></svg>
+                </span>
+              </button>
+              <input type="range" id="mystery-reveal-volume-slider" class="now-playing-volume-slider" min="0" max="100" value="70" aria-label="Volume">
             </div>
             <div class="mystery-reveal-times">
               <span class="mono" id="mystery-reveal-elapsed">0:00</span>
               <span class="mono" id="mystery-reveal-duration">0:00</span>
             </div>
           </div>
-        </div>
-        <div class="now-playing-volume mystery-reveal-volume" id="mystery-reveal-volume">
-          <button class="now-playing-mute" id="mystery-reveal-mute" type="button" aria-label="Mute">
-            <span id="mystery-reveal-volume-icon">
-              <svg viewBox="0 0 24 24"><path d="M5 9v6h4l5 5V4l-5 5H5z"/><path d="M16.5 12a4.5 4.5 0 0 0-1.77-3.59l1.06-1.06A6 6 0 0 1 18.5 12a6 6 0 0 1-2.71 4.65l-1.06-1.06A4.5 4.5 0 0 0 16.5 12z"/></svg>
-            </span>
-          </button>
-          <input type="range" id="mystery-reveal-volume-slider" class="now-playing-volume-slider" min="0" max="100" value="70" aria-label="Volume">
-        </div>
-        <div class="now-playing-note" id="mystery-reveal-note">
-          Taking a moment to load — if nothing plays in a few seconds, the audio file may be missing.
         </div>
       </div>
     `;
@@ -2109,52 +2113,46 @@
     const audio = new Audio();
     audio.preload = 'none';
     audio.src = './assets/HIDDEN.mp3';
-    audio.volume = sliderToGain(0.7); // slider starts at 70%
+    audio.volume = 0.7;
 
-    const noteEl = reveal.querySelector('#mystery-reveal-note');
     let mysteryHasErrored = false;
-    let mysteryFallbackTimer = setTimeout(() => { if (!audio.duration && noteEl) noteEl.classList.add('visible'); }, 7000);
-    audio.addEventListener('loadedmetadata', () => { clearTimeout(mysteryFallbackTimer); if (noteEl) noteEl.classList.remove('visible'); });
-    audio.addEventListener('error', () => { mysteryHasErrored = true; if (noteEl) noteEl.classList.add('visible'); });
+    audio.addEventListener('error', () => { mysteryHasErrored = true; });
 
     const playBtn = reveal.querySelector('#mystery-reveal-play');
     const playIcon = reveal.querySelector('#mystery-reveal-play-icon');
     const scrub = reveal.querySelector('#mystery-reveal-scrub');
     const scrubFill = reveal.querySelector('#mystery-reveal-scrub-fill');
+    const scrubThumb = reveal.querySelector('#mystery-reveal-scrub-thumb');
     const elapsedEl = reveal.querySelector('#mystery-reveal-elapsed');
     const durationEl = reveal.querySelector('#mystery-reveal-duration');
 
-    // ---------- volume control ----------
-    const volumeSlider = reveal.querySelector('#mystery-reveal-volume-slider');
+    // ---------- volume control: mute + a compact slider ----------
     const muteBtn = reveal.querySelector('#mystery-reveal-mute');
     const volumeIcon = reveal.querySelector('#mystery-reveal-volume-icon');
+    const volumeSlider = reveal.querySelector('#mystery-reveal-volume-slider');
     const ICON_VOLUME_UP = '<svg viewBox="0 0 24 24"><path d="M5 9v6h4l5 5V4l-5 5H5z"/><path d="M16.5 12a4.5 4.5 0 0 0-1.77-3.59l1.06-1.06A6 6 0 0 1 18.5 12a6 6 0 0 1-2.71 4.65l-1.06-1.06A4.5 4.5 0 0 0 16.5 12z"/></svg>';
-    const ICON_VOLUME_LOW = '<svg viewBox="0 0 24 24"><path d="M5 9v6h4l5 5V4l-5 5H5z"/></svg>';
     const ICON_MUTED = '<svg viewBox="0 0 24 24"><path d="M5 9v6h4l5 5V4l-5 5H5z" opacity="0.5"/><path d="M19.5 7.5l-1.4 1.4 2.6 2.6-2.6 2.6 1.4 1.4 2.6-2.6 2.6 2.6 1.4-1.4-2.6-2.6 2.6-2.6-1.4-1.4-2.6 2.6z" transform="translate(-3)"/></svg>';
     let lastVolume = 0.7;
-    if (volumeSlider) volumeSlider.value = Math.round(gainToSlider(audio.volume) * 100);
+    if (volumeSlider) volumeSlider.value = 70;
 
     function refreshVolumeIcon() {
       if (!volumeIcon) return;
-      if (audio.muted || audio.volume === 0) volumeIcon.innerHTML = ICON_MUTED;
-      else if (audio.volume < 0.5) volumeIcon.innerHTML = ICON_VOLUME_LOW;
-      else volumeIcon.innerHTML = ICON_VOLUME_UP;
+      volumeIcon.innerHTML = (audio.muted || audio.volume === 0) ? ICON_MUTED : ICON_VOLUME_UP;
     }
     refreshVolumeIcon();
 
     volumeSlider && volumeSlider.addEventListener('input', () => {
-      const t = Number(volumeSlider.value) / 100;
-      const gain = sliderToGain(t);
-      audio.volume = gain;
+      const v = Number(volumeSlider.value) / 100;
+      audio.volume = v;
       audio.muted = false;
-      if (gain > 0) lastVolume = gain;
+      if (v > 0) lastVolume = v;
       refreshVolumeIcon();
     });
     muteBtn && muteBtn.addEventListener('click', () => {
-      if (audio.volume === 0 || audio.muted) {
+      if (audio.muted || audio.volume === 0) {
         audio.muted = false;
         audio.volume = lastVolume || 0.7;
-        if (volumeSlider) volumeSlider.value = Math.round(gainToSlider(audio.volume) * 100);
+        if (volumeSlider) volumeSlider.value = Math.round(audio.volume * 100);
       } else {
         lastVolume = audio.volume;
         audio.muted = true;
@@ -2173,6 +2171,7 @@
     audio.addEventListener('timeupdate', () => {
       const fraction = audio.duration ? audio.currentTime / audio.duration : 0;
       scrubFill.style.width = (fraction * 100) + '%';
+      if (scrubThumb) scrubThumb.style.left = (fraction * 100) + '%';
       elapsedEl.textContent = fmt(audio.currentTime);
     });
     audio.addEventListener('play', () => {
@@ -2183,18 +2182,20 @@
       playBtn.classList.remove('is-playing');
       reveal.querySelector('#mystery-reveal-play-icon').outerHTML = '<svg id="mystery-reveal-play-icon" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
     });
-    audio.addEventListener('ended', () => { scrubFill.style.width = '0%'; elapsedEl.textContent = '0:00'; });
+    audio.addEventListener('ended', () => { scrubFill.style.width = '0%'; if (scrubThumb) scrubThumb.style.left = '0%'; elapsedEl.textContent = '0:00'; });
 
     playBtn.addEventListener('click', () => {
       if (mysteryHasErrored) return;
       if (!audio.paused) { audio.pause(); return; }
-      audio.play().catch(() => { if (noteEl) noteEl.classList.add('visible'); });
+      audio.play().catch(() => {});
     });
     scrub.addEventListener('click', (e) => {
       if (!audio.duration) return;
       const rect = scrub.getBoundingClientRect();
       const fraction = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
       audio.currentTime = fraction * audio.duration;
+      scrubFill.style.width = (fraction * 100) + '%';
+      if (scrubThumb) scrubThumb.style.left = (fraction * 100) + '%';
     });
 
     function closeReveal() {
