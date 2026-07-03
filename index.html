@@ -600,17 +600,19 @@
   .mystery-strip {
     position: fixed; left: 0; top: 50%; z-index: 40;
     transform: translateY(-50%);
-    width: 22px; height: 88px;
+    width: 26px; height: 104px;
     border-radius: 0 10px 10px 0;
     cursor: pointer;
-    border: none; border-left: none; padding: 0; margin: 0;
+    border: none; border-left: none; padding: 12px 0;
+    margin: 0;
     background: var(--steel);
     box-shadow: 0 6px 24px -6px rgba(79,123,176,0.55);
     display: flex; align-items: center; justify-content: center;
+    box-sizing: border-box;
     overflow: hidden;
     transition: width 0.25s var(--ease), background 0.25s var(--ease);
   }
-  .mystery-strip:hover { width: 26px; background: var(--steel-bright); }
+  .mystery-strip:hover { width: 30px; background: var(--steel-bright); }
   .mystery-strip:focus-visible { outline: 2px solid var(--steel-bright); outline-offset: 2px; }
   .mystery-strip-shine {
     position: absolute; top: -40%; left: -120%;
@@ -636,7 +638,7 @@
     .mystery-strip-shine { animation: none; display: none; }
   }
   @media (max-width: 640px) {
-    .mystery-strip { width: 18px; height: 66px; }
+    .mystery-strip { width: 20px; height: 82px; padding: 8px 0; }
     .mystery-strip-label { font-size: 9px; }
   }
 
