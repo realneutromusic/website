@@ -1297,7 +1297,7 @@
           </div>
 
           <div class="now-playing-note" id="now-playing-note">
-            Taking a moment to load — if nothing plays in a few seconds, the track may be set to private on SoundCloud. <a id="now-playing-fallback-link" href="#" target="_blank" rel="noopener">Open it there instead ↗</a>
+            Taking a moment to load — if nothing plays in a few seconds, the audio file may be missing. <a id="now-playing-fallback-link" href="#" target="_blank" rel="noopener">Listen on SoundCloud instead ↗</a>
           </div>
         </div>
       </div>
@@ -2090,13 +2090,23 @@
           </button>
           <input type="range" id="mystery-reveal-volume-slider" class="now-playing-volume-slider" min="0" max="100" value="70" aria-label="Volume">
         </div>
+        <div class="now-playing-note" id="mystery-reveal-note">
+          Taking a moment to load — if nothing plays in a few seconds, the audio file may be missing.
+        </div>
       </div>
     `;
     document.body.appendChild(reveal);
 
     const audio = new Audio();
     audio.preload = 'none';
+    audio.src = './assets/HIDDEN.mp3';
     audio.volume = sliderToGain(0.7); // slider starts at 70%
+
+    const noteEl = reveal.querySelector('#mystery-reveal-note');
+    let mysteryHasErrored = false;
+    let mysteryFallbackTimer = setTimeout(() => { if (!audio.duration && noteEl) noteEl.classList.add('visible'); }, 7000);
+    audio.addEventListener('loadedmetadata', () => { clearTimeout(mysteryFallbackTimer); if (noteEl) noteEl.classList.remove('visible'); });
+    audio.addEventListener('error', () => { mysteryHasErrored = true; if (noteEl) noteEl.classList.add('visible'); });
 
     const playBtn = reveal.querySelector('#mystery-reveal-play');
     const playIcon = reveal.querySelector('#mystery-reveal-play-icon');
@@ -2166,7 +2176,11 @@
     });
     audio.addEventListener('ended', () => { scrubFill.style.width = '0%'; elapsedEl.textContent = '0:00'; });
 
-    playBtn.addEventListener('click', () => { audio.paused ? audio.play() : audio.pause(); });
+    playBtn.addEventListener('click', () => {
+      if (mysteryHasErrored) return;
+      if (!audio.paused) { audio.pause(); return; }
+      audio.play().catch(() => { if (noteEl) noteEl.classList.add('visible'); });
+    });
     scrub.addEventListener('click', (e) => {
       if (!audio.duration) return;
       const rect = scrub.getBoundingClientRect();
