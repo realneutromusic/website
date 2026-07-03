@@ -10,7 +10,8 @@
     "youtubemusic_link": "https://music.youtube.com/playlist?list=OLAK5uy_nftNkfVnt8HPuXQ18QexYouENsVQs5TnQ&si=Tt3fwZcHLbyXI-X5",
     "collab_links": {
       "TAIGA": "https://open.spotify.com/artist/0JolqGK5GdGLY87AJyvDwF"
-    }
+    },
+    "label": "Swerve Collective Creations"
   },
   {
     "catalog": "NTR#007",
@@ -20,20 +21,22 @@
     "spotify_link": "",
     "soundcloud_link": "https://soundcloud.com/realneutromusic/fejka-azur-neutro-remix",
     "applemusic_link": "",
-    "youtubemusic_link": ""
+    "youtubemusic_link": "",
+    "label": ""
   },
   {
     "catalog": "NTR#006",
     "artist": "drft. & Neutro",
     "title": "Thinking Of You",
     "image": "NTR006.jpg",
-    "spotify_link": "https://open.spotify.com/artist/2Zj4lZCxNSCb5rjx82Ptmu",
+    "spotify_link": "",
     "soundcloud_link": "https://soundcloud.com/realneutromusic/drft-neutro-thinking-of-you",
     "applemusic_link": "",
     "youtubemusic_link": "",
     "collab_links": {
-      "drft.": "https://soundcloud.com/yummie-926134961"
-    }
+      "drft.": ""
+    },
+    "label": ""
   },
   {
     "catalog": "NTR#005",
@@ -43,17 +46,19 @@
     "spotify_link": "https://open.spotify.com/album/0WmurAEdp8ANnkRVs2CWub",
     "soundcloud_link": "https://soundcloud.com/neutro52470/bitd",
     "applemusic_link": "https://music.apple.com/de/album/bitd-single/1866610029",
-    "youtubemusic_link": "https://music.youtube.com/watch?v=8h0-EsEmsi0&si=JRMzhoXJnSUDuIgB"
+    "youtubemusic_link": "https://music.youtube.com/watch?v=8h0-EsEmsi0&si=JRMzhoXJnSUDuIgB",
+    "label": "Lemon Drops"
   },
   {
     "catalog": "NTR#004",
     "artist": "Neutro",
     "title": "Jerk It Out (Neutro Flip)",
     "image": "NTR004.jpg",
-    "spotify_link": "https://open.spotify.com/artist/2Zj4lZCxNSCb5rjx82Ptmu",
+    "spotify_link": "",
     "soundcloud_link": "https://soundcloud.com/realneutromusic/jerk-it-out-neutro-flip",
     "applemusic_link": "",
-    "youtubemusic_link": ""
+    "youtubemusic_link": "",
+    "label": ""
   },
   {
     "catalog": "NTR#003",
@@ -63,7 +68,8 @@
     "spotify_link": "https://open.spotify.com/album/2iQtlZncfnL9doGfsqTpRL",
     "soundcloud_link": "https://soundcloud.com/realneutromusic/neutro-all-on-me",
     "applemusic_link": "https://music.apple.com/de/song/all-on-me/1842824273",
-    "youtubemusic_link": "https://music.youtube.com/playlist?list=OLAK5uy_lcyQaKTne2H2eUu73n3vYg1Jj6_MoUgYw&si=u7C6Ys7LSdsnwh-3"
+    "youtubemusic_link": "https://music.youtube.com/playlist?list=OLAK5uy_lcyQaKTne2H2eUu73n3vYg1Jj6_MoUgYw&si=u7C6Ys7LSdsnwh-3",
+    "label": ""
   },
   {
     "catalog": "NTR#002",
@@ -76,7 +82,8 @@
     "youtubemusic_link": "https://music.youtube.com/playlist?list=OLAK5uy_lQEynxs4ZhDX_MNZww9syWVb7SRsjQ0k4&si=wFPpK6hTvUqKTQFZ",
     "collab_links": {
       "Appys": "https://open.spotify.com/artist/43GdGQjDXmkAJTgiNQs3nm"
-    }
+    },
+    "label": ""
   },
   {
     "catalog": "NTR#001",
@@ -86,6 +93,7 @@
     "spotify_link": "https://open.spotify.com/album/22lGfo7B1le7VkfNDLBr5X",
     "soundcloud_link": "https://soundcloud.com/neutro101694/dopamine",
     "applemusic_link": "https://music.apple.com/de/song/dopamine/1815220402",
-    "youtubemusic_link": "https://music.youtube.com/watch?v=RVqIcFnvcvU&si=pYJGrRwENqsCBeCl"
+    "youtubemusic_link": "https://music.youtube.com/watch?v=RVqIcFnvcvU&si=pYJGrRwENqsCBeCl",
+    "label": "Red Ocean"
   }
 ]
