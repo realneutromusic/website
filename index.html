@@ -1293,6 +1293,7 @@
               <a id="now-playing-spotify-link" href="https://open.spotify.com/artist/2Zj4lZCxNSCb5rjx82Ptmu" target="_blank" rel="noopener">Spotify<svg viewBox="0 0 24 24"><path d="M7 17L17 7M7 7h10v10" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
               <a id="now-playing-soundcloud-link" href="https://soundcloud.com/realneutromusic" target="_blank" rel="noopener">SoundCloud<svg viewBox="0 0 24 24"><path d="M7 17L17 7M7 7h10v10" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
               <a id="now-playing-applemusic-link" href="#" target="_blank" rel="noopener" style="display:none">Apple Music<svg viewBox="0 0 24 24"><path d="M7 17L17 7M7 7h10v10" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+              <a id="now-playing-youtubemusic-link" href="#" target="_blank" rel="noopener" style="display:none">YouTube Music<svg viewBox="0 0 24 24"><path d="M7 17L17 7M7 7h10v10" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
             </div>
           </div>
 
@@ -1815,6 +1816,7 @@
   const npSpotifyLink = document.getElementById('now-playing-spotify-link');
   const npSoundcloudLink = document.getElementById('now-playing-soundcloud-link');
   const npAppleLink = document.getElementById('now-playing-applemusic-link');
+  const npYoutubeMusicLink = document.getElementById('now-playing-youtubemusic-link');
   const npCatalog = document.getElementById('now-playing-catalog');
 
   function formatTime(seconds) {
@@ -1838,6 +1840,14 @@
         npAppleLink.style.display = '';
       } else {
         npAppleLink.style.display = 'none';
+      }
+    }
+    if (npYoutubeMusicLink) {
+      if (latest.youtubemusic) {
+        npYoutubeMusicLink.href = latest.youtubemusic;
+        npYoutubeMusicLink.style.display = '';
+      } else {
+        npYoutubeMusicLink.style.display = 'none';
       }
     }
 
