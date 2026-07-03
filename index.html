@@ -4,6 +4,15 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
+<!-- runs as early as possible, before the browser applies its own
+     scroll-position memory on reload — without this, reloading the
+     page while scrolled down (e.g. in the Socials section) leaves you
+     there instead of starting at the top, like a normal fresh visit -->
+<script>
+  if ('scrollRestoration' in history) { history.scrollRestoration = 'manual'; }
+  if (!location.hash) { window.scrollTo(0, 0); }
+</script>
+
 <title>Neutro — Official Website</title>
 <meta name="description" content="Official website of Neutro. Explore electronic music releases, exclusive tracks, and specialized tools for music producers.">
 
@@ -46,10 +55,16 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 
 <!-- hero photo is the largest-contentful-paint element, so hint the
-     browser to fetch it immediately — one link per breakpoint, since
-     desktop and mobile now load different files -->
-<link rel="preload" as="image" href="./hero-desktop.jpg" media="(min-width: 641px)">
-<link rel="preload" as="image" href="./hero-mobile.jpg" media="(max-width: 640px)">
+     browser to fetch it immediately — one link per breakpoint AND per
+     format, since desktop/mobile are different files and webp/jpg are
+     alternate formats of the same image, not different breakpoints.
+     `type` makes the browser skip whichever format it can't use, and
+     `media` makes it skip whichever breakpoint doesn't apply, so each
+     visitor ends up actually fetching exactly one of these four. -->
+<link rel="preload" as="image" href="./hero/hero-mobile.webp" type="image/webp" media="(max-width: 767px)">
+<link rel="preload" as="image" href="./hero/hero-mobile.jpg" type="image/jpeg" media="(max-width: 767px)">
+<link rel="preload" as="image" href="./hero/hero-desktop.webp" type="image/webp" media="(min-width: 768px)">
+<link rel="preload" as="image" href="./hero/hero-desktop.jpg" type="image/jpeg" media="(min-width: 768px)">
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;600;700;800;900&family=Sora:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 
@@ -235,22 +250,24 @@
   }
   .hero-photo {
     position: absolute; inset: 0; z-index: 0;
-    /* real external files instead of a ~180KB inline base64 string —
-       lets the browser cache the image and preload it, and drops a
-       dedicated small file for phones instead of shipping the full
-       1100px desktop photo to every visitor regardless of screen size */
-    background-image: url('./hero-desktop.jpg');
-    background-image: image-set(url('./hero-desktop.webp') type('image/webp'), url('./hero-desktop.jpg') type('image/jpeg'));
+    /* mobile jpg first (plain url() so every browser has a valid fallback
+       even without image-set() support), then desktop jpg overrides it
+       above 768px, then the webp versions layer on top of each of those
+       for browsers that understand image-set() — same picture, smaller
+       file, no separate <picture> markup needed since this is a CSS
+       background rather than an <img> */
+    background-image: url('./hero/hero-mobile.jpg');
+    background-image: image-set(url('./hero/hero-mobile.webp') type('image/webp'), url('./hero/hero-mobile.jpg') type('image/jpeg'));
     background-size: cover;
     background-position: 72% 35%;
     filter: saturate(1.08) contrast(1.04);
     opacity: 0;
     animation: photoIn 0.9s var(--ease) forwards;
   }
-  @media (max-width: 640px) {
+  @media (min-width: 768px) {
     .hero-photo {
-      background-image: url('./hero-mobile.jpg');
-      background-image: image-set(url('./hero-mobile.webp') type('image/webp'), url('./hero-mobile.jpg') type('image/jpeg'));
+      background-image: url('./hero/hero-desktop.jpg');
+      background-image: image-set(url('./hero/hero-desktop.webp') type('image/webp'), url('./hero/hero-desktop.jpg') type('image/jpeg'));
     }
   }
   @keyframes photoIn { from { opacity: 0; transform: scale(1.03); } to { opacity: 1; transform: scale(1); } }
@@ -340,7 +357,17 @@
 
   @keyframes riseIn { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
 
-  /* ---------- now playing: full release-card player, right column of hero ---------- */
+  /* ---------- now playing: the latest release shown as a full-bleed
+     photograph — the cover art IS the card, not a small square icon
+     sitting above a stack of player chrome. Title and controls float
+     on gradient scrims over the image, like a title card, with a thin
+     strip of film-sprocket perforations down the left edge as the one
+     quiet nod to "this is a photography project that also makes music".
+     ---------- */
+  /* ---------- now playing: clean card, image on top and fully visible
+     (no gradient scrims, no text overlaid on the photo — that's the
+     Spotify/Apple Music "now playing" look and it's not ours), all the
+     info sits in its own panel below, same as any other card on the site ---------- */
   .now-playing {
     position: relative; z-index: 3;
     perspective: 2200px;
@@ -356,12 +383,10 @@
     overflow: hidden;
     transform: rotateY(-4deg);
     transform-style: preserve-3d;
-    transition: transform 0.5s var(--ease);
+    transition: transform 0.2s linear, box-shadow 0.4s var(--ease);
   }
-  .now-playing-card.card:hover { transform: rotateY(-1.5deg); }
   @media (max-width: 980px) {
     .now-playing-card.card { transform: none; }
-    .now-playing-card.card:hover { transform: none; }
   }
   .now-playing-card-glow {
     position: absolute; inset: -30%; z-index: 0; pointer-events: none;
@@ -369,57 +394,38 @@
     transition: opacity 0.5s var(--ease);
   }
   .now-playing-card.card > *:not(.now-playing-card-glow) { position: relative; z-index: 1; }
-  .now-playing-eyebrow {
-    display: inline-flex; align-items: center; gap: 8px;
-    font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase;
-    color: var(--ink-dim); margin-bottom: 14px;
+
+  .now-playing-art {
+    position: relative;
+    width: 100%; aspect-ratio: 1 / 1; border-radius: 12px; overflow: hidden;
+    background-size: cover; background-position: center;
+    box-shadow: 0 16px 34px -14px rgba(0,0,0,0.6);
   }
-  .now-playing-eyebrow .dash { width: 14px; height: 1px; background: var(--steel-bright); }
-  .now-playing-eyebrow .pulse {
+
+  .now-playing-tag {
+    margin-top: 16px;
+    display: inline-flex; align-items: center; gap: 7px;
+    font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--steel-bright);
+  }
+  .now-playing-tag .pulse {
     width: 6px; height: 6px; border-radius: 50%; background: var(--steel-bright);
     box-shadow: 0 0 0 0 rgba(168,200,236,0.55);
     animation: eyebrowPing 2.4s ease-out infinite;
   }
-
-  .now-playing-art {
-    position: relative;
-    width: 100%; aspect-ratio: 1 / 1; border-radius: 14px; overflow: hidden;
-    background-size: cover; background-position: center;
-    box-shadow: 0 20px 44px -16px rgba(0,0,0,0.65);
-    isolation: isolate;
-    transform: translateZ(0);
-  }
-  .now-playing-art::after {
-    content: '';
-    position: absolute; inset: 0;
-    background: linear-gradient(195deg, transparent 55%, rgba(4,7,13,0.55) 100%);
-  }
-  .now-playing-art-badge {
-    position: absolute; top: 12px; left: 12px; z-index: 2;
-    display: inline-flex; align-items: center; gap: 6px;
-    font-family: 'JetBrains Mono', monospace; font-size: 10.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
-    color: var(--bg); background: var(--steel-bright);
-    padding: 5px 10px; border-radius: 999px;
-  }
-
-  .now-playing-info { margin-top: 18px; display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
   .now-playing-title {
-    font-family: 'Unbounded', sans-serif; font-weight: 700; font-size: 21px; letter-spacing: -0.01em; line-height: 1.2;
+    margin-top: 8px;
+    font-family: 'Unbounded', sans-serif; font-weight: 800; font-size: 23px; letter-spacing: -0.01em; line-height: 1.15;
   }
   .now-playing-sub { font-size: 13px; color: var(--ink-dim); margin-top: 5px; }
 
-  .now-playing-transport { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
-  .now-playing-skip {
-    width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0;
-    display: flex; align-items: center; justify-content: center;
-    background: transparent; border: 1px solid var(--line); color: var(--ink-dim);
-    cursor: pointer; transition: all 0.25s var(--ease);
+  .now-playing-controls {
+    margin-top: 18px;
+    display: flex; align-items: center; gap: 14px;
   }
-  .now-playing-skip:hover { border-color: var(--ink-faint); color: var(--ink); }
-  .now-playing-skip svg { width: 13px; height: 13px; fill: currentColor; }
   .now-playing-play {
     position: relative; flex-shrink: 0;
-    width: 52px; height: 52px; border-radius: 50%;
+    width: 50px; height: 50px; border-radius: 50%;
     background: var(--steel);
     display: flex; align-items: center; justify-content: center;
     border: none; cursor: pointer;
@@ -439,39 +445,57 @@
   .now-playing-play.is-loading .now-playing-play-spin { opacity: 1; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  /* waveform */
+  /* seek bar: a bold gradient-filled strip with tick marks, so it reads
+     as an intentional instrument even paused at 0% */
   .now-playing-wave {
-    margin-top: 20px;
-    display: flex; align-items: center; gap: 2px;
-    height: 36px; cursor: pointer;
+    flex: 1; min-width: 0;
+    position: relative;
+    display: flex; align-items: center;
+    cursor: pointer;
+    padding: 10px 0;
   }
-  .now-playing-wave span {
-    flex: 1; min-width: 2px; border-radius: 1px;
-    background: var(--line);
-    transition: background 0.2s var(--ease);
+  .now-playing-wave-track {
+    position: relative; width: 100%; height: 5px; border-radius: 999px;
+    background: var(--line); overflow: hidden;
   }
-  .now-playing-wave span.played { background: var(--steel-bright); }
-  .now-playing-wave:hover span.played { background: var(--steel-bright); }
-  .now-playing-wave.is-playing span.played { animation: waveLevel 0.7s ease-in-out infinite; }
-  @keyframes waveLevel { 0%, 100% { transform: scaleY(0.85); } 50% { transform: scaleY(1.1); } }
-
-  .now-playing-scrub {
-    margin-top: 10px; position: relative; height: 3px; border-radius: 999px;
-    background: var(--line); cursor: pointer;
+  .now-playing-wave-fill {
+    position: absolute; left: 0; top: 0; bottom: 0; width: 0%;
+    background: linear-gradient(90deg, var(--steel-deep), var(--steel-bright));
+    border-radius: 999px;
+    transition: width 0.15s linear;
   }
-  .now-playing-scrub-fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0%; background: var(--steel-bright); border-radius: 999px; }
-  .now-playing-scrub-dot {
-    position: absolute; top: 50%; left: 0%; width: 9px; height: 9px; border-radius: 50%;
+  .now-playing-wave-ticks {
+    position: absolute; inset: 0; z-index: 1;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 2px; pointer-events: none;
+  }
+  .now-playing-wave-ticks span { width: 1px; height: 9px; background: rgba(4,7,13,0.45); border-radius: 1px; }
+  .now-playing-wave-dot {
+    position: absolute; top: 50%; left: 0%; width: 12px; height: 12px; border-radius: 50%;
     background: var(--steel-bright); transform: translate(-50%, -50%);
-    box-shadow: 0 0 0 4px rgba(168,200,236,0.18);
+    box-shadow: 0 0 0 4px rgba(168,200,236,0.18), 0 0 14px rgba(168,200,236,0.65);
+    transition: left 0.15s linear;
   }
-  .now-playing-times {
-    margin-top: 9px; display: flex; justify-content: space-between;
+  .now-playing-wave.is-playing .now-playing-wave-dot { animation: trailPulse 1s ease-in-out infinite; }
+  @keyframes trailPulse { 0%, 100% { transform: translate(-50%, -50%) scale(1); } 50% { transform: translate(-50%, -50%) scale(1.2); } }
+
+  .now-playing-strip {
+    margin-top: 6px;
+    display: flex; align-items: center; justify-content: space-between;
     font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: var(--ink-faint);
   }
+  .now-playing-transport { display: flex; align-items: center; gap: 8px; }
+  .now-playing-skip {
+    width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: transparent; border: 1px solid var(--line); color: var(--ink-dim);
+    cursor: pointer; transition: all 0.25s var(--ease);
+  }
+  .now-playing-skip:hover { border-color: var(--ink-faint); color: var(--ink); }
+  .now-playing-skip svg { width: 11px; height: 11px; fill: currentColor; }
 
   .now-playing-volume {
-    margin-top: 12px; display: flex; align-items: center; gap: 10px;
+    margin-top: 14px; display: flex; align-items: center; gap: 10px;
   }
   .now-playing-mute {
     flex-shrink: 0; width: 26px; height: 26px; border-radius: 50%;
@@ -502,18 +526,29 @@
   }
   .now-playing-volume-slider::-moz-range-track { height: 3px; border-radius: 999px; background: var(--line); }
 
+  /* "Listen on" — a small grid of platform buttons instead of a plain
+     text row of links, so the card ends on the same clean note it starts on */
   .now-playing-footer {
-    margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line);
-    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-    font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: var(--ink-faint);
+    margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line);
   }
-  .now-playing-footer .pulse-sm {
-    width: 6px; height: 6px; border-radius: 50%; background: var(--steel-bright); flex-shrink: 0;
-    box-shadow: 0 0 0 0 rgba(168,200,236,0.55);
-    animation: eyebrowPing 2.4s ease-out infinite;
+  .now-playing-footer-label {
+    font-family: 'JetBrains Mono', monospace; font-size: 10.5px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--ink-faint); margin-bottom: 10px; display: block;
   }
-  .now-playing-footer a { color: var(--ink-dim); transition: color 0.2s; }
-  .now-playing-footer a:hover { color: var(--steel-bright); text-decoration: underline; text-underline-offset: 2px; }
+  .now-playing-links {
+    display: flex; flex-wrap: wrap; gap: 8px;
+  }
+  .now-playing-links a {
+    flex: 1 1 calc(50% - 4px);
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 10px 12px;
+    border: 1px solid var(--line); border-radius: 10px;
+    background: rgba(238,243,250,0.03);
+    font-size: 12.5px; font-weight: 600; color: var(--ink);
+    transition: all 0.2s var(--ease);
+  }
+  .now-playing-links a:hover { border-color: var(--steel); background: var(--steel-soft); color: var(--steel-bright); }
+  .now-playing-links a svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2; flex-shrink: 0; opacity: 0.6; }
 
   .now-playing-embed { position: absolute; width: 1px; height: 1px; overflow: hidden; opacity: 0; pointer-events: none; }
   .now-playing-note {
@@ -523,7 +558,7 @@
   .now-playing-note a { color: var(--steel-bright); text-decoration: underline; text-underline-offset: 2px; }
   @media (max-width: 560px) {
     .now-playing-card.card { padding: 14px; }
-    .now-playing-title { font-size: 18px; }
+    .now-playing-title { font-size: 19px; }
   }
 </style>
 <style>
@@ -565,8 +600,8 @@
   .mystery-strip {
     position: fixed; left: 0; top: 50%; z-index: 40;
     transform: translateY(-50%);
-    width: 34px; height: 132px;
-    border-radius: 0 12px 12px 0;
+    width: 22px; height: 88px;
+    border-radius: 0 10px 10px 0;
     cursor: pointer;
     border: none; border-left: none; padding: 0; margin: 0;
     background: var(--steel);
@@ -575,7 +610,7 @@
     overflow: hidden;
     transition: width 0.25s var(--ease), background 0.25s var(--ease);
   }
-  .mystery-strip:hover { width: 40px; background: var(--steel-bright); }
+  .mystery-strip:hover { width: 26px; background: var(--steel-bright); }
   .mystery-strip:focus-visible { outline: 2px solid var(--steel-bright); outline-offset: 2px; }
   .mystery-strip-shine {
     position: absolute; top: -40%; left: -120%;
@@ -588,7 +623,7 @@
   .mystery-strip-label {
     position: relative; z-index: 1;
     writing-mode: vertical-rl; text-orientation: mixed;
-    font-family: 'Unbounded', sans-serif; font-weight: 800; font-size: 13px; letter-spacing: 0.04em;
+    font-family: 'Unbounded', sans-serif; font-weight: 800; font-size: 10px; letter-spacing: 0.03em;
     color: #04070d;
     white-space: nowrap;
     transform: rotate(180deg);
@@ -601,8 +636,8 @@
     .mystery-strip-shine { animation: none; display: none; }
   }
   @media (max-width: 640px) {
-    .mystery-strip { width: 28px; height: 108px; }
-    .mystery-strip-label { font-size: 11px; }
+    .mystery-strip { width: 18px; height: 66px; }
+    .mystery-strip-label { font-size: 9px; }
   }
 
   /* ---------- MYSTERY REVEAL: hidden panel with blurred art + HIDDEN.mp3 ---------- */
@@ -678,130 +713,211 @@
   }
 
   .release-card.card {
-    overflow: hidden;
+    padding: 0;
+    overflow: visible;
     opacity: 0;
+    cursor: pointer;
     transform: translateY(14px);
     transform-style: preserve-3d;
-    transition: border-color 0.3s var(--ease), box-shadow 0.3s var(--ease), transform 0.2s var(--ease);
+    transition: border-color 0.3s var(--ease), box-shadow 0.4s var(--ease), transform 0.45s var(--ease-spring);
     will-change: transform;
   }
-  .release-card.in-view { animation: cardReveal 0.55s var(--ease) forwards; }
+  .release-card.in-view {
+    opacity: 1;
+    transform: translateY(0);
+    animation: cardReveal 0.55s var(--ease) forwards;
+  }
   @keyframes cardReveal { to { opacity: 1; transform: translateY(0); } }
 
   .release-card:hover {
-    border-color: var(--ink-faint);
-    box-shadow: 0 16px 36px -18px rgba(0,0,0,0.6);
+    border-color: var(--steel);
+    box-shadow: 0 26px 50px -20px rgba(0,0,0,0.65);
+    transform: translateY(-8px);
   }
+  .release-card:focus-visible { outline: 2px solid var(--steel-bright); outline-offset: 2px; }
 
-  .release-card-glow {
-    position: absolute; inset: -30%; z-index: 0; pointer-events: none;
-    background: radial-gradient(circle at var(--mx, 50%) var(--my, 50%), rgba(168,200,236,0.22), transparent 60%);
-    opacity: 0; transition: opacity 0.4s var(--ease);
-  }
-  .release-card:hover .release-card-glow { opacity: 1; }
-
+  /* ---------- reworked card: catalog badge pinned over the top-left
+     corner of the cover (the numbering is part of the brand, so it stays
+     visible without opening anything), a play-hint that pops in on hover
+     to signal "click me", and the title/artist living OUTSIDE the art in
+     their own row — the modal is still where the full detail lives. ---- */
   .release-art-stage {
     position: relative; width: 100%; aspect-ratio: 1 / 1;
     overflow: hidden;
-    border-radius: 16px 16px 0 0;
+    border-radius: 16px;
     transform: translateZ(0);
     isolation: isolate;
   }
   .release-art-img {
     position: absolute; inset: 0;
     background-size: cover; background-position: center;
-    transition: transform 0.5s var(--ease), filter 0.4s var(--ease);
-    filter: saturate(0.92) brightness(0.94);
-    will-change: transform;
+    filter: saturate(0.92) brightness(0.86);
+    transition: filter 0.45s var(--ease), transform 0.6s var(--ease-spring);
   }
-  .release-card:hover .release-art-img { transform: scale(1.06); filter: saturate(1) brightness(0.7); }
+  .release-card:hover .release-art-img { filter: saturate(1.08) brightness(0.62); transform: scale(1.09) rotate(-0.6deg); }
+
+  .release-catalog-badge {
+    position: absolute; top: 10px; left: 10px; z-index: 2;
+    font-family: 'JetBrains Mono', monospace; font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em;
+    color: var(--ink);
+    background: rgba(4,7,13,0.55);
+    border: 1px solid rgba(238,243,250,0.2);
+    backdrop-filter: blur(6px);
+    padding: 5px 10px;
+    border-radius: 999px;
+    transition: background 0.3s var(--ease), border-color 0.3s var(--ease), transform 0.4s var(--ease-spring);
+  }
+  .release-card:hover .release-catalog-badge {
+    background: var(--steel);
+    color: #04070d;
+    border-color: var(--steel);
+    transform: translateY(-2px) scale(1.05);
+  }
+
+  .release-play-hint {
+    position: absolute; inset: 0; z-index: 2;
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.35s var(--ease), transform 0.4s var(--ease-spring);
+    transform: scale(0.6) rotate(-8deg);
+  }
+  .release-card:hover .release-play-hint { opacity: 1; transform: scale(1) rotate(0deg); }
+  .release-play-hint span {
+    width: 52px; height: 52px; border-radius: 50%;
+    background: rgba(4,7,13,0.55); backdrop-filter: blur(6px);
+    border: 1.5px solid rgba(238,243,250,0.4);
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 10px 30px -8px rgba(0,0,0,0.6);
+  }
+  .release-play-hint svg { width: 18px; height: 18px; fill: var(--ink); margin-left: 2px; }
+
+  .release-card-meta {
+    padding: 16px 14px 15px;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .release-title {
+    font-family: 'Unbounded', sans-serif; font-weight: 700; font-size: 14px;
+    letter-spacing: -0.005em; line-height: 1.3; color: var(--ink);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    transition: color 0.3s var(--ease);
+  }
+  .release-card:hover .release-title { color: var(--steel-bright); }
+  .release-artist {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 12px; font-weight: 500; color: var(--ink-faint);
+    letter-spacing: 0.005em; line-height: 1.3;
+  }
+  .release-artist .person-icon { width: 11px; height: 11px; flex-shrink: 0; opacity: 0.6; fill: currentColor; }
+  .release-artist .artist-text { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .release-artist a { color: var(--steel-bright); text-decoration: none; }
+  .release-artist a:hover { text-decoration: underline; text-underline-offset: 2px; color: var(--ink); }
 
   .release-art-stage::after {
     content: '';
-    position: absolute; inset: 0; z-index: 1;
-    background: linear-gradient(160deg, rgba(79,123,176,0.2), transparent 60%);
-    opacity: 0; transition: opacity 0.4s var(--ease);
-  }
-  .release-card:hover .release-art-stage::after { opacity: 1; }
-
-  .release-art-scrim {
-    position: absolute; inset: 0;
-    background: linear-gradient(180deg, transparent 40%, rgba(4,7,13,0.96) 100%);
-  }
-
-  .release-year {
-    position: absolute; top: 12px; left: 12px; z-index: 2;
-    font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 600;
-    color: var(--steel-bright); background: rgba(4,7,13,0.65); backdrop-filter: blur(4px);
-    border: 1px solid rgba(79,123,176,0.4);
-    padding: 4px 9px; border-radius: 999px;
-  }
-
-  .release-card-play {
-    position: absolute; bottom: 14px; left: 14px; z-index: 2;
-    width: 50px; height: 50px; border-radius: 50%;
-    background: var(--steel);
-    display: flex; align-items: center; justify-content: center;
-    border: none; cursor: pointer;
-    box-shadow: 0 8px 22px -6px rgba(79,123,176,0.6);
-    transform: translateY(8px) scale(0.9);
+    position: absolute; inset: 0; z-index: 1; pointer-events: none;
+    background: linear-gradient(115deg, transparent 42%, rgba(238,243,250,0.65) 50%, transparent 58%);
+    transform: translateX(-140%) rotate(6deg);
     opacity: 0;
-    transition: all 0.4s var(--ease-spring);
   }
-  .release-card:hover .release-card-play { transform: translateY(0) scale(1); opacity: 1; }
-  .release-card-play:hover { background: var(--steel-bright); transform: scale(1.1) !important; }
-  .release-card-play svg { width: 16px; height: 16px; fill: #04070d; margin-left: 1px; }
-  .release-card-play.is-playing {
-    opacity: 1; transform: translateY(0) scale(1);
-    animation: pulsePlay 1.6s ease-in-out infinite;
+  .release-card:hover .release-art-stage::after {
+    animation: releaseLightLeak 0.85s var(--ease) forwards;
   }
-  @keyframes pulsePlay { 0%, 100% { box-shadow: 0 8px 22px -6px rgba(79,123,176,0.6); } 50% { box-shadow: 0 8px 30px -4px rgba(168,200,236,0.7); } }
+  @keyframes releaseLightLeak {
+    0% { transform: translateX(-140%) rotate(6deg); opacity: 0; }
+    18% { opacity: 0.85; }
+    100% { transform: translateX(140%) rotate(6deg); opacity: 0; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .release-card:hover .release-art-stage::after { animation: none; }
+  }
 
-  .release-platforms-card {
-    position: absolute; bottom: 14px; right: 14px; z-index: 2;
-    display: flex; gap: 6px;
-    opacity: 0; transform: translateY(8px);
-    transition: all 0.4s var(--ease-spring);
-    transition-delay: 0.04s;
-  }
-  .release-card:hover .release-platforms-card { opacity: 1; transform: translateY(0); }
-
-  .platform-link {
+  /* ---------- release detail modal — click a card, see the full picture,
+     no inline embed cluttering the grid itself ---------- */
+  .release-modal-backdrop {
+    position: fixed; inset: 0; z-index: 200;
+    background: rgba(4,7,13,0.78); backdrop-filter: blur(6px);
     display: flex; align-items: center; justify-content: center;
-    width: 34px; height: 34px; border-radius: 9px;
-    background: rgba(4,7,13,0.55);
-    backdrop-filter: blur(4px);
-    border: 1px solid rgba(238,243,250,0.18);
-    flex-shrink: 0;
-    transition: all 0.3s var(--ease-spring);
+    padding: 24px;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.3s var(--ease);
   }
-  .platform-link:hover { transform: translateY(-3px) scale(1.08); background: var(--steel); border-color: var(--steel); }
-  .platform-link svg { width: 15px; height: 15px; fill: var(--ink); transition: fill 0.25s; }
-  .platform-link:hover svg { fill: #04070d; }
-  .platform-link.apple-music svg .am-ring { stroke: var(--ink); transition: stroke 0.25s; }
-  .platform-link.apple-music svg .am-stem { stroke: var(--ink); transition: stroke 0.25s; }
-  .platform-link.apple-music svg .am-note { fill: var(--ink); transition: fill 0.25s; }
-  .platform-link.apple-music:hover svg .am-ring,
-  .platform-link.apple-music:hover svg .am-stem { stroke: #04070d; }
-  .platform-link.apple-music:hover svg .am-note { fill: #04070d; }
+  .release-modal-backdrop.visible { opacity: 1; pointer-events: auto; }
+  .release-modal {
+    position: relative; width: 100%; max-width: 460px;
+    background: var(--surface-solid, #0c1424);
+    border: 1px solid var(--line); border-radius: 18px;
+    overflow: hidden;
+    box-shadow: 0 50px 100px -30px rgba(0,0,0,0.85);
+    transform: translateY(14px) scale(0.98);
+    transition: transform 0.35s var(--ease-spring);
+    max-height: 88vh; overflow-y: auto;
+  }
+  .release-modal-backdrop.visible .release-modal { transform: translateY(0) scale(1); }
+  .release-modal-art {
+    position: relative; width: 100%; aspect-ratio: 16 / 10;
+    background-size: cover; background-position: center;
+  }
+  .release-modal-art::after {
+    content: ''; position: absolute; inset: 0;
+    background: linear-gradient(0deg, rgba(4,7,13,0.55) 0%, transparent 45%);
+  }
+  .release-modal-close {
+    position: absolute; top: 14px; right: 14px; z-index: 2;
+    width: 34px; height: 34px; border-radius: 50%;
+    background: rgba(4,7,13,0.6); backdrop-filter: blur(4px);
+    border: 1px solid rgba(238,243,250,0.2);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; color: var(--ink);
+    transition: all 0.2s var(--ease);
+  }
+  .release-modal-close:hover { background: var(--steel); border-color: var(--steel); color: #04070d; }
+  .release-modal-close svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; }
 
-  .release-card-info { padding: 16px 16px 18px; }
-  .release-title { font-family: 'Unbounded', sans-serif; font-weight: 700; font-size: 15.5px; letter-spacing: -0.01em; line-height: 1.3; }
-  .release-collab {
-    display: flex; align-items: center; gap: 6px;
-    font-size: 12.5px; color: var(--ink-dim); margin-top: 7px;
+  .release-modal-body { padding: 22px 26px 26px; }
+  .release-modal-label {
+    display: inline-flex; align-items: center;
+    font-family: 'JetBrains Mono', monospace; font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--steel-bright);
+    background: var(--steel-soft);
+    border: 1px solid rgba(168,200,236,0.28);
+    padding: 5px 12px;
+    border-radius: 999px;
   }
-  .release-collab svg { width: 13px; height: 13px; fill: var(--ink-faint); flex-shrink: 0; }
-  .release-collab a { color: var(--steel-bright); }
-  .release-collab a:hover { text-decoration: underline; }
+  .release-modal-title {
+    font-family: 'Unbounded', sans-serif; font-weight: 800; font-size: 25px; letter-spacing: -0.01em; line-height: 1.15;
+    margin-top: 10px;
+  }
+  .release-modal-collab { font-size: 13.5px; color: var(--ink-dim); margin-top: 6px; }
+  .release-modal-collab a { color: var(--steel-bright); text-decoration: underline; text-underline-offset: 2px; }
+  .release-modal-collab a:hover { color: var(--ink); }
 
-  .release-embed { max-height: 0; overflow: hidden; transition: max-height 0.4s var(--ease); }
-  .release-embed.active { max-height: 166px; }
-  .release-embed iframe { width: 100%; height: 166px; border: none; display: block; }
-  .release-embed-note {
-    padding: 10px 16px 14px; font-size: 12px; color: var(--ink-faint); line-height: 1.5;
+  .release-modal-divider { height: 1px; background: var(--line); margin: 20px 0; }
+  .release-modal-listen-label {
+    font-family: 'JetBrains Mono', monospace; font-size: 10.5px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--ink-faint); margin-bottom: 12px; display: block;
   }
-  .release-embed-note a { color: var(--steel-bright); text-decoration: underline; text-underline-offset: 2px; }
+  .release-modal-links { display: flex; flex-wrap: wrap; gap: 10px; }
+  .release-modal-links a {
+    flex: 1 1 calc(50% - 5px);
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 14px 10px 10px;
+    border: none; border-radius: 999px;
+    background: rgba(238,243,250,0.06);
+    font-size: 13.5px; font-weight: 700; color: var(--ink);
+    transition: all 0.25s var(--ease-spring);
+  }
+  .release-modal-links a:hover { background: rgba(238,243,250,0.13); transform: translateY(-2px); }
+  .release-modal-links a .link-icon {
+    width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: rgb(var(--brand-rgb));
+  }
+  .release-modal-links a .link-icon svg { width: 15px; height: 15px; fill: #04070d; }
+  .release-modal-links a .link-icon.apple-music svg .am-ring,
+  .release-modal-links a .link-icon.apple-music svg .am-stem { stroke: #04070d; }
+  .release-modal-links a .link-icon.apple-music svg .am-note { fill: #04070d; }
+  .release-modal-links a span.name { flex: 1; }
+  .release-modal-links a .ext-icon { width: 12px; height: 12px; fill: none; stroke: var(--ink-faint); stroke-width: 2; flex-shrink: 0; }
 
   /* ==============================================================
      SOCIALS — "Socials Grid": each platform is a tilting glass panel
@@ -1123,39 +1239,31 @@
       <div class="now-playing" id="now-playing">
         <div class="now-playing-card card" id="now-playing-card">
           <div class="now-playing-card-glow" id="now-playing-card-glow" aria-hidden="true"></div>
-          <div class="now-playing-eyebrow"><span class="dash"></span><span class="pulse"></span>Latest release</div>
 
-          <div class="now-playing-art" id="now-playing-art">
-            <span class="now-playing-art-badge">New</span>
+          <div class="now-playing-art" id="now-playing-art"></div>
+
+          <span class="now-playing-tag mono"><span class="pulse"></span>Latest release<span id="now-playing-catalog"></span></span>
+          <div class="now-playing-title" id="now-playing-title">—</div>
+          <div class="now-playing-sub" id="now-playing-sub">Neutro</div>
+
+          <div class="now-playing-controls">
+            <button class="now-playing-play" id="now-playing-play" type="button" aria-label="Play preview of the latest release">
+              <span class="now-playing-play-spin" aria-hidden="true"></span>
+              <span id="now-playing-icon"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></span>
+            </button>
+            <div class="now-playing-wave" id="now-playing-wave" role="slider" aria-label="Seek" tabindex="0" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div>
           </div>
 
-          <div class="now-playing-info">
-            <div>
-              <div class="now-playing-title" id="now-playing-title">—</div>
-              <div class="now-playing-sub" id="now-playing-sub">Neutro</div>
-            </div>
+          <div class="now-playing-strip">
+            <span class="mono" id="now-playing-elapsed">0:00</span>
             <div class="now-playing-transport">
               <button class="now-playing-skip" id="now-playing-back" type="button" aria-label="Restart preview">
                 <svg viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
-              </button>
-              <button class="now-playing-play" id="now-playing-play" type="button" aria-label="Play preview of the latest release">
-                <span class="now-playing-play-spin" aria-hidden="true"></span>
-                <span id="now-playing-icon"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></span>
               </button>
               <button class="now-playing-skip" id="now-playing-forward" type="button" aria-label="Open full track on SoundCloud">
                 <svg viewBox="0 0 24 24"><path d="M16 6h2v12h-2zM6 6l8.5 6L6 18z"/></svg>
               </button>
             </div>
-          </div>
-
-          <div class="now-playing-wave" id="now-playing-wave" role="slider" aria-label="Seek" tabindex="0" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div>
-
-          <div class="now-playing-scrub" id="now-playing-scrub">
-            <span class="now-playing-scrub-fill" id="now-playing-scrub-fill"></span>
-            <span class="now-playing-scrub-dot" id="now-playing-scrub-dot"></span>
-          </div>
-          <div class="now-playing-times">
-            <span class="mono" id="now-playing-elapsed">0:00</span>
             <span class="mono" id="now-playing-duration">0:30</span>
           </div>
 
@@ -1169,13 +1277,12 @@
           </div>
 
           <div class="now-playing-footer">
-            <span class="pulse-sm" aria-hidden="true"></span>
-            <span>Available on</span>
-            <a id="now-playing-spotify-link" href="https://open.spotify.com/artist/2Zj4lZCxNSCb5rjx82Ptmu" target="_blank" rel="noopener">Spotify</a>
-            <span>·</span>
-            <a id="now-playing-soundcloud-link" href="https://soundcloud.com/realneutromusic" target="_blank" rel="noopener">SoundCloud</a>
-            <span id="now-playing-applemusic-sep">·</span>
-            <a id="now-playing-applemusic-link" href="#" target="_blank" rel="noopener" style="display:none">Apple Music</a>
+            <span class="now-playing-footer-label mono">Listen on</span>
+            <div class="now-playing-links">
+              <a id="now-playing-spotify-link" href="https://open.spotify.com/artist/2Zj4lZCxNSCb5rjx82Ptmu" target="_blank" rel="noopener">Spotify<svg viewBox="0 0 24 24"><path d="M7 17L17 7M7 7h10v10" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+              <a id="now-playing-soundcloud-link" href="https://soundcloud.com/realneutromusic" target="_blank" rel="noopener">SoundCloud<svg viewBox="0 0 24 24"><path d="M7 17L17 7M7 7h10v10" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+              <a id="now-playing-applemusic-link" href="#" target="_blank" rel="noopener" style="display:none">Apple Music<svg viewBox="0 0 24 24"><path d="M7 17L17 7M7 7h10v10" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+            </div>
           </div>
 
           <div class="now-playing-note" id="now-playing-note">
@@ -1314,8 +1421,8 @@
 (function(){
   "use strict";
 
-  // hero image now loads from real files (hero-desktop/mobile .webp+.jpg)
-  // instead of an inline base64 string — see the .hero-photo CSS rule.
+  // hero image loads from real external files (./hero/) instead of an
+  // inline base64 string — see the .hero-photo CSS rule.
 
   // ================================================================
   // A NOTE ON THE 30-SECOND PREVIEW: this embeds SoundCloud's own
@@ -1341,6 +1448,12 @@
   //       "spotify_link": "...",
   //       "soundcloud_link": "...",
   //       "applemusic_link": "..." (optional — omit if there isn't one yet)
+  //       "youtubemusic_link": "..." (optional — omit if there isn't one yet)
+  //       "collab_links": { "CollabName": "https://open.spotify.com/artist/..." }
+  //         (optional — one entry per collaborator in "artist" other than
+  //         Neutro himself, so their name in the modal can link straight to
+  //         their own Spotify profile. Skip a name here and it just renders
+  //         as plain text instead of a link.)
   //     },
   //     ...
   //   ]
@@ -1370,14 +1483,17 @@
       art: `./assets/${r.image}`,
       spotify: r.spotify_link,
       soundcloud: r.soundcloud_link,
-      applemusic: r.applemusic_link || r.apple_music_link || r.applemusic || r.apple_link || r.apple
+      applemusic: r.applemusic_link || r.apple_music_link || r.applemusic || r.apple_link || r.apple,
+      youtubemusic: r.youtubemusic_link || r.youtube_music_link || r.ytmusic_link,
+      collabLinks: r.collab_links || {}
     }));
   }
 
 
   const PLAY_ICON = '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
   const STOP_ICON = '<svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg>';
-  const COLLAB_ICON = '<svg viewBox="0 0 24 24"><path d="M12 2a5 5 0 110 10 5 5 0 010-10zm0 12c4.4 0 8 2.2 8 5v3H4v-3c0-2.8 3.6-5 8-5z"/></svg>';
+  const COLLAB_ICON = '<svg class="person-icon" viewBox="0 0 24 24"><path d="M12 2a5 5 0 110 10 5 5 0 010-10zm0 12c4.4 0 8 2.2 8 5v3H4v-3c0-2.8 3.6-5 8-5z"/></svg>';
+  const EXT_ICON = '<svg class="ext-icon" viewBox="0 0 24 24"><path d="M7 17L17 7M7 7h10v10" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
   // ---------- icon library ----------
   const ICONS = {
@@ -1386,6 +1502,7 @@
     apple: '<svg viewBox="0 0 24 24"><circle class="am-ring" cx="12" cy="12" r="10.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path class="am-stem" d="M9.5 16.2V9.8c0-.3.2-.5.45-.56l4.3-1.1c.3-.08.55.13.55.42v5.4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle class="am-note" cx="9" cy="16.5" r="1.7" fill="currentColor"/><circle class="am-note" cx="14.3" cy="14.9" r="1.7" fill="currentColor"/></svg>',
     instagram: '<svg viewBox="0 0 24 24"><path d="M12 2.16c3.2 0 3.58.01 4.85.07 3.25.15 4.77 1.69 4.92 4.92.06 1.27.07 1.65.07 4.85s-.01 3.58-.07 4.85c-.15 3.23-1.66 4.77-4.92 4.92-1.27.06-1.64.07-4.85.07s-3.58-.01-4.85-.07c-3.26-.15-4.77-1.7-4.92-4.92-.06-1.27-.07-1.65-.07-4.85s.01-3.58.07-4.85C2.38 3.85 3.9 2.32 7.15 2.23 8.42 2.17 8.8 2.16 12 2.16zM12 0C8.74 0 8.33.01 7.05.07c-4.18.2-6.78 2.8-6.98 6.98C0 8.33 0 8.74 0 12s.01 3.67.07 4.95c.2 4.17 2.8 6.78 6.98 6.98C8.33 24 8.74 24 12 24s3.67-.01 4.95-.07c4.17-.2 6.78-2.8 6.98-6.98.06-1.28.07-1.69.07-4.95s-.01-3.67-.07-4.95c-.2-4.17-2.8-6.78-6.98-6.98C15.67.01 15.26 0 12 0zm0 5.84A6.16 6.16 0 1 0 12 18.16 6.16 6.16 0 0 0 12 5.84zM12 16a4 4 0 1 1 0-8 4 4 0 0 1 0 8zm6.41-11.85a1.44 1.44 0 1 0 0 2.88 1.44 1.44 0 0 0 0-2.88z"/></svg>',
     youtube: '<svg viewBox="0 0 24 24"><path d="M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.5 12 3.5 12 3.5s-7.5 0-9.4.6A3 3 0 0 0 .5 6.2 31.7 31.7 0 0 0 0 12a31.7 31.7 0 0 0 .5 5.8 3 3 0 0 0 2.1 2.1c1.9.6 9.4.6 9.4.6s7.5 0 9.4-.6a3 3 0 0 0 2.1-2.1A31.7 31.7 0 0 0 24 12a31.7 31.7 0 0 0-.5-5.8zM9.6 15.6V8.4l6.3 3.6z"/></svg>',
+    youtubemusic: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="11" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="12" r="4.1" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M10.4 9.7l4 2.3-4 2.3z" fill="currentColor"/></svg>',
     discord: '<svg viewBox="0 0 24 24"><path d="M20.3 4.4A19.7 19.7 0 0 0 15.4 3c-.2.4-.5.9-.6 1.3a18.3 18.3 0 0 0-5.6 0c-.2-.4-.4-.9-.6-1.3-1.7.3-3.4.8-4.9 1.4C1.2 8.5.5 12.6.8 16.6a19.9 19.9 0 0 0 6 3c.5-.6.9-1.3 1.2-2-.7-.3-1.3-.6-1.9-1 .2-.1.3-.3.5-.4 3.6 1.7 7.5 1.7 11 0l.5.4c-.6.4-1.2.7-1.9 1 .3.7.7 1.4 1.2 2a19.9 19.9 0 0 0 6-3c.4-4.6-.8-8.7-3.1-12.2zM8.5 14.3c-1 0-1.9-1-1.9-2.2s.8-2.2 1.9-2.2 1.9 1 1.9 2.2-.8 2.2-1.9 2.2zm7 0c-1 0-1.9-1-1.9-2.2s.8-2.2 1.9-2.2 1.9 1 1.9 2.2-.8 2.2-1.9 2.2z"/></svg>'
   };
 
@@ -1484,133 +1601,145 @@
 
   async function renderReleasesAndPlayer() {
   const grid = document.getElementById('release-grid');
-  let currentlyOpenEmbed = null;
   const releaseCountEl = document.getElementById('release-count');
   if (releaseCountEl) releaseCountEl.textContent = RELEASES.length;
 
-  function buildEmbedUrl(scUrl) {
-    return `https://w.soundcloud.com/player/?url=${encodeURIComponent(scUrl)}&color=%234f7bb0&auto_play=true&hide_related=true&show_comments=false&show_user=false&show_reposts=false&visual=false&start_track=0`;
+  // ---------- release detail modal: click a card, see catalog/title/
+  // collaborators and a clean "listen on" button grid — built once and
+  // reused for whichever card was clicked ----------
+  let modalBackdrop = document.getElementById('release-modal-backdrop');
+  if (!modalBackdrop) {
+    modalBackdrop = document.createElement('div');
+    modalBackdrop.className = 'release-modal-backdrop';
+    modalBackdrop.id = 'release-modal-backdrop';
+    modalBackdrop.innerHTML = `
+      <div class="release-modal" role="dialog" aria-modal="true" aria-labelledby="release-modal-title">
+        <div class="release-modal-art" id="release-modal-art">
+          <button class="release-modal-close" id="release-modal-close" type="button" aria-label="Close">
+            <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+        <div class="release-modal-body">
+          <div class="release-modal-label mono" id="release-modal-label"></div>
+          <div class="release-modal-title" id="release-modal-title"></div>
+          <div class="release-modal-collab" id="release-modal-collab"></div>
+          <div class="release-modal-divider"></div>
+          <span class="release-modal-listen-label mono">Listen on</span>
+          <div class="release-modal-links" id="release-modal-links"></div>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modalBackdrop);
+
+    function closeReleaseModal() {
+      modalBackdrop.classList.remove('visible');
+      document.body.style.overflow = '';
+    }
+    modalBackdrop.querySelector('#release-modal-close').addEventListener('click', closeReleaseModal);
+    modalBackdrop.addEventListener('click', (e) => { if (e.target === modalBackdrop) closeReleaseModal(); });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && modalBackdrop.classList.contains('visible')) closeReleaseModal();
+    });
+    window.closeReleaseModal = closeReleaseModal;
   }
 
-  RELEASES.forEach((r, i) => {
+  // Renders the artist credit line for the modal: solo tracks just show
+  // "Neutro"; collabs show the credit exactly as written in releases.json,
+  // with any name other than Neutro turned into a link IF releases.json
+  // has a matching entry in that release's collab_links — otherwise that
+  // name just renders as plain text (nothing breaks if a link is missing).
+  function artistCreditHtml(r) {
+    const parts = (r.artist || 'Neutro').split('&').map(s => s.trim()).filter(Boolean);
+    if (!parts.length) return 'Neutro';
+    return parts.map((name) => {
+      if (name.toLowerCase() === 'neutro') return 'Neutro';
+      const link = r.collabLinks && r.collabLinks[name];
+      return link
+        ? `<a href="${link}" target="_blank" rel="noopener">${name}</a>`
+        : name;
+    }).join(' &amp; ');
+  }
+
+  function openReleaseModal(r) {
+    document.getElementById('release-modal-art').style.backgroundImage = `url(${r.art})`;
+    document.getElementById('release-modal-label').textContent = r.catalog || 'Neutro';
+    document.getElementById('release-modal-title').textContent = r.title;
+
+    const collabEl = document.getElementById('release-modal-collab');
+    collabEl.style.display = 'block';
+    collabEl.innerHTML = artistCreditHtml(r);
+
+    let linksHtml = '';
+    if (r.spotify) linksHtml += `<a href="${r.spotify}" target="_blank" rel="noopener" style="--brand-rgb:30,215,96"><span class="link-icon">${ICONS.spotify}</span><span class="name">Spotify</span>${EXT_ICON}</a>`;
+    if (r.soundcloud) linksHtml += `<a href="${r.soundcloud}" target="_blank" rel="noopener" style="--brand-rgb:255,119,0"><span class="link-icon">${ICONS.soundcloud}</span><span class="name">SoundCloud</span>${EXT_ICON}</a>`;
+    if (r.applemusic) linksHtml += `<a href="${r.applemusic}" target="_blank" rel="noopener" style="--brand-rgb:252,69,98"><span class="link-icon apple-music">${ICONS.apple}</span><span class="name">Apple Music</span>${EXT_ICON}</a>`;
+    if (r.youtubemusic) linksHtml += `<a href="${r.youtubemusic}" target="_blank" rel="noopener" style="--brand-rgb:255,0,0"><span class="link-icon">${ICONS.youtubemusic}</span><span class="name">YouTube Music</span>${EXT_ICON}</a>`;
+    document.getElementById('release-modal-links').innerHTML = linksHtml;
+
+    modalBackdrop.classList.add('visible');
+    document.body.style.overflow = 'hidden';
+  }
+
+  RELEASES.forEach((r) => {
     const card = document.createElement('div');
     card.className = 'release-card card';
+    card.setAttribute('role', 'button');
+    card.setAttribute('tabindex', '0');
+    card.setAttribute('aria-label', `View details for ${r.title}`);
 
-    const glow = document.createElement('div');
-    glow.className = 'release-card-glow';
-    glow.setAttribute('aria-hidden', 'true');
-    card.appendChild(glow);
-
-    card.addEventListener('mousemove', (e) => {
-      const rect = card.getBoundingClientRect();
-      const px = (e.clientX - rect.left) / rect.width;
-      const py = (e.clientY - rect.top) / rect.height;
-      const tiltX = (py - 0.5) * -8;
-      const tiltY = (px - 0.5) * 8;
-      card.style.transform = `perspective(800px) rotateX(${tiltX}deg) rotateY(${tiltY}deg) translateY(-4px) scale(1.015)`;
-      glow.style.setProperty('--mx', (px * 100) + '%');
-      glow.style.setProperty('--my', (py * 100) + '%');
+    // The entrance reveal is a CSS *animation* (cardReveal, fill-mode
+    // forwards) that touches `transform`. A fill-forwards animation keeps
+    // outranking any other rule for that property — including the plain
+    // CSS :hover rule below — for as long as it's still "filling", even
+    // after it's technically finished playing. Dropping the animation once
+    // it ends hands `transform` back to the normal cascade so :hover's
+    // lift-on-hover actually takes effect.
+    card.addEventListener('animationend', (e) => {
+      if (e.animationName === 'cardReveal') card.style.animation = 'none';
     });
-    card.addEventListener('mouseleave', () => { card.style.transform = ''; });
 
     const stage = document.createElement('div');
     stage.className = 'release-art-stage';
 
-    const trackNo = document.createElement('span');
-    trackNo.className = 'release-year mono';
-    trackNo.textContent = r.catalog || `#${String(RELEASES.length - i).padStart(2, '0')}`;
-    stage.appendChild(trackNo);
-
     const artImg = document.createElement('div');
     artImg.className = 'release-art-img';
-    artImg.style.backgroundImage = `url(${r.art})`;
+    // cover art is loaded lazily (see the lazy-load observer below) instead
+    // of all at once here — with several releases this used to fire a burst
+    // of image requests at page load that competed with the hero photo and
+    // fonts, so cards near the bottom sat blank for a while after they'd
+    // already animated into view
+    artImg.dataset.src = r.art;
     stage.appendChild(artImg);
 
-    const scrim = document.createElement('div');
-    scrim.className = 'release-art-scrim';
-    scrim.setAttribute('aria-hidden', 'true');
-    stage.appendChild(scrim);
-
-    const playBtn = document.createElement('button');
-    playBtn.className = 'release-card-play';
-    playBtn.type = 'button';
-    playBtn.innerHTML = PLAY_ICON;
-    playBtn.setAttribute('aria-label', `Preview ${r.title}, inline on this page`);
-    stage.appendChild(playBtn);
-
-    const platforms = document.createElement('div');
-    platforms.className = 'release-platforms-card';
-    let platformsHtml = `<a class="platform-link soundcloud" href="${r.soundcloud}" target="_blank" rel="noopener" aria-label="Open on SoundCloud">${ICONS.soundcloud}</a>`;
-    platformsHtml += `<a class="platform-link spotify" href="${r.spotify}" target="_blank" rel="noopener" aria-label="Listen on Spotify">${ICONS.spotify}</a>`;
-    if (r.applemusic) {
-      platformsHtml += `<a class="platform-link apple-music" href="${r.applemusic}" target="_blank" rel="noopener" aria-label="Find on Apple Music">${ICONS.apple}</a>`;
+    if (r.catalog) {
+      const badge = document.createElement('div');
+      badge.className = 'release-catalog-badge mono';
+      badge.textContent = r.catalog;
+      stage.appendChild(badge);
     }
-    platforms.innerHTML = platformsHtml;
-    stage.appendChild(platforms);
+
+    const playHint = document.createElement('div');
+    playHint.className = 'release-play-hint';
+    playHint.setAttribute('aria-hidden', 'true');
+    playHint.innerHTML = `<span>${PLAY_ICON}</span>`;
+    stage.appendChild(playHint);
 
     card.appendChild(stage);
 
-    const info = document.createElement('div');
-    info.className = 'release-card-info';
-    let infoHtml = `<div class="release-title">${r.title}</div>`;
-    if (r.artist) {
-      infoHtml += `<div class="release-collab">${COLLAB_ICON} ${r.artist}</div>`;
-    }
-    info.innerHTML = infoHtml;
-    card.appendChild(info);
+    const meta = document.createElement('div');
+    meta.className = 'release-card-meta';
+    meta.innerHTML = `<div class="release-title">${r.title}</div><div class="release-artist">${COLLAB_ICON}<span class="artist-text">${artistCreditHtml(r)}</span></div>`;
+    // the artist line can contain a real <a> to the collaborator's Spotify
+    // profile — stop it from also bubbling up to the card's own click
+    // handler, which would otherwise open the release modal at the same time
+    meta.querySelectorAll('a').forEach((a) => {
+      a.addEventListener('click', (e) => e.stopPropagation());
+    });
+    card.appendChild(meta);
 
-    const embedWrap = document.createElement('div');
-    embedWrap.className = 'release-embed';
-    card.appendChild(embedWrap);
-
-    const noteWrap = document.createElement('div');
-    noteWrap.className = 'release-embed-note';
-    noteWrap.style.display = 'none';
-    noteWrap.innerHTML = `Taking a moment — if nothing plays, this track may be private on SoundCloud. <a href="${r.soundcloud}" target="_blank" rel="noopener">Open it there instead ↗</a>`;
-    card.appendChild(noteWrap);
-
-    let isOpen = false;
-    let fallbackTimer = null;
-    function closeThis() {
-      embedWrap.classList.remove('active');
-      embedWrap.innerHTML = '';
-      noteWrap.style.display = 'none';
-      playBtn.innerHTML = PLAY_ICON;
-      playBtn.classList.remove('is-playing');
-      isOpen = false;
-      if (fallbackTimer) { clearTimeout(fallbackTimer); fallbackTimer = null; }
-      if (window.setNowPlayingStatus) window.setNowPlayingStatus(null);
-    }
-    playBtn.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      if (isOpen) {
-        closeThis();
-        if (currentlyOpenEmbed === closeThis) currentlyOpenEmbed = null;
-        return;
-      }
-      if (currentlyOpenEmbed) currentlyOpenEmbed();
-      if (typeof window.closeNowPlaying === 'function') window.closeNowPlaying();
-
-      const iframe = document.createElement('iframe');
-      iframe.src = buildEmbedUrl(r.soundcloud);
-      iframe.allow = 'autoplay';
-      iframe.scrolling = 'no';
-      embedWrap.appendChild(iframe);
-      embedWrap.classList.add('active');
-      playBtn.innerHTML = STOP_ICON;
-      playBtn.classList.add('is-playing');
-      isOpen = true;
-      currentlyOpenEmbed = closeThis;
-      if (window.setNowPlayingStatus) window.setNowPlayingStatus(r.title);
-
-      // SoundCloud sometimes blocks the embed for tracks set to private
-      // or "not embeddable" on their end — that fails silently with a
-      // blank iframe, which looks like the page is broken. Surface it.
-      noteWrap.style.display = 'none';
-      fallbackTimer = setTimeout(() => {
-        if (isOpen) noteWrap.style.display = 'block';
-      }, 6000);
+    card.addEventListener('click', () => openReleaseModal(r));
+    card.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openReleaseModal(r); }
     });
 
     grid.appendChild(card);
@@ -1625,13 +1754,20 @@
   const npCard = document.getElementById('now-playing-card');
   const npCardGlow = document.getElementById('now-playing-card-glow');
   if (npCard && npCardGlow) {
+    // magnetic 3D tilt — the same effect the release cards used to have,
+    // moved here at the user's request; the release cards now get a
+    // softer, non-tracking hover instead.
     npCard.addEventListener('mousemove', (e) => {
       const rect = npCard.getBoundingClientRect();
-      const px = ((e.clientX - rect.left) / rect.width) * 100;
-      const py = ((e.clientY - rect.top) / rect.height) * 100;
-      npCardGlow.style.setProperty('--mx', px + '%');
-      npCardGlow.style.setProperty('--my', py + '%');
+      const px = (e.clientX - rect.left) / rect.width;
+      const py = (e.clientY - rect.top) / rect.height;
+      const tiltX = (py - 0.5) * -14;
+      const tiltY = (px - 0.5) * 14;
+      npCard.style.transform = `perspective(1200px) rotateX(${tiltX}deg) rotateY(${tiltY}deg) translateY(-4px)`;
+      npCardGlow.style.setProperty('--mx', (px * 100) + '%');
+      npCardGlow.style.setProperty('--my', (py * 100) + '%');
     });
+    npCard.addEventListener('mouseleave', () => { npCard.style.transform = ''; });
   }
   const npTitle = document.getElementById('now-playing-title');
   const npSub = document.getElementById('now-playing-sub');
@@ -1642,15 +1778,12 @@
   const npNote = document.getElementById('now-playing-note');
   const npFallbackLink = document.getElementById('now-playing-fallback-link');
   const npWave = document.getElementById('now-playing-wave');
-  const npScrub = document.getElementById('now-playing-scrub');
-  const npScrubFill = document.getElementById('now-playing-scrub-fill');
-  const npScrubDot = document.getElementById('now-playing-scrub-dot');
   const npElapsed = document.getElementById('now-playing-elapsed');
   const npDuration = document.getElementById('now-playing-duration');
   const npSpotifyLink = document.getElementById('now-playing-spotify-link');
   const npSoundcloudLink = document.getElementById('now-playing-soundcloud-link');
   const npAppleLink = document.getElementById('now-playing-applemusic-link');
-  const npAppleSep = document.getElementById('now-playing-applemusic-sep');
+  const npCatalog = document.getElementById('now-playing-catalog');
 
   function formatTime(seconds) {
     const total = Math.max(0, Math.round(seconds));
@@ -1663,37 +1796,37 @@
     npArt.style.backgroundImage = `url(${latest.art})`;
     npTitle.textContent = latest.title;
     if (npSub && latest.artist) npSub.textContent = latest.artist;
+    if (npCatalog && latest.catalog) npCatalog.textContent = ' · ' + latest.catalog;
     if (npFallbackLink) npFallbackLink.href = latest.soundcloud;
     if (npSpotifyLink && latest.spotify) npSpotifyLink.href = latest.spotify;
     if (npSoundcloudLink && latest.soundcloud) npSoundcloudLink.href = latest.soundcloud;
-    if (npAppleLink && npAppleSep) {
+    if (npAppleLink) {
       if (latest.applemusic) {
         npAppleLink.href = latest.applemusic;
         npAppleLink.style.display = '';
-        npAppleSep.style.display = '';
       } else {
         npAppleLink.style.display = 'none';
-        npAppleSep.style.display = 'none';
       }
     }
 
-    // build a stable-but-organic looking waveform (deterministic per pixel count)
-    const BAR_COUNT = 64;
-    npWave.innerHTML = '';
-    const bars = [];
-    for (let i = 0; i < BAR_COUNT; i++) {
-      const bar = document.createElement('span');
-      const h = 22 + Math.round(Math.sin(i * 0.7) * 10 + Math.sin(i * 2.3) * 6 + Math.sin(i * 0.13) * 8);
-      bar.style.height = Math.max(8, Math.min(36, h)) + 'px';
-      npWave.appendChild(bar);
-      bars.push(bar);
-    }
+    // seek bar: a gradient-filled strip with sprocket-style tick marks —
+    // looks intentional at rest (0%), not just an empty line waiting for
+    // playback to give it meaning
+    const TICK_COUNT = 28;
+    npWave.innerHTML = `
+      <div class="now-playing-wave-track">
+        <span class="now-playing-wave-fill" id="now-playing-wave-fill"></span>
+        <span class="now-playing-wave-ticks" aria-hidden="true">${'<span></span>'.repeat(TICK_COUNT)}</span>
+      </div>
+      <span class="now-playing-wave-dot" id="now-playing-wave-dot"></span>
+    `;
+    const waveFill = npWave.querySelector('#now-playing-wave-fill');
+    const waveDot = npWave.querySelector('#now-playing-wave-dot');
 
     function paintProgress(fraction) {
-      const litCount = Math.round(fraction * BAR_COUNT);
-      bars.forEach((bar, i) => bar.classList.toggle('played', i < litCount));
-      npScrubFill.style.width = (fraction * 100) + '%';
-      npScrubDot.style.left = (fraction * 100) + '%';
+      const pct = (fraction * 100).toFixed(2) + '%';
+      waveFill.style.width = pct;
+      waveDot.style.left = pct;
       npWave.setAttribute('aria-valuenow', Math.round(fraction * 100));
     }
 
@@ -1813,9 +1946,7 @@
       paintProgress(fraction);
       npElapsed.textContent = formatTime(audio.currentTime);
     }
-    [npWave, npScrub].forEach((el) => {
-      el.addEventListener('click', (e) => seekFromClientX(e.clientX, el));
-    });
+    npWave.addEventListener('click', (e) => seekFromClientX(e.clientX, npWave));
     npWave.addEventListener('keydown', (e) => {
       if (!audio.duration) return;
       if (e.key === 'ArrowRight') audio.currentTime = Math.min(audio.duration, audio.currentTime + 3);
@@ -1823,6 +1954,26 @@
     });
   } else {
     window.closeNowPlaying = function() {};
+  }
+
+  // ---------- lazy-load cover art shortly before each card is scrolled into view ----------
+  // fires well ahead of the viewport (600px) so the image has already loaded
+  // by the time the reveal animation below plays — no more blank cards
+  const artImgs = Array.from(document.querySelectorAll('.release-art-img[data-src]'));
+  if ('IntersectionObserver' in window) {
+    const imageObserver = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          const el = entry.target;
+          el.style.backgroundImage = `url(${el.dataset.src})`;
+          delete el.dataset.src;
+          imageObserver.unobserve(el);
+        }
+      });
+    }, { threshold: 0, rootMargin: '600px 0px 600px 0px' });
+    artImgs.forEach(el => imageObserver.observe(el));
+  } else {
+    artImgs.forEach(el => { el.style.backgroundImage = `url(${el.dataset.src})`; delete el.dataset.src; });
   }
 
   // ---------- scroll-triggered reveal animation for release cards ----------
@@ -1838,7 +1989,11 @@
           observer.unobserve(row);
         }
       });
-    }, { threshold: 0.15, rootMargin: '0px 0px -40px 0px' });
+      // reveal a little before the card is fully in the viewport (rootMargin
+      // extends the trigger zone below the fold) instead of waiting for it
+      // to be 15% visible — that extra margin was making cards feel slow
+      // to appear on a normal scroll
+    }, { threshold: 0, rootMargin: '0px 0px 120px 0px' });
     rows.forEach(row => observer.observe(row));
   } else {
     rows.forEach(row => row.classList.add('in-view'));
