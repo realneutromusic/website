@@ -1965,7 +1965,6 @@
       e.preventDefault();
       if (hasErrored) { window.open(latest.soundcloud, '_blank', 'noopener'); return; }
       if (isPlaying) { audio.pause(); return; }
-      if (currentlyOpenEmbed) currentlyOpenEmbed();
       setLoading(true);
       audio.play().catch(() => { setLoading(false); if (npNote) npNote.classList.add('visible'); });
     });
