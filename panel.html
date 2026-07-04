@@ -158,7 +158,35 @@
   .autoclean-toggle-btn.is-on .autoclean-toggle-dot {
     background: #e0a848; animation: nowPlayingDot 1.4s ease-in-out infinite;
   }
-  .sm-autoclean-toggle-btn { width: calc(100% - 36px); margin: 0 18px 12px; justify-content: center; font-size: 11px; padding: 8px 10px; }
+  .sm-autoclean-toggle-btn { width: 100%; justify-content: center; font-size: 11px; padding: 8px 10px; margin: 0; }
+
+  /* ---- tucked-away controls: auto-clean, recently listened, clean-all
+     are all things you set once and rarely touch again mid-stream, so
+     they're hidden by default and only slide out on hover — one small
+     row instead of three permanent buttons cluttering the sidebar. ---- */
+  .sm-tucked { margin: 0 18px 12px; }
+  .sm-tucked-trigger {
+    width: 100%; display: flex; align-items: center; gap: 7px;
+    font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--ink-faint);
+    background: transparent; border: 1px solid var(--line); border-radius: 999px;
+    padding: 8px 12px; cursor: pointer; transition: all 0.2s var(--ease);
+  }
+  .sm-tucked-trigger span { flex: 1; text-align: left; }
+  .sm-tucked-trigger svg { width: 13px; height: 13px; flex-shrink: 0; }
+  .sm-tucked-trigger:hover, .sm-tucked:hover .sm-tucked-trigger, .sm-tucked:focus-within .sm-tucked-trigger {
+    border-color: var(--ink-faint); color: var(--ink);
+  }
+  .sm-tucked-chevron { transition: transform 0.25s var(--ease); }
+  .sm-tucked:hover .sm-tucked-chevron, .sm-tucked:focus-within .sm-tucked-chevron { transform: rotate(180deg); }
+  .sm-tucked-panel {
+    display: flex; flex-direction: column; gap: 8px;
+    max-height: 0; overflow: hidden;
+    transition: max-height 0.3s var(--ease), margin-top 0.3s var(--ease);
+  }
+  .sm-tucked-panel > * { margin: 0 !important; width: 100% !important; }
+  .sm-tucked:hover .sm-tucked-panel, .sm-tucked:focus-within .sm-tucked-panel {
+    max-height: 220px; margin-top: 8px;
+  }
 
   .filter-row { display: flex; gap: 8px; margin-bottom: 24px; flex-wrap: wrap; }
   .filter-row-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
@@ -1126,19 +1154,30 @@
             Wheel
           </button>
         </div>
-        <button type="button" class="autoclean-toggle-btn sm-autoclean-toggle-btn" id="sm-autoclean-toggle-btn" title="When on, automatically sends anything older than 12 hours straight to Trash">
-          <span class="autoclean-toggle-dot" id="sm-autoclean-toggle-dot"></span>
-          <span id="sm-autoclean-toggle-label">Auto-clean: loading…</span>
-        </button>
         <p class="stream-total-count" id="sm-total-count"></p>
-        <button type="button" class="stream-listened-history-btn" id="sm-open-listened-history">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12a9 9 0 109-9 9.75 9.75 0 00-6.74 2.74L3 8"/><path d="M3 3v5h5M12 7v5l4 2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          <span id="sm-listened-history-label">Recently listened</span>
-        </button>
-        <button type="button" class="stream-clean-all-btn" id="sm-clean-all-btn">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14z" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          Clean all — send to Trash
-        </button>
+
+        <div class="sm-tucked" id="sm-tucked">
+          <button type="button" class="sm-tucked-trigger" id="sm-tucked-trigger" aria-expanded="false">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>
+            <span>More options</span>
+            <svg class="sm-tucked-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 9l6 6 6-6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <div class="sm-tucked-panel">
+            <button type="button" class="autoclean-toggle-btn sm-autoclean-toggle-btn" id="sm-autoclean-toggle-btn" title="When on, automatically sends anything older than 12 hours straight to Trash">
+              <span class="autoclean-toggle-dot" id="sm-autoclean-toggle-dot"></span>
+              <span id="sm-autoclean-toggle-label">Auto-clean: loading…</span>
+            </button>
+            <button type="button" class="stream-listened-history-btn" id="sm-open-listened-history">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12a9 9 0 109-9 9.75 9.75 0 00-6.74 2.74L3 8"/><path d="M3 3v5h5M12 7v5l4 2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span id="sm-listened-history-label">Recently listened</span>
+            </button>
+            <button type="button" class="stream-clean-all-btn" id="sm-clean-all-btn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Clean all — send to Trash
+            </button>
+          </div>
+        </div>
+
         <div class="stream-search-row">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3" stroke-linecap="round"/></svg>
           <input type="text" id="sm-search-input" placeholder="Search by name, link, or note…" autocomplete="off">
@@ -1758,6 +1797,22 @@
   const smToastText = document.getElementById('sm-toast-text');
   const smToastUndo = document.getElementById('sm-toast-undo');
   const smOpenListenedHistoryBtn = document.getElementById('sm-open-listened-history');
+
+  // keep aria-expanded honest — the panel's open/closed state is driven
+  // purely by CSS (:hover / :focus-within), so without this the attribute
+  // would just sit on 'false' forever regardless of what's actually shown
+  const smTucked = document.getElementById('sm-tucked');
+  const smTuckedTrigger = document.getElementById('sm-tucked-trigger');
+  if (smTucked && smTuckedTrigger) {
+    const syncTuckedExpanded = () => {
+      const isOpen = smTucked.matches(':hover') || smTucked.matches(':focus-within');
+      smTuckedTrigger.setAttribute('aria-expanded', String(isOpen));
+    };
+    smTucked.addEventListener('mouseenter', syncTuckedExpanded);
+    smTucked.addEventListener('mouseleave', syncTuckedExpanded);
+    smTucked.addEventListener('focusin', syncTuckedExpanded);
+    smTucked.addEventListener('focusout', syncTuckedExpanded);
+  }
   const smListenedHistoryLabel = document.getElementById('sm-listened-history-label');
   const smListenedHistoryModal = document.getElementById('sm-listened-history-modal');
   const smCloseListenedHistoryBtn = document.getElementById('sm-close-listened-history');
