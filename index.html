@@ -23,17 +23,17 @@
 <meta property="og:type" content="website">
 <meta property="og:title" content="Neutro — Official Website">
 <meta property="og:description" content="Official website of Neutro. Explore electronic music releases, exclusive tracks, and specialized tools for music producers.">
-<meta property="og:url" content="https://realneutromusic.github.io/website/">
-<meta property="og:image" content="https://realneutromusic.github.io/website/social-preview.jpg">
+<meta property="og:url" content="https://realneutromusic.com/">
+<meta property="og:image" content="https://realneutromusic.com/social-preview.jpg">
 
-<link rel="canonical" href="https://realneutromusic.github.io/website/">
+<link rel="canonical" href="https://realneutromusic.com/">
 
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
   "@type": "MusicGroup",
   "name": "Neutro",
-  "url": "https://realneutromusic.github.io/website/",
+  "url": "https://realneutromusic.com/",
   "genre": "Electronic",
   "sameAs": [
     "https://open.spotify.com/artist/2Zj4lZCxNSCb5rjx82Ptmu",
@@ -49,7 +49,7 @@
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Neutro — Official Website">
 <meta name="twitter:description" content="Official website of Neutro. Explore electronic music releases, exclusive tracks, and specialized tools for music producers.">
-<meta name="twitter:image" content="https://realneutromusic.github.io/website/social-preview.jpg">
+<meta name="twitter:image" content="https://realneutromusic.com/social-preview.jpg">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -522,7 +522,6 @@
   .now-playing-links a:hover { border-color: var(--steel); background: var(--steel-soft); color: var(--steel-bright); }
   .now-playing-links a svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2; flex-shrink: 0; opacity: 0.6; }
 
-  .now-playing-embed { position: absolute; width: 1px; height: 1px; overflow: hidden; opacity: 0; pointer-events: none; }
   @media (max-width: 560px) {
     .now-playing-card.card { padding: 14px; }
     .now-playing-title { font-size: 19px; }
@@ -1556,6 +1555,23 @@
 
 
   const PLAY_ICON = '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
+
+  // ---------- shared audio coordinator ----------
+  // BUG THAT WAS HERE: the "Latest Release" player and the "Hidden" player
+  // are each their own independent <audio> element, built in separate
+  // functions that never knew about each other. Nothing stopped both from
+  // playing at once if you started one, then the other. Every <audio> on
+  // the page registers itself here, and starting any one of them pauses
+  // every other registered one.
+  const ALL_AUDIO_ELEMENTS = [];
+  function registerAudioElement(audio) {
+    ALL_AUDIO_ELEMENTS.push(audio);
+    audio.addEventListener('play', () => {
+      ALL_AUDIO_ELEMENTS.forEach((other) => {
+        if (other !== audio && !other.paused) other.pause();
+      });
+    });
+  }
   const STOP_ICON = '<svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg>';
   const COLLAB_ICON = '<svg class="person-icon" viewBox="0 0 24 24"><path d="M12 2a5 5 0 110 10 5 5 0 010-10zm0 12c4.4 0 8 2.2 8 5v3H4v-3c0-2.8 3.6-5 8-5z"/></svg>';
   const EXT_ICON = '<svg class="ext-icon" viewBox="0 0 24 24"><path d="M7 17L17 7M7 7h10v10" stroke-linecap="round" stroke-linejoin="round"/></svg>';
@@ -1915,6 +1931,7 @@
     const audio = new Audio();
     audio.preload = 'metadata';
     audio.src = './assets/LATESTRELEASE.mp3';
+    registerAudioElement(audio);
 
     let isPlaying = false;
     let hasErrored = false;
@@ -2079,14 +2096,18 @@
   // touch the DOM, so there's nothing to remove later when there's no hidden
   // release queued up. Lives pinned to the left edge of the whole page, not
   // tucked inside the Releases section, so it can be noticed anywhere.
-  initMysteryCard();
+  if ('requestIdleCallback' in window) {
+    requestIdleCallback(initMysteryCard, { timeout: 2000 });
+  } else {
+    setTimeout(initMysteryCard, 1200);
+  }
   }
 
   function initMysteryCard() {
     const probe = new Image();
     probe.onload = () => buildMysteryCard();
     probe.onerror = () => { /* no HIDDEN.jpg on the server — show nothing, ever */ };
-    probe.src = './assets/HIDDEN.jpg?_=' + Date.now();
+    probe.src = './assets/HIDDEN.jpg';
   }
 
   function buildMysteryCard() {
@@ -2142,6 +2163,7 @@
     audio.preload = 'none';
     audio.src = './assets/HIDDEN.mp3';
     audio.volume = 0.7;
+    registerAudioElement(audio);
 
     let mysteryHasErrored = false;
     audio.addEventListener('error', () => { mysteryHasErrored = true; });
