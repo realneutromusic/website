@@ -1812,6 +1812,20 @@
     smTucked.addEventListener('mouseleave', syncTuckedExpanded);
     smTucked.addEventListener('focusin', syncTuckedExpanded);
     smTucked.addEventListener('focusout', syncTuckedExpanded);
+
+    // BUG THAT WAS HERE: clicking one of the buttons inside (auto-clean,
+    // recently listened, clean-all) leaves that button focused afterward —
+    // normal browser behavior for any button click. Since the panel stays
+    // open on :focus-within as well as :hover, it would then stay stuck
+    // open after the mouse left, until the user clicked somewhere else on
+    // the page to steal focus away. Blurring the clicked button
+    // immediately after the click lets :focus-within clear on its own
+    // once the mouse also leaves, while Tab-key navigation (which is what
+    // :focus-within is actually for) is untouched.
+    smTucked.addEventListener('click', (e) => {
+      const btn = e.target.closest('button');
+      if (btn) btn.blur();
+    });
   }
   const smListenedHistoryLabel = document.getElementById('sm-listened-history-label');
   const smListenedHistoryModal = document.getElementById('sm-listened-history-modal');
