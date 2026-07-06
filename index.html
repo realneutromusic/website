@@ -722,19 +722,28 @@
     font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--ink-faint); letter-spacing: 0.02em;
   }
 
-  /* mute + a short slider sit together in the existing transport row — no
-     extra row, no popover. (History here: a full-width row felt like it
-     added too much height and looked "giant"; a floating popover broke
-     because dragging focuses the <input> and :focus-within doesn't clear
-     on its own, leaving it stuck open; mute-only with no slider at all
-     left no way to actually adjust volume. This is the middle ground —
-     compact, plain, always there, nothing to get stuck.) */
+  /* mute icon always visible; the slider itself only appears on hover (or
+     keyboard focus) of the pair, collapsing back to just the icon
+     otherwise — takes less room in the transport row at rest. (History:
+     a floating popover version of this broke because dragging focuses the
+     <input> and :focus-within doesn't clear on its own, leaving it stuck
+     open after the mouse left — same risk here, so the mute/slider clicks
+     are blurred right after, same fix as the panel's "More options".) */
   .now-playing-skip:focus-visible {
     outline: 2px solid var(--steel-bright); outline-offset: 2px;
   }
+  .volume-hover { display: flex; align-items: center; }
+  .volume-hover-slider {
+    width: 0; opacity: 0; margin-left: 0; overflow: hidden;
+    transition: width 0.25s var(--ease), opacity 0.2s var(--ease), margin-left 0.25s var(--ease);
+  }
+  .volume-hover:hover .volume-hover-slider,
+  .volume-hover:focus-within .volume-hover-slider {
+    width: 64px; opacity: 1; margin-left: 8px;
+  }
   .now-playing-volume-slider {
     -webkit-appearance: none; appearance: none;
-    width: 60px; height: 3px; border-radius: 999px; flex-shrink: 0;
+    height: 3px; border-radius: 999px; flex-shrink: 0;
     background: var(--line);
     cursor: pointer;
   }
@@ -1330,12 +1339,14 @@
               <button class="now-playing-skip" id="now-playing-back" type="button" aria-label="Restart preview">
                 <svg viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
               </button>
-              <button class="now-playing-skip" id="now-playing-mute" type="button" aria-label="Mute">
-                <span id="now-playing-volume-icon">
-                  <svg viewBox="0 0 24 24"><path d="M5 9v6h4l5 5V4l-5 5H5z"/><path d="M16.5 12a4.5 4.5 0 0 0-1.77-3.59l1.06-1.06A6 6 0 0 1 18.5 12a6 6 0 0 1-2.71 4.65l-1.06-1.06A4.5 4.5 0 0 0 16.5 12z"/></svg>
-                </span>
-              </button>
-              <input type="range" id="now-playing-volume-slider" class="now-playing-volume-slider" min="0" max="100" value="70" aria-label="Volume">
+              <div class="volume-hover" id="now-playing-volume-hover">
+                <button class="now-playing-skip" id="now-playing-mute" type="button" aria-label="Mute">
+                  <span id="now-playing-volume-icon">
+                    <svg viewBox="0 0 24 24"><path d="M5 9v6h4l5 5V4l-5 5H5z"/><path d="M16.5 12a4.5 4.5 0 0 0-1.77-3.59l1.06-1.06A6 6 0 0 1 18.5 12a6 6 0 0 1-2.71 4.65l-1.06-1.06A4.5 4.5 0 0 0 16.5 12z"/></svg>
+                  </span>
+                </button>
+                <input type="range" id="now-playing-volume-slider" class="now-playing-volume-slider volume-hover-slider" min="0" max="100" value="70" aria-label="Volume">
+              </div>
               <button class="now-playing-skip" id="now-playing-forward" type="button" aria-label="Open full track on SoundCloud">
                 <svg viewBox="0 0 24 24"><path d="M16 6h2v12h-2zM6 6l8.5 6L6 18z"/></svg>
               </button>
@@ -1978,6 +1989,18 @@
       refreshVolumeIcon();
     });
 
+    // clicking the mute icon, or finishing a drag on the slider, leaves
+    // that element focused — normal browser behavior for any button/input.
+    // Since the slider only shows on :hover or :focus-within, a lingering
+    // focus after a click would keep it visibly expanded even after the
+    // mouse leaves, until something else stole focus. Blur right after the
+    // interaction settles so it collapses like it's supposed to.
+    const npVolumeHover = document.getElementById('now-playing-volume-hover');
+    if (npVolumeHover) {
+      npVolumeHover.addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) b.blur(); });
+      volumeSlider && volumeSlider.addEventListener('change', () => volumeSlider.blur());
+    }
+
     function setLoading(on) {
       npPlay.classList.toggle('is-loading', on);
     }
@@ -2148,12 +2171,14 @@
                 <span class="mystery-reveal-scrub-fill" id="mystery-reveal-scrub-fill"></span>
                 <span class="mystery-reveal-scrub-thumb" id="mystery-reveal-scrub-thumb" aria-hidden="true"></span>
               </div>
-              <button class="now-playing-skip" id="mystery-reveal-mute" type="button" aria-label="Mute">
-                <span id="mystery-reveal-volume-icon">
-                  <svg viewBox="0 0 24 24"><path d="M5 9v6h4l5 5V4l-5 5H5z"/><path d="M16.5 12a4.5 4.5 0 0 0-1.77-3.59l1.06-1.06A6 6 0 0 1 18.5 12a6 6 0 0 1-2.71 4.65l-1.06-1.06A4.5 4.5 0 0 0 16.5 12z"/></svg>
-                </span>
-              </button>
-              <input type="range" id="mystery-reveal-volume-slider" class="now-playing-volume-slider" min="0" max="100" value="70" aria-label="Volume">
+              <div class="volume-hover" id="mystery-reveal-volume-hover">
+                <button class="now-playing-skip" id="mystery-reveal-mute" type="button" aria-label="Mute">
+                  <span id="mystery-reveal-volume-icon">
+                    <svg viewBox="0 0 24 24"><path d="M5 9v6h4l5 5V4l-5 5H5z"/><path d="M16.5 12a4.5 4.5 0 0 0-1.77-3.59l1.06-1.06A6 6 0 0 1 18.5 12a6 6 0 0 1-2.71 4.65l-1.06-1.06A4.5 4.5 0 0 0 16.5 12z"/></svg>
+                  </span>
+                </button>
+                <input type="range" id="mystery-reveal-volume-slider" class="now-playing-volume-slider volume-hover-slider" min="0" max="100" value="70" aria-label="Volume">
+              </div>
             </div>
             <div class="mystery-reveal-times">
               <span class="mono" id="mystery-reveal-elapsed">0:00</span>
@@ -2216,6 +2241,14 @@
       }
       refreshVolumeIcon();
     });
+
+    // same fix as the Latest Release player above — blur after interaction
+    // so the hover-revealed slider actually collapses again
+    const mysteryVolumeHover = reveal.querySelector('#mystery-reveal-volume-hover');
+    if (mysteryVolumeHover) {
+      mysteryVolumeHover.addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) b.blur(); });
+      volumeSlider && volumeSlider.addEventListener('change', () => volumeSlider.blur());
+    }
 
     function fmt(seconds) {
       const total = Math.max(0, Math.round(seconds || 0));

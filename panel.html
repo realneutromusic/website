@@ -213,17 +213,34 @@
      of the previous plain icon + bare slider with no feedback beyond the
      number. */
   .floating-volume {
+    display: none;
     position: fixed; bottom: 20px; right: 20px; z-index: 210;
-    display: flex; align-items: center; gap: 4px;
+    align-items: center; gap: 0;
     background: rgba(12,20,36,0.92); backdrop-filter: blur(10px);
     border: 1px solid var(--line); border-radius: 999px;
-    padding: 4px 16px 4px 4px; box-shadow: 0 10px 30px -8px rgba(0,0,0,0.55);
+    padding: 4px; box-shadow: 0 10px 30px -8px rgba(0,0,0,0.55);
     transition: bottom 0.25s var(--ease), transform 0.2s var(--ease), box-shadow 0.2s var(--ease), border-color 0.2s var(--ease);
   }
   .floating-volume:hover {
     transform: translateY(-2px);
     box-shadow: 0 14px 36px -8px rgba(0,0,0,0.65);
     border-color: var(--steel-bright);
+  }
+  /* the slider + percentage stay collapsed to zero width until the pill is
+     hovered or has keyboard focus inside it — only the mute icon takes up
+     room otherwise. (Same click-blur fix as elsewhere on this site: dragging
+     the slider or clicking mute leaves that element focused afterward, and
+     since :focus-within is also what keeps this expanded, a lingering focus
+     would leave it stuck open after the mouse left — so both get blurred
+     right after the interaction settles.) */
+  .floating-volume-expand {
+    display: flex; align-items: center; gap: 8px;
+    width: 0; opacity: 0; margin-left: 0; overflow: hidden;
+    transition: width 0.25s var(--ease), opacity 0.2s var(--ease), margin-left 0.25s var(--ease);
+  }
+  .floating-volume:hover .floating-volume-expand,
+  .floating-volume:focus-within .floating-volume-expand {
+    width: 138px; opacity: 1; margin-left: 6px;
   }
 
   /* ---------- queue position badge ---------- */
@@ -1481,11 +1498,13 @@
       clearAuthError();
       loginGate.style.display = 'none';
       adminShell.style.display = 'block';
+      floatingVolume.style.display = 'flex';
       whoLabel.textContent = 'Signed in';
       startListening();
     } else {
       loginGate.style.display = 'flex';
       adminShell.style.display = 'none';
+      floatingVolume.style.display = 'none';
       if (unsubscribe) { unsubscribe(); unsubscribe = null; }
       if (unsubscribeSubmitGate) { unsubscribeSubmitGate(); unsubscribeSubmitGate = null; }
       if (unsubscribeAutoClean) { unsubscribeAutoClean(); unsubscribeAutoClean = null; }
@@ -2480,6 +2499,13 @@
       setPanelVolume(volumeBeforeMute || 80);
     }
   });
+
+  // clicking mute, or releasing a drag on the slider, leaves that element
+  // focused (normal browser behavior) — and since the expand area also
+  // stays open on :focus-within, a lingering focus would keep it visibly
+  // expanded after the mouse leaves. Blur right after so it collapses.
+  floatingVolumeMuteBtn.addEventListener('click', () => floatingVolumeMuteBtn.blur());
+  globalVolumeSlider.addEventListener('change', () => globalVolumeSlider.blur());
 
   updateVolumeSliderFill(); // paint the initial gradient to match the slider's default value
 
@@ -4409,8 +4435,10 @@
       <path class="vol-mute-x" d="M16.5 9.5l5 5M21.5 9.5l-5 5"/>
     </svg>
   </button>
-  <input type="range" id="global-volume-slider" min="0" max="100" value="80">
-  <span class="global-volume-value" id="global-volume-value">80%</span>
+  <div class="floating-volume-expand" id="floating-volume-expand">
+    <input type="range" id="global-volume-slider" min="0" max="100" value="80">
+    <span class="global-volume-value" id="global-volume-value">80%</span>
+  </div>
 </div>
 
 <!-- ================== STICKY NOW-PLAYING BAR ================== -->
