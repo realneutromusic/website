@@ -3587,11 +3587,15 @@
     const trashCount = allSubmissions.filter(s => s.status === 'deleted').length;
     emptyTrashBtn.style.display = (currentFilter === 'trash' && trashCount > 0) ? 'inline-flex' : 'none';
 
-    // "Clean all" lives on the "All" and "Save" tabs — sending everything
-    // to Trash from either of those makes sense; Trash itself has its own
-    // "Empty trash" for permanent deletion instead.
+    // "Clean all" only makes sense from a view where there's an active
+    // queue worth bulk-clearing: the main pile, or things you've already
+    // listened to and are ready to be done with. It never shows on Trash
+    // (nothing there needs "sending to Trash" again — that's what "Empty
+    // trash" above is for) or on Save (that tab exists specifically to
+    // protect things you deliberately kept, a bulk-trash button there
+    // would be one accidental click away from wiping your favorites).
     const activeCount = allSubmissions.filter(s => s.status !== 'deleted').length;
-    cleanAllBtn.style.display = ((currentFilter === 'all' || currentFilter === 'trash' || currentFilter === 'listened') && activeCount > 0) ? 'inline-flex' : 'none';
+    cleanAllBtn.style.display = ((currentFilter === 'all' || currentFilter === 'listened') && activeCount > 0) ? 'inline-flex' : 'none';
 
     if (searchQuery) {
       items = items.filter(s => {
