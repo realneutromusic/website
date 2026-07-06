@@ -771,8 +771,15 @@
     opacity: 0;
     cursor: pointer;
     transform: translateY(14px);
-    transform-style: preserve-3d;
     transition: border-color 0.3s var(--ease), box-shadow 0.4s var(--ease), transform 0.45s var(--ease-spring);
+  }
+  /* will-change only while the card is actually animating (entrance or
+     hover) — see JS below. Keeping it on permanently forces the browser
+     to promote every single release card to its own composited layer for
+     the whole lifetime of the page, which is exactly the kind of cost
+     that piles up the first time several cards enter the viewport at
+     once (new tab, nothing cached yet). */
+  .release-card.card.will-animate {
     will-change: transform;
   }
   .release-card.in-view {
@@ -1804,8 +1811,16 @@
     // it ends hands `transform` back to the normal cascade so :hover's
     // lift-on-hover actually takes effect.
     card.addEventListener('animationend', (e) => {
-      if (e.animationName === 'cardReveal') card.style.animation = 'none';
+      if (e.animationName === 'cardReveal') {
+        card.style.animation = 'none';
+        card.classList.remove('will-animate');
+      }
     });
+    // only pay the will-change/composited-layer cost while a transform is
+    // actually about to move (entrance reveal or hover) — not for the
+    // entire lifetime of the card
+    card.addEventListener('mouseenter', () => card.classList.add('will-animate'));
+    card.addEventListener('mouseleave', () => card.classList.remove('will-animate'));
 
     const stage = document.createElement('div');
     stage.className = 'release-art-stage';
@@ -2085,9 +2100,27 @@
       entries.forEach((entry) => {
         if (entry.isIntersecting) {
           const el = entry.target;
-          el.style.backgroundImage = `url(${el.dataset.src})`;
+          const src = el.dataset.src;
           delete el.dataset.src;
           imageObserver.unobserve(el);
+          // Decode off the main render path first. Setting background-image
+          // directly forces the browser to decode the full image inside the
+          // same frame it's trying to paint — when several cards cross the
+          // 600px trigger zone in one scroll (a fresh tab, nothing cached
+          // yet), that's several synchronous decodes stacking up in the
+          // same frame, which is exactly the stutter on first arrival at
+          // Releases. img.decode() does the decode off that critical path;
+          // once it resolves we just set the background, which is then
+          // instant. Falls back to the old direct-assign if decode() isn't
+          // supported or fails (e.g. a 404).
+          const preloader = new Image();
+          preloader.src = src;
+          const paint = () => { el.style.backgroundImage = `url(${src})`; };
+          if (preloader.decode) {
+            preloader.decode().then(paint).catch(paint);
+          } else {
+            paint();
+          }
         }
       });
     }, { threshold: 0, rootMargin: '600px 0px 600px 0px' });
@@ -2099,16 +2132,29 @@
   // ---------- scroll-triggered reveal animation for release cards ----------
   const rows = Array.from(document.querySelectorAll('.release-card'));
   if ('IntersectionObserver' in window) {
+    let revealBatchIndex = 0;
     const observer = new IntersectionObserver((entries) => {
+      // entries can contain several cards at once (a whole row, or more,
+      // crossing the line together on a fast first scroll) — stagger by
+      // arrival order within that batch instead of by fixed grid position,
+      // so a burst of 8+ simultaneous intersections doesn't still end up
+      // with 4+ of them sharing the exact same delay (and therefore the
+      // exact same animation start frame).
       entries.forEach((entry) => {
         if (entry.isIntersecting) {
           const row = entry.target;
-          const rowIndex = rows.indexOf(row);
-          row.style.animationDelay = (rowIndex % 4) * 0.08 + 's';
+          row.style.animationDelay = Math.min(revealBatchIndex, 7) * 0.06 + 's';
+          revealBatchIndex++;
+          row.classList.add('will-animate');
           row.classList.add('in-view');
           observer.unobserve(row);
         }
       });
+      // batch counter resets shortly after, so the next distinct scroll
+      // wave (e.g. reaching a much later row) starts staggering from 0
+      // again instead of drifting to an ever-longer delay
+      clearTimeout(observer._resetTimer);
+      observer._resetTimer = setTimeout(() => { revealBatchIndex = 0; }, 400);
       // reveal a little before the card is fully in the viewport (rootMargin
       // extends the trigger zone below the fold) instead of waiting for it
       // to be 15% visible — that extra margin was making cards feel slow
