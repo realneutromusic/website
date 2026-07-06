@@ -13,6 +13,26 @@
   if (!location.hash) { window.scrollTo(0, 0); }
 </script>
 
+<!-- Fires the releases.json request the instant the browser starts on
+     <head> — in parallel with the font and hero-image fetches below —
+     instead of waiting for the ~1500-line inline script further down the
+     page to finish parsing and executing before it even starts. On a cold
+     load (new tab, nothing cached, nothing warmed up) that script doesn't
+     run until the parser has worked through most of the document, which
+     is often *after* the user has already scrolled to Releases. That's
+     what produced the stutter: an empty grid, then every card being
+     built, decoded, and animated in one burst right as it's needed most.
+     Starting the request here means it's usually already resolved by the
+     time anyone reaches that section. loadReleases() further down just
+     awaits this same promise instead of firing a second request. -->
+<script>
+  window.__releasesPromise = fetch('./releases.json?v=' + Date.now(), { cache: 'no-store' })
+    .then((res) => {
+      if (!res.ok) throw new Error('releases.json request failed: ' + res.status);
+      return res.json();
+    });
+</script>
+
 <title>Neutro — Official Website</title>
 <meta name="description" content="Official website of Neutro. Explore electronic music releases, exclusive tracks, and specialized tools for music producers.">
 
@@ -1553,15 +1573,11 @@
   let RELEASES = [];
 
   async function loadReleases() {
-    // Cache-busting on two layers, since browsers (and GitHub Pages' CDN)
-    // can be stubborn about caching a plain .json file:
-    //   1. cache: 'no-store' tells THIS browser to never reuse a cached copy
-    //   2. the ?v=<timestamp> query param changes the URL every load, which
-    //      defeats any cache (browser or CDN) that ignores cache-control
-    //      headers entirely. No version number to remember to bump by hand.
-    const res = await fetch('./releases.json?v=' + Date.now(), { cache: 'no-store' });
-    if (!res.ok) throw new Error('releases.json request failed: ' + res.status);
-    const data = await res.json();
+    // The actual network request already started as early as possible, in
+    // a tiny script at the top of <head> (see the comment there) — this
+    // just waits on that same promise instead of firing a second,
+    // redundant fetch this late in the page's life.
+    const data = await window.__releasesPromise;
     const list = Array.isArray(data) ? data : (data.releases || []);
     RELEASES = list.map((r) => ({
       catalog: r.catalog,
@@ -1796,6 +1812,11 @@
     document.body.style.overflow = 'hidden';
   }
 
+  // Built into a fragment and appended once at the end — appending inside
+  // the loop instead would mean the grid's layout can be invalidated once
+  // per card; batching it into a single insertion means it's invalidated
+  // once total, no matter how many releases there are.
+  const cardsFragment = document.createDocumentFragment();
   RELEASES.forEach((r) => {
     const card = document.createElement('div');
     card.className = 'release-card card';
@@ -1866,8 +1887,9 @@
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openReleaseModal(r); }
     });
 
-    grid.appendChild(card);
+    cardsFragment.appendChild(card);
   });
+  grid.appendChild(cardsFragment);
 
   // ---------- now playing: full inline player driven by a native <audio> element ----------
   // Plays ./assets/LATESTRELEASE.mp3 directly — no SoundCloud embed involved here,
