@@ -1509,6 +1509,7 @@
         <div class="result-label">Key</div>
         <div class="result-value mono" id="result-key">—</div>
         <div class="result-sub" id="result-key-sub"></div>
+        <div class="result-alt-bpm" id="result-alt-key"></div>
       </div>
     </div>
 
@@ -2512,6 +2513,7 @@
   const resultAltBpm = document.getElementById('result-alt-bpm');
   const resultKey = document.getElementById('result-key');
   const resultKeySub = document.getElementById('result-key-sub');
+  const resultAltKey = document.getElementById('result-alt-key');
   const confidenceRow = document.getElementById('confidence-row');
   const confidenceFill = document.getElementById('confidence-fill');
   const confidenceValue = document.getElementById('confidence-value');
@@ -2532,6 +2534,7 @@
     results.classList.remove('visible');
     confidenceRow.classList.remove('visible');
     resultAltBpm.classList.remove('visible');
+    resultAltKey.classList.remove('visible');
     bars.forEach(b => { b.style.height = '4px'; b.classList.remove('active'); });
   }
 
@@ -2705,17 +2708,40 @@
       }
       const folded = windowResults.map(r => ({ bpm: foldToAnchorOctave(r.bpm), score: r.score }));
 
+      // A window can still disagree with the anchor after octave-folding —
+      // not because the tempo is genuinely ambiguous, but because that
+      // slice's autocorrelation locked onto a different subdivision
+      // (triplet/syncopated hats, a half-time breakdown, a 3:4 polyrhythm
+      // feel) that isn't a clean double/half of the real tempo. Trusting
+      // that reading at full weight is what let one bad window drag a
+      // correct 130 BPM anchor up to 144 on a real test track. The anchor
+      // comes from a pass over almost the entire track, so it's inherently
+      // more reliable than any one ~30%-long slice — down-weight readings
+      // that still disagree with it after folding (a smooth falloff, not a
+      // hard cutoff, so a slightly-off window still counts almost fully).
+      const ANCHOR_TOLERANCE_BPM = 6;
+      const weighted = folded.map(r => {
+        const distance = Math.abs(r.bpm - anchorBpm);
+        const trust = (ANCHOR_TOLERANCE_BPM * ANCHOR_TOLERANCE_BPM) /
+          (ANCHOR_TOLERANCE_BPM * ANCHOR_TOLERANCE_BPM + distance * distance);
+        return { bpm: r.bpm, score: r.score * trust, trust };
+      });
+
       // weighted average by score — but if every window's score is ~0
       // (near-silent input), sum(bpm * 0) / sum(0) would just collapse to
       // 0 regardless of the actual bpm values, so fall back to a plain
       // average in that case instead of a bogus weighted one
-      const rawTotalScore = folded.reduce((s, r) => s + r.score, 0);
+      const rawTotalScore = weighted.reduce((s, r) => s + r.score, 0);
       const avgBpm = rawTotalScore > 1e-9
-        ? folded.reduce((s, r) => s + r.bpm * r.score, 0) / rawTotalScore
+        ? weighted.reduce((s, r) => s + r.bpm * r.score, 0) / rawTotalScore
         : folded.reduce((s, r) => s + r.bpm, 0) / (folded.length || 1);
 
-      const spread = folded.length > 1
-        ? Math.max(...folded.map(r => r.bpm)) - Math.min(...folded.map(r => r.bpm))
+      // agreement/confidence should reflect the windows that actually agree
+      // with the anchor, not get dragged down by one we already correctly
+      // decided to mostly ignore above
+      const agreeingWindows = weighted.filter(r => r.trust > 0.5);
+      const spread = agreeingWindows.length > 1
+        ? Math.max(...agreeingWindows.map(r => r.bpm)) - Math.min(...agreeingWindows.map(r => r.bpm))
         : 0;
       const agreement = clamp(1 - spread / 6, 0, 1);
 
@@ -2767,7 +2793,14 @@
     };
 
     function chromaForSegment(sampleRate, segment) {
-      const fftSize = 4096, hop = 2048;
+      // 4096 gives ~10.8Hz per bin at 44.1kHz — wider than the gap between
+      // adjacent semitones in the bass register (e.g. C3/C#3 are only
+      // ~7.8Hz apart), so a bass-heavy root note can't be reliably told
+      // apart from its neighbor and bleeds energy into the wrong pitch
+      // class. 8192 halves the bin width to ~5.4Hz, enough to resolve
+      // semitones down through the octave that matters most for reading
+      // the track's actual root/bass note.
+      const fftSize = 8192, hop = 4096;
       const chroma = new Float64Array(12);
       const window = hannWindow(fftSize);
       let energy = 0;
@@ -2815,18 +2848,25 @@
       const chroma = Array.from(combined, v => v / chromaMax);
 
       let best = { score: -Infinity, key: '' };
-      let second = { score: -Infinity };
+      let second = { score: -Infinity, key: '' };
       for (let root = 0; root < 12; root++) {
         const majorScore = correlate(chroma, rotate(MAJOR_PROFILE, root));
         const minorScore = correlate(chroma, rotate(MINOR_PROFILE, root));
         if (majorScore > best.score) { second = {...best}; best = { score: majorScore, key: NOTE_NAMES[root] + ' Major' }; }
-        else if (majorScore > second.score) { second = { score: majorScore }; }
+        else if (majorScore > second.score) { second = { score: majorScore, key: NOTE_NAMES[root] + ' Major' }; }
         if (minorScore > best.score) { second = {...best}; best = { score: minorScore, key: NOTE_NAMES[root] + ' Minor' }; }
-        else if (minorScore > second.score) { second = { score: minorScore }; }
+        else if (minorScore > second.score) { second = { score: minorScore, key: NOTE_NAMES[root] + ' Minor' }; }
       }
       const margin = best.score - (second.score || 0);
       const confidence = clamp(0.55 + margin * 1.8, 0.35, 0.97);
-      return { key: best.key, camelot: CAMELOT[best.key] || '—', relative: relativeKey(best.key), confidence };
+      // Profile-correlation key detection is a genuinely harder problem
+      // than tempo: bass-forward, filtered, or non-functional-harmony
+      // material (a lot of electronic music) can leave two or three keys
+      // in a near-tie. Rather than assert one answer with false certainty
+      // when that happens, surface the runner-up so the result is honest
+      // about the ambiguity instead of hiding it.
+      const runnerUp = margin < 0.05 ? second.key : null;
+      return { key: best.key, camelot: CAMELOT[best.key] || '—', relative: relativeKey(best.key), confidence, runnerUp };
     }
 
     function rotate(profile, n) { const out = new Array(12); for (let i = 0; i < 12; i++) out[i] = profile[(i - n + 120) % 12]; return out; }
@@ -2986,6 +3026,12 @@
     }
     resultKey.textContent = keyResult.key;
     resultKeySub.textContent = `Camelot ${keyResult.camelot} · rel. ${keyResult.relative}`;
+    if (keyResult.runnerUp) {
+      resultAltKey.textContent = `Close call — could also be ${keyResult.runnerUp}`;
+      resultAltKey.classList.add('visible');
+    } else {
+      resultAltKey.classList.remove('visible');
+    }
     const overallConfidence = (bpmResult.confidence + keyResult.confidence) / 2;
     confidenceFill.style.width = (overallConfidence * 100) + '%';
     confidenceValue.textContent = Math.round(overallConfidence * 100) + '%';
