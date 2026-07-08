@@ -244,121 +244,10 @@
   .tools-trigger:hover { transform: translateY(-1px) scale(1.03); background: var(--steel-bright); }
   .tools-trigger svg { width: 13px; height: 13px; display: block; flex-shrink: 0; }
 
-  @media (max-width: 640px) { .topbar nav { display: none; } }
-
-  /* ---------- mobile menu: replaces the whole pill nav below 640px ---------- */
-  .mobile-menu-btn {
-    display: none;
-    width: 44px; height: 44px; border-radius: 50%;
-    align-items: center; justify-content: center;
-    background: rgba(12,20,36,0.78);
-    border: 1px solid var(--line);
-    backdrop-filter: blur(10px);
-    color: var(--ink); cursor: pointer;
-    transition: border-color 0.3s var(--ease), background 0.3s var(--ease), color 0.3s var(--ease), transform 0.25s var(--ease-spring);
-  }
-  .mobile-menu-btn:hover { border-color: var(--ink-faint); transform: scale(1.06); }
-  .mobile-menu-btn:active { transform: scale(0.92); }
-  /* open state borrows the same steel accent used on hover states across
-     the rest of the site (tools-trigger, socials-card, etc.) instead of
-     staying visually identical whether the menu is open or closed —
-     previously this button gave literally no feedback about its own state */
-  .mobile-menu-btn.open { border-color: var(--steel); background: rgba(79,123,176,0.16); color: var(--steel-bright); }
-  @media (max-width: 640px) { .mobile-menu-btn { display: flex; } }
-
-  /* three plain divs instead of an SVG so each bar can be independently
-     rotated/faded into an X — an icon that visibly changes state reads
-     as far more intentional than one that looks identical whether the
-     menu is open or closed */
-  .hamburger-lines { position: relative; width: 18px; height: 13px; flex-shrink: 0; }
-  .hamburger-lines span {
-    position: absolute; left: 0; width: 100%; height: 2px; border-radius: 2px;
-    background: currentColor;
-    transition: transform 0.32s var(--ease-spring), opacity 0.2s var(--ease), top 0.32s var(--ease-spring);
-  }
-  .hamburger-lines span:nth-child(1) { top: 0; }
-  .hamburger-lines span:nth-child(2) { top: 50%; margin-top: -1px; }
-  .hamburger-lines span:nth-child(3) { top: 100%; margin-top: -2px; }
-  .mobile-menu-btn.open .hamburger-lines span:nth-child(1) { top: 50%; margin-top: -1px; transform: rotate(45deg); }
-  .mobile-menu-btn.open .hamburger-lines span:nth-child(2) { opacity: 0; transform: scaleX(0); }
-  .mobile-menu-btn.open .hamburger-lines span:nth-child(3) { top: 50%; margin-top: -1px; transform: rotate(-45deg); }
-  @media (prefers-reduced-motion: reduce) {
-    .mobile-menu-btn, .hamburger-lines span { transition: none; }
-  }
-
-  .mobile-menu-backdrop {
-    /* starts below the topbar row on purpose — .topbar is its own
-       stacking context (position:fixed + z-index), so giving the button
-       a higher z-index couldn't lift it above a full-viewport sibling
-       backdrop anyway. Simplest fix: the backdrop just never covers that
-       strip, so the hamburger button stays tappable (to close the menu
-       the same way it opened it) the whole time the menu is open. */
-    position: fixed; top: 70px; left: 0; right: 0; bottom: 0; z-index: 90;
-    background: transparent;
-  }
-
-  /* A compact floating panel anchored under the hamburger button — same
-     frosted-glass language as .topbar nav/.mark (translucent fill,
-     blurred backdrop, hairline border, spring easing) instead of a flat
-     opaque full-height drawer, so it reads as part of the same design
-     system on mobile instead of a generic off-canvas menu bolted on. */
-  .mobile-menu {
-    position: fixed; top: 78px; right: 16px; z-index: 91;
-    width: min(72vw, 280px);
-    background: rgba(12,20,36,0.92);
-    backdrop-filter: blur(16px);
-    border: 1px solid var(--line);
-    border-radius: 20px;
-    box-shadow: 0 24px 60px -16px rgba(0,0,0,0.65);
-    padding: 10px;
-    display: flex; flex-direction: column;
-    transform-origin: top right;
-    transform: scale(0.92) translateY(-6px);
-    opacity: 0;
-    transition: transform 0.32s var(--ease-spring), opacity 0.22s var(--ease);
-  }
-  .mobile-menu.open { transform: scale(1) translateY(0); opacity: 1; }
-  /* Every row is still a real 52px+ touch target, not a shrunk copy of
-     the desktop pill links — this is the actual replacement for mobile
-     navigation, not a decorative extra, so it needs to be comfortably
-     tappable on its own. */
-  .mobile-menu-link {
-    display: flex; align-items: center; justify-content: space-between; gap: 10px;
-    min-height: 52px; padding: 0 16px;
-    border-radius: 13px;
-    font-size: 15px; font-weight: 600; color: var(--ink);
-    background: none; border: none; text-align: left; width: 100%;
-    font-family: inherit; cursor: pointer;
-    transition: background 0.2s var(--ease), color 0.2s var(--ease);
-    opacity: 0; transform: translateX(10px);
-  }
-  /* small staggered slide-in once the panel is open — a quieter version
-     of the same reveal stagger used on the release cards, so the menu
-     feels like a deliberate reveal instead of content just appearing */
-  .mobile-menu.open .mobile-menu-link {
-    animation: mobileMenuRowIn 0.32s var(--ease) forwards;
-  }
-  .mobile-menu.open .mobile-menu-link:nth-child(1) { animation-delay: 0.05s; }
-  .mobile-menu.open .mobile-menu-link:nth-child(2) { animation-delay: 0.09s; }
-  .mobile-menu.open .mobile-menu-link:nth-child(3) { animation-delay: 0.13s; }
-  .mobile-menu.open .mobile-menu-link:nth-child(4) { animation-delay: 0.17s; }
-  .mobile-menu.open .mobile-menu-link:nth-child(5) { animation-delay: 0.21s; }
-  @keyframes mobileMenuRowIn { to { opacity: 1; transform: translateX(0); } }
-  .mobile-menu-link .row-arrow { width: 14px; height: 14px; flex-shrink: 0; opacity: 0.45; stroke: currentColor; fill: none; transition: opacity 0.2s var(--ease), transform 0.2s var(--ease-spring); }
-  .mobile-menu-link:active, .mobile-menu-link:hover { background: rgba(238,243,250,0.08); }
-  .mobile-menu-link:active .row-arrow, .mobile-menu-link:hover .row-arrow { opacity: 1; transform: translateX(2px); }
-  .mobile-menu-tools {
-    margin-top: 8px; padding-top: 16px;
-    position: relative; color: var(--steel-bright);
-  }
-  .mobile-menu-tools::before {
-    content: ''; position: absolute; top: 0; left: 16px; right: 16px; height: 1px;
-    background: var(--line);
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .mobile-menu { transition: none; }
-    .mobile-menu-backdrop { transition: none; }
-    .mobile-menu-link { opacity: 1; transform: none; animation: none !important; }
+  @media (max-width: 640px) { .topbar nav a:not(.tools-trigger) { display: none; } }
+  @media (max-width: 480px) {
+    .tools-trigger { padding: 7px 12px 7px 10px; font-size: 11.5px; }
+    .tools-trigger svg { display: none; }
   }
 
   @keyframes eyebrowPing {
@@ -685,20 +574,6 @@
     grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
     gap: 22px;
     padding-top: 6px;
-  }
-  /* On a single narrow column, one 1:1 cover fills roughly half the
-     screen — it reads as oversized and sparse compared to the dense
-     multi-column catalog feel on desktop. Two smaller columns keeps that
-     same "grid of releases" character instead of a stacked list. */
-  @media (max-width: 640px) {
-    .release-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
-    .release-card-meta { padding: 10px 8px 11px; gap: 4px; }
-    .release-title { font-size: 12px; }
-    .release-artist { font-size: 10.5px; gap: 4px; }
-    .release-artist .person-icon { width: 10px; height: 10px; }
-    .release-catalog-badge { font-size: 9px; padding: 4px 8px; top: 8px; left: 8px; }
-    .release-play-hint span { width: 40px; height: 40px; }
-    .release-play-hint svg { width: 15px; height: 15px; }
   }
 
   /* ---------- MYSTERY STRIP: a barely-there sliver pinned to the far left edge
@@ -1178,25 +1053,7 @@
     gap: 16px;
   }
   @media (max-width: 880px) { .socials-grid { grid-template-columns: repeat(2, 1fr); } }
-  /* Same reasoning as the release grid: collapsing to a single column
-     made each card fill nearly the whole screen width, which read as
-     oversized compared to the dense multi-column feel on desktop. Two
-     smaller columns keeps that "grid of cards" character on mobile too,
-     with padding/icon/type sizes scaled down to match. */
-  @media (max-width: 560px) {
-    .socials-grid { gap: 10px; }
-    .socials-card { padding: 16px 14px; }
-    .socials-card-icon { width: 36px; height: 36px; border-radius: 11px; }
-    .socials-card-icon svg { width: 17px; height: 17px; }
-    .socials-card-go { width: 24px; height: 24px; }
-    .socials-card-go svg { width: 11px; height: 11px; }
-    .socials-card-body { margin-top: 14px; }
-    .socials-card-name { font-size: 14px; }
-    .socials-card-handle { font-size: 10px; margin-top: 3px; }
-    .socials-card-pulse { margin-top: 10px; font-size: 9px; gap: 6px; }
-    .socials-card-pulse .led { width: 5px; height: 5px; }
-    .socials-card-bars { right: 12px; bottom: 12px; height: 14px; }
-  }
+  @media (max-width: 560px) { .socials-grid { grid-template-columns: 1fr; } }
 
   .socials-card {
     --glow: 168, 200, 236;
@@ -1438,33 +1295,6 @@
   .confidence-fill { display: block; height: 100%; background: var(--steel); border-radius: 999px; width: 0%; transition: width 0.6s var(--ease); }
   .confidence-row .mono { font-size: 12px; color: var(--ink-dim); flex-shrink: 0; }
 </style>
-
-<!-- ================== TOUCH TARGET FIXES (mobile/coarse-pointer only) ==================
-     Several standalone icon buttons across the page — modal close buttons,
-     footer social icons — were sized at 30-38px, below the ~44x44px
-     minimum both Apple's HIG and Google's Material guidelines recommend
-     for a comfortable tap target. Scoped to (hover:none) and
-     (pointer:coarse) so mouse/trackpad users keep the original, more
-     compact sizing (which is fine with a precise pointer) — only touch
-     input gets the bigger targets. Placed last in <head> on purpose so it
-     wins the cascade over every earlier same-specificity rule above. -->
-<style>
-  @media (hover: none) and (pointer: coarse) {
-    .mystery-reveal-close,
-    .release-modal-close,
-    .tools-modal-close {
-      width: 44px; height: 44px;
-    }
-    .footer-icon {
-      width: 44px; height: 44px;
-    }
-    .footer-icon svg { width: 18px; height: 18px; }
-    /* form inputs measured out to ~40px with their current padding —
-       close, but under the 44px baseline once an actual finger (not a
-       precise mouse cursor) is doing the tapping */
-    .form-row input, .form-row textarea { min-height: 44px; }
-  }
-</style>
 </head>
 <body>
 
@@ -1489,29 +1319,7 @@
       Tools
     </a>
   </nav>
-  <!-- Mobile-only: below 640px the pill nav above disappears entirely
-       (see .topbar nav { display:none } at max-width:640px) and this
-       button becomes the only way to reach Releases/Socials/Contact.
-       44x44 minimum touch target per Apple/Material guidelines. -->
-  <button class="mobile-menu-btn" id="mobile-menu-btn" type="button" aria-label="Open menu" aria-expanded="false" aria-controls="mobile-menu">
-    <span class="hamburger-lines" aria-hidden="true"><span></span><span></span><span></span></span>
-  </button>
 </header>
-
-<div class="mobile-menu-backdrop" id="mobile-menu-backdrop" hidden></div>
-<nav class="mobile-menu" id="mobile-menu" aria-label="Mobile navigation" hidden>
-  <a href="#main" class="mobile-menu-link">Home<svg class="row-arrow" viewBox="0 0 24 24"><path d="M7 17L17 7M7 7h10v10" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
-  <a href="#releases" class="mobile-menu-link">Releases<svg class="row-arrow" viewBox="0 0 24 24"><path d="M7 17L17 7M7 7h10v10" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
-  <a href="#socials" class="mobile-menu-link">Socials<svg class="row-arrow" viewBox="0 0 24 24"><path d="M7 17L17 7M7 7h10v10" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
-  <a href="#contact" class="mobile-menu-link">Contact<svg class="row-arrow" viewBox="0 0 24 24"><path d="M7 17L17 7M7 7h10v10" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
-  <button type="button" class="mobile-menu-link mobile-menu-tools" id="mobile-menu-tools">
-    <span style="display:flex; align-items:center; gap:10px;">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 004.6 15a1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
-      BPM &amp; Key Tools
-    </span>
-    <svg class="row-arrow" viewBox="0 0 24 24"><path d="M7 17L17 7M7 7h10v10" stroke-linecap="round" stroke-linejoin="round"/></svg>
-  </button>
-</nav>
 
 <main id="main">
 
@@ -2689,45 +2497,6 @@
   closeToolsBtn.addEventListener('click', closeTools);
   toolsModal.addEventListener('click', (e) => { if (e.target === toolsModal) closeTools(); });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && toolsModal.classList.contains('open')) closeTools(); });
-
-  // ---------- mobile menu: the only way to reach Releases/Socials/Contact
-  // on screens ≤640px, since the pill nav is fully hidden there ----------
-  const mobileMenuBtn = document.getElementById('mobile-menu-btn');
-  const mobileMenu = document.getElementById('mobile-menu');
-  const mobileMenuBackdrop = document.getElementById('mobile-menu-backdrop');
-  const mobileMenuToolsBtn = document.getElementById('mobile-menu-tools');
-
-  function openMobileMenu() {
-    mobileMenu.hidden = false;
-    mobileMenuBackdrop.hidden = false;
-    // two rAFs so the browser paints the pre-transition state (hidden ->
-    // visible, transform still off-screen) before the class flip, or the
-    // slide-in transition gets skipped on some mobile browsers
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      mobileMenu.classList.add('open');
-      mobileMenuBackdrop.classList.add('open');
-    }));
-    mobileMenuBtn.classList.add('open');
-    mobileMenuBtn.setAttribute('aria-expanded', 'true');
-    document.body.style.overflow = 'hidden';
-  }
-  function closeMobileMenu() {
-    mobileMenu.classList.remove('open');
-    mobileMenuBackdrop.classList.remove('open');
-    mobileMenuBtn.classList.remove('open');
-    mobileMenuBtn.setAttribute('aria-expanded', 'false');
-    document.body.style.overflow = '';
-    setTimeout(() => { mobileMenu.hidden = true; mobileMenuBackdrop.hidden = true; }, 320);
-  }
-  mobileMenuBtn.addEventListener('click', () => {
-    if (mobileMenu.classList.contains('open')) closeMobileMenu(); else openMobileMenu();
-  });
-  mobileMenuBackdrop.addEventListener('click', closeMobileMenu);
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && mobileMenu.classList.contains('open')) closeMobileMenu(); });
-  // closing on link tap matters as much as opening — otherwise the menu
-  // just sits there covering the section the person meant to jump to
-  mobileMenu.querySelectorAll('a.mobile-menu-link').forEach((a) => a.addEventListener('click', closeMobileMenu));
-  mobileMenuToolsBtn.addEventListener('click', () => { closeMobileMenu(); openTools(); });
 
   // ================== AUDIO TOOL LOGIC ==================
   const dropZone = document.getElementById('drop-zone');
