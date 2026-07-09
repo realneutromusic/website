@@ -569,9 +569,22 @@
   .block-count b { color: var(--ink-dim); font-weight: 500; }
 
   /* ---------- RELEASES: flat grid ---------- */
+  /* flexbox instead of grid on purpose: with CSS Grid's auto-fill, a
+     leftover row (5 releases = a full row of 4 plus 1 alone) sits that
+     lone card in the grid's first column — stuck at the left edge — since
+     grid doesn't re-center partial rows on its own. Flexbox with wrap +
+     justify-content:center centers whatever is left over in the last row
+     automatically, whether that's 1 release or 3, without needing to know
+     the total count in advance. */
+  /* flexbox + wrap, centered. The per-card width itself (flex-basis) is
+     set dynamically by layoutReleaseGrid() in JS below, which picks a
+     column count based on the actual release count so a leftover row
+     never ends up with a single stretched-huge orphan card — see the
+     comment on that function for the full reasoning. */
   .release-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
     gap: 22px;
     padding-top: 6px;
   }
@@ -792,6 +805,11 @@
     cursor: pointer;
     transform: translateY(14px);
     transition: border-color 0.3s var(--ease), box-shadow 0.4s var(--ease), transform 0.45s var(--ease-spring);
+    /* flex-basis (width) is set per-card by layoutReleaseGrid() in JS —
+       this flex-shrink:0 just stops cards from being unwillingly squeezed
+       smaller than the width JS computed for them if something unexpected
+       eats into the row's available space. */
+    flex-shrink: 0;
   }
   /* will-change only while the card is actually animating (entrance or
      hover) — see JS below. Keeping it on permanently forces the browser
@@ -823,6 +841,12 @@
      their own row — the modal is still where the full detail lives. ---- */
   .release-art-stage {
     position: relative; width: 100%; aspect-ratio: 1 / 1;
+    /* defensive cap, not the main mechanism anymore — layoutReleaseGrid()
+       in JS now picks column counts that avoid a lone stretched-huge
+       orphan card in the first place. This just stays as a safety net in
+       case JS hasn't run yet, or in the rare count where an orphan is
+       genuinely unavoidable (see that function's comment). */
+    max-height: 260px;
     overflow: hidden;
     border-radius: 16px;
     transform: translateZ(0);
@@ -949,14 +973,22 @@
   }
   .release-modal-art::after {
     content: ''; position: absolute; inset: 0;
+    /* fade starts right from the top now instead of holding fully
+       transparent until 20% — on a bright, high-contrast cover (lots of
+       light blues/whites near the bottom, not just dark ones) the old
+       20%-to-100% range compressed the whole brightness drop into a
+       shorter stretch, which reads as a visible edge even though the
+       color values themselves step smoothly. Spreading the same fade
+       across the full height gives it more room to be gradual on any
+       cover, bright or dark. */
     background: linear-gradient(to bottom,
       transparent 0%,
-      transparent 20%,
-      rgba(12,20,36,0.08) 40%,
-      rgba(12,20,36,0.22) 55%,
-      rgba(12,20,36,0.45) 68%,
-      rgba(12,20,36,0.7) 80%,
-      rgba(12,20,36,0.88) 90%,
+      rgba(12,20,36,0.05) 15%,
+      rgba(12,20,36,0.14) 32%,
+      rgba(12,20,36,0.28) 48%,
+      rgba(12,20,36,0.48) 62%,
+      rgba(12,20,36,0.7) 75%,
+      rgba(12,20,36,0.88) 88%,
       var(--surface-solid, #0c1424) 100%
     );
   }
@@ -972,7 +1004,9 @@
   .release-modal-close:hover { background: var(--steel); border-color: var(--steel); color: #04070d; }
   .release-modal-close svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; }
 
-  .release-modal-body { padding: 22px 26px 26px; }
+  .release-modal-body {
+    padding: 22px 26px 26px;
+  }
   .release-modal-tags { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .release-modal-title {
     font-family: 'Unbounded', sans-serif; font-weight: 800; font-size: 25px; letter-spacing: -0.01em; line-height: 1.15;
@@ -1813,6 +1847,61 @@
     document.body.style.overflow = 'hidden';
   }
 
+  function debounce(fn, ms) {
+    let t;
+    return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+  }
+
+  // Picks how many columns the release grid uses based on the actual
+  // release count. 3 is the preferred layout, but a perfectly even split
+  // beats it when one exists nearby: 8 releases divides exactly into 4+4
+  // (nothing left over at all), which reads as more "finished" than
+  // 3+3+2 even though neither strands a lone card — so an exact fit at 3
+  // or 4 is checked first, preferring whichever is closer to 3 (ties go
+  // to the larger, since fuller rows read more natural than more of
+  // them). Only when NEITHER divides evenly does it fall back to
+  // avoiding a single stranded card (e.g. 7 → 4+3, 10 → 4+4+2) — a
+  // remainder of exactly 1 is the one layout that actually looks broken;
+  // a shorter-but-not-lone last row reads as normal.
+  function bestReleaseColumnCount(n, maxCols) {
+    const target = Math.min(3, maxCols);
+    if (n <= target) return n || 1;
+
+    // exact fits first, target itself takes priority — only reach for a
+    // wider count when 3 doesn't divide evenly but something else does
+    if (n % target === 0) return target;
+    for (let c = target + 1; c <= maxCols; c++) {
+      if (n % c === 0) return c;
+    }
+
+    // no perfect fit available — fall back to avoiding a single
+    // stranded card instead
+    if (n % target !== 1) return target;
+    for (let c = target + 1; c <= maxCols; c++) {
+      if (n % c !== 1) return c;
+    }
+    for (let c = target - 1; c >= 2; c--) {
+      if (n % c !== 1) return c;
+    }
+    return target; // rare counts (e.g. 13) can't fully avoid it either way
+  }
+
+  function layoutReleaseGrid() {
+    const grid = document.getElementById('release-grid');
+    if (!grid) return;
+    const cards = Array.from(grid.children);
+    const n = cards.length;
+    if (n === 0) return;
+    const gap = 22;
+    const minCardWidth = 230;
+    const containerWidth = grid.getBoundingClientRect().width;
+    if (containerWidth <= 0) return;
+    const maxCols = Math.max(1, Math.floor((containerWidth + gap) / (minCardWidth + gap)));
+    const cols = bestReleaseColumnCount(n, maxCols);
+    const width = (containerWidth - (cols - 1) * gap) / cols;
+    cards.forEach((c) => { c.style.flexBasis = width + 'px'; c.style.maxWidth = width + 'px'; });
+  }
+
   // Built into a fragment and appended once at the end — appending inside
   // the loop instead would mean the grid's layout can be invalidated once
   // per card; batching it into a single insertion means it's invalidated
@@ -1891,6 +1980,8 @@
     cardsFragment.appendChild(card);
   });
   grid.appendChild(cardsFragment);
+  layoutReleaseGrid();
+  window.addEventListener('resize', debounce(layoutReleaseGrid, 150));
 
   // ---------- now playing: full inline player driven by a native <audio> element ----------
   // Plays ./assets/LATESTRELEASE.mp3 directly — no SoundCloud embed involved here,
@@ -2269,7 +2360,6 @@
     audio.addEventListener('error', () => { mysteryHasErrored = true; });
 
     const playBtn = reveal.querySelector('#mystery-reveal-play');
-    const playIcon = reveal.querySelector('#mystery-reveal-play-icon');
     const scrub = reveal.querySelector('#mystery-reveal-scrub');
     const scrubFill = reveal.querySelector('#mystery-reveal-scrub-fill');
     const scrubThumb = reveal.querySelector('#mystery-reveal-scrub-thumb');
@@ -2334,11 +2424,20 @@
     });
     audio.addEventListener('play', () => {
       playBtn.classList.add('is-playing');
-      playIcon.outerHTML = '<svg id="mystery-reveal-play-icon" viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>';
+      // re-query fresh instead of reusing the captured `playIcon`
+      // reference — outerHTML replacement below swaps in a brand new
+      // element each time, so after the first play→pause cycle the
+      // original `playIcon` variable points at a detached node with no
+      // parent. Setting .outerHTML on that throws (no-op at best, a
+      // console error at worst) on every play after the first pause,
+      // leaving the icon stuck. Querying fresh each time never goes stale.
+      const icon = reveal.querySelector('#mystery-reveal-play-icon');
+      if (icon) icon.outerHTML = '<svg id="mystery-reveal-play-icon" viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>';
     });
     audio.addEventListener('pause', () => {
       playBtn.classList.remove('is-playing');
-      reveal.querySelector('#mystery-reveal-play-icon').outerHTML = '<svg id="mystery-reveal-play-icon" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
+      const icon = reveal.querySelector('#mystery-reveal-play-icon');
+      if (icon) icon.outerHTML = '<svg id="mystery-reveal-play-icon" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
     });
     audio.addEventListener('ended', () => { scrubFill.style.width = '0%'; if (scrubThumb) scrubThumb.style.left = '0%'; elapsedEl.textContent = '0:00'; });
 
@@ -2828,10 +2927,44 @@
     // (lower energy = fewer log-magnitude contributions), the loud main
     // sections dominate, without needing to explicitly detect "which
     // section is the real song" at all.
+    // ---- bass-register chroma: sub/bassline content usually states the
+    // track's actual root far more clearly than the full mix, especially
+    // in bass-forward electronic music — but the main chromaForSegment
+    // above starts at 130Hz specifically to avoid rumble/mud, which also
+    // throws away exactly the octave (roughly E1-D3) where that bassline
+    // fundamental usually lives. This is a second, separate pass over
+    // just that low register, with a bigger FFT (16384 vs 8192) since
+    // resolving individual semitones down at ~50-150Hz needs a narrower
+    // bin width than the main pass needs.
+    function bassChromaForSegment(sampleRate, segment) {
+      const fftSize = 16384, hop = 8192;
+      if (segment.length < fftSize) return { chroma: new Float64Array(12), energy: 0 };
+      const chroma = new Float64Array(12);
+      const window = hannWindow(fftSize);
+      let energy = 0;
+      for (let start = 0; start + fftSize <= segment.length; start += hop) {
+        const frame = new Float64Array(fftSize);
+        for (let i = 0; i < fftSize; i++) frame[i] = segment[start + i] * window[i];
+        const mags = fftMagnitudes(frame);
+        const minBin = Math.max(1, Math.floor(40 * fftSize / sampleRate));
+        const maxBin = Math.min(mags.length - 1, Math.floor(300 * fftSize / sampleRate));
+        for (let bin = minBin; bin <= maxBin; bin++) {
+          const freq = bin * sampleRate / fftSize;
+          const midi = 69 + 12 * Math.log2(freq / 440);
+          const pitchClass = ((Math.round(midi) % 12) + 12) % 12;
+          const contribution = Math.log1p(mags[bin] * mags[bin]);
+          chroma[pitchClass] += contribution;
+          energy += contribution;
+        }
+      }
+      return { chroma, energy };
+    }
+
     function detectKey(sampleRate, data) {
       const windowSec = Math.min(35, (data.length / sampleRate) / 3);
       const positions = [0.15, 0.45, 0.75].map(f => Math.floor(f * data.length));
       const combined = new Float64Array(12);
+      const combinedBass = new Float64Array(12);
       let anyEnergy = false;
       for (const pos of positions) {
         const start = Math.max(0, Math.min(data.length - 1, pos));
@@ -2839,26 +2972,70 @@
         if (end - start < sampleRate * 2) continue;
         const segment = data.subarray(start, end);
         const { chroma, energy } = chromaForSegment(sampleRate, segment);
+        const bass = bassChromaForSegment(sampleRate, segment);
         if (energy > 0) anyEnergy = true;
-        for (let i = 0; i < 12; i++) combined[i] += chroma[i];
+        for (let i = 0; i < 12; i++) { combined[i] += chroma[i]; combinedBass[i] += bass.chroma[i]; }
       }
       if (!anyEnergy) return { key: '—', camelot: '—', relative: '—', confidence: 0.3 };
 
       const chromaMax = Math.max(...combined) || 1;
       const chroma = Array.from(combined, v => v / chromaMax);
 
-      let best = { score: -Infinity, key: '' };
-      let second = { score: -Infinity, key: '' };
+      // rank every one of the 24 candidates instead of only tracking the
+      // top two — needed below to check whether the bass root corroborates
+      // one of the close contenders, not just the single highest scorer
+      const allScores = [];
       for (let root = 0; root < 12; root++) {
-        const majorScore = correlate(chroma, rotate(MAJOR_PROFILE, root));
-        const minorScore = correlate(chroma, rotate(MINOR_PROFILE, root));
-        if (majorScore > best.score) { second = {...best}; best = { score: majorScore, key: NOTE_NAMES[root] + ' Major' }; }
-        else if (majorScore > second.score) { second = { score: majorScore, key: NOTE_NAMES[root] + ' Major' }; }
-        if (minorScore > best.score) { second = {...best}; best = { score: minorScore, key: NOTE_NAMES[root] + ' Minor' }; }
-        else if (minorScore > second.score) { second = { score: minorScore, key: NOTE_NAMES[root] + ' Minor' }; }
+        allScores.push({ score: correlate(chroma, rotate(MAJOR_PROFILE, root)), key: NOTE_NAMES[root] + ' Major', root });
+        allScores.push({ score: correlate(chroma, rotate(MINOR_PROFILE, root)), key: NOTE_NAMES[root] + ' Minor', root });
       }
-      const margin = best.score - (second.score || 0);
-      const confidence = clamp(0.55 + margin * 1.8, 0.35, 0.97);
+      allScores.sort((a, b) => b.score - a.score);
+      let best = allScores[0];
+      let second = allScores[1];
+
+      // Profile correlation alone genuinely can't separate relative
+      // major/minor (or modal siblings like Dorian, common in house/
+      // electronic music, which share the same 7 notes as a different
+      // major/minor pair) — the pitch-class histogram is identical either
+      // way. What actually distinguishes them is which note the music
+      // resolves to, and the clearest signal for that in bass-forward
+      // music is literally which note the bassline centers on — much
+      // more reliable here than another pass of profile-shape matching.
+      // So: take the profile correlation's top few close contenders
+      // (it's still what determines major-vs-minor "color"), then prefer
+      // whichever of those has its tonic matching the dominant bass note.
+      const bassSorted = Array.from(combinedBass).sort((a, b) => b - a);
+      const bassMax = bassSorted[0] || 0;
+      const bassMean = combinedBass.reduce((s, v) => s + v, 0) / 12;
+      // only trust the bass note as a corroborating signal if it's an
+      // actual, reasonably clear peak above the general bass noise floor —
+      // a track with little or no real bassline shouldn't get overridden
+      // by whatever low content happens to be loudest by a hair
+      const bassPitchClass = (bassMax > 1e-6 && bassMax > bassMean * 1.3)
+        ? combinedBass.reduce((best, v, i) => v > combinedBass[best] ? i : best, 0)
+        : null;
+      const contenders = allScores.filter(c => c.score > best.score - 0.12);
+      const bassMatch = bassPitchClass !== null
+        ? contenders.find(c => c.root === bassPitchClass)
+        : null;
+      let chosen = best;
+      let bassCorroborated = false;
+      if (bassMatch) {
+        chosen = bassMatch;
+        bassCorroborated = true;
+        // recompute "second" relative to the chosen candidate so the
+        // margin/runner-up below still reflects real ambiguity
+        second = allScores.find(c => c.key !== chosen.key) || second;
+      }
+
+      const margin = chosen.score - (second.score || 0);
+      let confidence = clamp(0.55 + margin * 1.8, 0.35, 0.97);
+      // corroborated by an independent signal (the actual bass note, not
+      // just another profile-shape comparison) — that's worth more
+      // confidence than profile correlation margin alone would justify,
+      // exactly in the cases profile correlation is weakest at
+      // (bass-forward, modally-ambiguous electronic music)
+      if (bassCorroborated) confidence = clamp(confidence + 0.15, 0.35, 0.97);
       // Profile-correlation key detection is a genuinely harder problem
       // than tempo: bass-forward, filtered, or non-functional-harmony
       // material (a lot of electronic music) can leave two or three keys
@@ -2866,7 +3043,7 @@
       // when that happens, surface the runner-up so the result is honest
       // about the ambiguity instead of hiding it.
       const runnerUp = margin < 0.05 ? second.key : null;
-      return { key: best.key, camelot: CAMELOT[best.key] || '—', relative: relativeKey(best.key), confidence, runnerUp };
+      return { key: chosen.key, camelot: CAMELOT[chosen.key] || '—', relative: relativeKey(chosen.key), confidence, runnerUp };
     }
 
     function rotate(profile, n) { const out = new Array(12); for (let i = 0; i < 12; i++) out[i] = profile[(i - n + 120) % 12]; return out; }
