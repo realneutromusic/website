@@ -1353,6 +1353,21 @@
   const auth = getAuth(app);
   const db = getFirestore(app);
 
+  // Firestore caps a single batch at 500 writes. 450 leaves headroom well
+  // above what any of this file's bulk actions (empty trash, clean all,
+  // the auto-clean sweep, clearing listened history) are ever likely to
+  // hold, but chunks anyway so none of them silently fail if a submission
+  // pile ever gets unusually large. Shared by every bulk-write call site
+  // instead of each repeating its own copy of this loop.
+  async function commitInChunks(items, applyFn) {
+    const chunkSize = 450;
+    for (let i = 0; i < items.length; i += chunkSize) {
+      const batch = writeBatch(db);
+      items.slice(i, i + chunkSize).forEach(item => applyFn(batch, item));
+      await batch.commit();
+    }
+  }
+
   const loginGate = document.getElementById('login-gate');
   const adminShell = document.getElementById('admin-shell');
   const emailForm = document.getElementById('email-login-form');
@@ -1584,6 +1599,24 @@
       if (unsubscribeAutoClean) { unsubscribeAutoClean(); unsubscribeAutoClean = null; }
       if (autoCleanSweepInterval) { clearInterval(autoCleanSweepInterval); autoCleanSweepInterval = null; }
       if (relativeTimeRefreshInterval) { clearInterval(relativeTimeRefreshInterval); relativeTimeRefreshInterval = null; }
+      // THE "SIGNING OUT DOESN'T STOP THE MUSIC" BUG: adminShell.style.display
+      // = 'none' above hides every card, but display:none on an ANCESTOR does
+      // not pause a live <iframe>/<audio> inside it — same reason
+      // card.innerHTML is never touched elsewhere in this file. A track
+      // playing at the moment of sign-out kept playing audibly behind the
+      // login screen, with no visible control left to stop it (the sticky
+      // player is inside adminShell too, so it vanished right along with
+      // everything else). enterStreamMode()/exitStreamMode() already call
+      // pauseAllExcept(null) for exactly this "switching views must stop
+      // audio" reason — this path just never got the same treatment. Tearing
+      // every card down the same way a genuine deletion does (destroys
+      // YouTube players, drops SoundCloud/Dropbox tracking, clears
+      // now-playing state) before wiping the list ensures nothing keeps
+      // running after sign-out, and leaves a clean slate for whenever
+      // startListening() rebuilds it on the next sign-in.
+      pauseAllExcept(null);
+      listEl.querySelectorAll('.submission-card').forEach(cleanupEmbedTracking);
+      listEl.innerHTML = '';
       allSubmissions = [];
     }
   });
@@ -1728,15 +1761,7 @@
     if (!confirm(`Permanently delete all ${trashed.length} submission(s) in Trash? This can't be undone.`)) return;
     emptyTrashBtn.disabled = true;
     try {
-      // Firestore caps a single batch at 500 writes — well above what a
-      // single admin's trash is ever likely to hold, but chunked just in
-      // case, so this doesn't silently fail on an unusually large trash.
-      const chunkSize = 450;
-      for (let i = 0; i < trashed.length; i += chunkSize) {
-        const batch = writeBatch(db);
-        trashed.slice(i, i + chunkSize).forEach(s => batch.delete(doc(db, 'submissions', s.id)));
-        await batch.commit();
-      }
+      await commitInChunks(trashed, (batch, s) => batch.delete(doc(db, 'submissions', s.id)));
     } catch (err) {
       console.error('Empty trash failed:', err);
       alert("Couldn't empty the trash completely — try again.");
@@ -1757,12 +1782,7 @@
     if (!confirm(`Send all ${active.length} submission(s) to Trash? Nothing is destroyed — you can restore any of them from there.`)) return;
     triggerBtn.disabled = true;
     try {
-      const chunkSize = 450;
-      for (let i = 0; i < active.length; i += chunkSize) {
-        const batch = writeBatch(db);
-        active.slice(i, i + chunkSize).forEach(s => batch.update(doc(db, 'submissions', s.id), { status: 'deleted', deletedAt: serverTimestamp() }));
-        await batch.commit();
-      }
+      await commitInChunks(active, (batch, s) => batch.update(doc(db, 'submissions', s.id), { status: 'deleted', deletedAt: serverTimestamp() }));
     } catch (err) {
       console.error('Clean all failed:', err);
       alert("Couldn't send everything to Trash — try again.");
@@ -1788,30 +1808,24 @@
     smSubmitToggleLabel.textContent = `Submissions: ${submitGateOpen ? 'open' : 'closed'}`;
   }
 
-  submitToggleBtn.addEventListener('click', async () => {
+  // One shared handler for both copies of this control (main header +
+  // Stream Mode's), same shape as toggleAutoClean() just below — two
+  // buttons that both toggle the exact same underlying setting never need
+  // two separate copies of the write/error-handling logic.
+  async function toggleSubmitGate(triggerBtn) {
     const nextOpen = !submitGateOpen;
-    submitToggleBtn.disabled = true;
+    triggerBtn.disabled = true;
     try {
       await setDoc(doc(db, 'settings', 'submitGate'), { open: nextOpen }, { merge: true });
     } catch (err) {
       console.error('Toggle submit gate failed:', err);
       alert("Couldn't change the submit status — try again.");
     } finally {
-      submitToggleBtn.disabled = false;
+      triggerBtn.disabled = false;
     }
-  });
-  smSubmitToggleBtn.addEventListener('click', async () => {
-    const nextOpen = !submitGateOpen;
-    smSubmitToggleBtn.disabled = true;
-    try {
-      await setDoc(doc(db, 'settings', 'submitGate'), { open: nextOpen }, { merge: true });
-    } catch (err) {
-      console.error('Toggle submit gate failed:', err);
-      alert("Couldn't change the submit status — try again.");
-    } finally {
-      smSubmitToggleBtn.disabled = false;
-    }
-  });
+  }
+  submitToggleBtn.addEventListener('click', () => toggleSubmitGate(submitToggleBtn));
+  smSubmitToggleBtn.addEventListener('click', () => toggleSubmitGate(smSubmitToggleBtn));
 
   function updateAutocleanToggleUI() {
     autocleanToggleBtn.classList.toggle('is-on', autoCleanEnabled);
@@ -1857,12 +1871,7 @@
     });
     if (stale.length === 0) return;
     try {
-      const chunkSize = 450;
-      for (let i = 0; i < stale.length; i += chunkSize) {
-        const batch = writeBatch(db);
-        stale.slice(i, i + chunkSize).forEach(s => batch.update(doc(db, 'submissions', s.id), { status: 'deleted', deletedAt: serverTimestamp() }));
-        await batch.commit();
-      }
+      await commitInChunks(stale, (batch, s) => batch.update(doc(db, 'submissions', s.id), { status: 'deleted', deletedAt: serverTimestamp() }));
     } catch (err) {
       console.error('Auto-clean sweep failed:', err);
     }
@@ -1943,6 +1952,7 @@
   let smSortReversed = false;
   let smLastRenderedTrackId = null;
   let smListenedActionPending = false;
+  let smPendingActionId = null; // which submission's write is in flight — lets smRenderSelected() tell "the selection itself changed" apart from "something unrelated re-triggered a render while this same pending action is still running"
   let smToastHideTimeout = null;
   let smCurrentSoundcloudWidget = null;
   let smCurrentYoutubePlayer = null;
@@ -2029,10 +2039,7 @@
       });
       items.forEach(s => {
         const host = getLinkHost(s.link || '');
-        const canResolve = host === 'soundcloud.com' || host === 'on.soundcloud.com' || host === 'm.soundcloud.com'
-          || host === 'youtube.com' || host === 'youtu.be' || host === 'music.youtube.com'
-          || host === 'dropbox.com';
-        if (!canResolve) return;
+        if (!canResolveTrackTitle(host)) return;
         resolveTrackTitle(s.link || '').then(title => {
           if (!title) return;
           const el = document.getElementById(`sm-list-sub-${s.id}`);
@@ -2055,6 +2062,23 @@
   let smTitleRequestId = 0;
 
   function smRenderSelected() {
+    // THE "PENDING LISTENED/SAVE/DELETE GETS SILENTLY UNDONE" BUG:
+    // smListenedBtn/smActOnCurrent animate the card out, disable their
+    // buttons, and wait 260ms before actually writing to Firestore — but
+    // this function re-runs on every single Firestore snapshot (any OTHER
+    // submission changing, anywhere, via smRenderList → onSnapshot), and it
+    // unconditionally re-enabled every button and removed .card-exiting
+    // whenever it still found this same submission with status 'new' —
+    // which it always did during that 260ms window, since the pending
+    // write hadn't landed yet. That visibly snapped the card back and
+    // re-enabled buttons mid-action, and a click during that window was a
+    // silent no-op (still blocked by smListenedActionPending) with zero
+    // feedback. Only skip the re-render when the selection itself hasn't
+    // actually changed — comparing against smPendingActionId (rather than
+    // just checking smListenedActionPending alone) means explicitly
+    // selecting a DIFFERENT track while an action is still in flight for
+    // the old one still works normally.
+    if (smListenedActionPending && smSelectedId === smPendingActionId) return;
     const s = allSubmissions.find(x => x.id === smSelectedId && (x.status || 'new') === 'new');
     if (!s) {
       smCard.style.display = 'none';
@@ -2094,9 +2118,7 @@
     if (isNewTrack) {
       const requestId = ++smTitleRequestId;
       const host = getLinkHost(s.link || '');
-      const canResolveTitle = host === 'soundcloud.com' || host === 'on.soundcloud.com' || host === 'm.soundcloud.com'
-        || host === 'youtube.com' || host === 'youtu.be' || host === 'music.youtube.com'
-        || host === 'dropbox.com';
+      const canResolveTitle = canResolveTrackTitle(host);
       smTitle.textContent = canResolveTitle ? 'Loading title…' : (host || 'Untitled');
       if (canResolveTitle) {
         resolveTrackTitle(s.link || '').then(title => {
@@ -2247,6 +2269,7 @@
     const s = allSubmissions.find(x => x.id === smSelectedId);
     if (!s) return;
     smListenedActionPending = true;
+    smPendingActionId = s.id;
     smListenedBtn.disabled = true;
     smCard.classList.add('card-exiting');
     const idToMark = s.id;
@@ -2263,6 +2286,7 @@
         smCard.classList.remove('card-exiting');
       }
       smListenedActionPending = false;
+      smPendingActionId = null;
     }, 260);
   });
 
@@ -2273,6 +2297,7 @@
     const s = allSubmissions.find(x => x.id === smSelectedId);
     if (!s) return;
     smListenedActionPending = true;
+    smPendingActionId = s.id;
     smSaveBtn.disabled = true;
     smDeleteBtn.disabled = true;
     smCard.classList.add('card-exiting');
@@ -2289,6 +2314,7 @@
         smCard.classList.remove('card-exiting');
       }
       smListenedActionPending = false;
+      smPendingActionId = null;
       smSaveBtn.disabled = false;
       smDeleteBtn.disabled = false;
     }, 260);
@@ -2383,10 +2409,7 @@
     });
     listenedItems.forEach(s => {
       const host = getLinkHost(s.link || '');
-      const canResolve = host === 'soundcloud.com' || host === 'on.soundcloud.com' || host === 'm.soundcloud.com'
-        || host === 'youtube.com' || host === 'youtu.be' || host === 'music.youtube.com'
-        || host === 'dropbox.com';
-      if (!canResolve) return;
+      if (!canResolveTrackTitle(host)) return;
       resolveTrackTitle(s.link || '').then(title => {
         if (!title) return;
         const el = document.getElementById(`sm-listened-history-sub-${s.id}`);
@@ -2401,12 +2424,7 @@
     if (!confirm(`Clear all ${listenedItems.length} listened track(s) from this list? They'll move to Trash in the admin panel, not be destroyed.`)) return;
     smListenedHistoryClearBtn.disabled = true;
     try {
-      const chunkSize = 450;
-      for (let i = 0; i < listenedItems.length; i += chunkSize) {
-        const batch = writeBatch(db);
-        listenedItems.slice(i, i + chunkSize).forEach(s => batch.update(doc(db, 'submissions', s.id), { status: 'deleted', deletedAt: serverTimestamp() }));
-        await batch.commit();
-      }
+      await commitInChunks(listenedItems, (batch, s) => batch.update(doc(db, 'submissions', s.id), { status: 'deleted', deletedAt: serverTimestamp() }));
     } catch (err) {
       console.error('Clear listened history failed:', err);
       alert("Couldn't clear the list completely — try again.");
@@ -2495,6 +2513,30 @@
               clearNowPlaying(iframe);
               stopYoutubeProgressPolling(iframe);
             }
+          },
+          // Unlike SoundCloud (resolveSoundcloudEmbed) and Dropbox
+          // (setupDropboxAudioErrorFallback), a broken YouTube embed used to
+          // just sit there as a blank/non-functional iframe with zero
+          // admin-facing explanation — a private video, one the owner
+          // deleted, or one with embedding disabled all looked identical to
+          // "still loading". Same friendly-fallback treatment as those two.
+          onError: (e) => {
+            const wrap = iframe.closest('.embed-wrap');
+            if (!wrap) return;
+            stopYoutubeProgressPolling(iframe);
+            youtubePlayers.delete(iframe);
+            if (currentPlayingIframe === iframe) clearNowPlaying(iframe);
+            // YT.PlayerError codes: 2 invalid video ID, 5 HTML5 player
+            // error, 100 video not found/removed, 101 & 150 (same cause,
+            // different code depending on how the video is embedded)
+            // embedding disabled by the video's owner.
+            const code = e.data;
+            const message = (code === 101 || code === 150)
+              ? "This video can't be embedded — the owner has disabled embedding on YouTube. Use the link above to open it directly."
+              : code === 100
+                ? 'This video is unavailable — it may have been removed or made private.'
+                : "Couldn't load this YouTube video — it may be unavailable. The link above still works to open it directly.";
+            wrap.innerHTML = `<p class="embed-error">${message}</p>`;
           }
         }
       });
@@ -2686,6 +2728,27 @@
     return u ? u.hostname.replace(/^www\./, '') : null;
   }
 
+  // The "is this host platform X" and "can we resolve a title for this
+  // link at all" checks below used to be copy-pasted inline (identical
+  // boolean expressions) at every single call site that needed them —
+  // getEmbedInfo, resolveTrackTitle, and every place that shows a
+  // "Loading title…" placeholder (Stream Mode's queue list, its selected-
+  // track header, its Listened History modal, the sticky player). One
+  // definition each means a platform's set of hostnames only has to be
+  // correct in one place.
+  function isSoundcloudHost(host) {
+    return host === 'soundcloud.com' || host === 'on.soundcloud.com' || host === 'm.soundcloud.com';
+  }
+  function isYoutubeHost(host) {
+    return host === 'youtube.com' || host === 'youtu.be' || host === 'music.youtube.com';
+  }
+  // Which platforms resolveTrackTitle() below can actually fetch a real
+  // title for — Spotify/Drive/etc. have no client-fetchable title API, so
+  // those fall back to just showing the hostname instead.
+  function canResolveTrackTitle(host) {
+    return isSoundcloudHost(host) || isYoutubeHost(host) || host === 'dropbox.com';
+  }
+
   // Display-only relabeling — the underlying status value stays 'kept'
   // (filters, CSS classes, Firestore docs all still use it), this just
   // changes what the badge text says.
@@ -2711,13 +2774,13 @@
     try {
       const u = normalizeUrl(url);
       if (!u) return null;
-      if (host === 'soundcloud.com' || host === 'on.soundcloud.com' || host === 'm.soundcloud.com') {
+      if (isSoundcloudHost(host)) {
         // Use the normalized (guaranteed-https) URL here, not the raw
         // `url` — SoundCloud's oEmbed endpoint needs a real absolute URL
         // and won't resolve a scheme-less one like "soundcloud.com/...".
         return { type: 'soundcloud-oembed', sourceUrl: u.toString() };
       }
-      if (host === 'youtube.com' || host === 'youtu.be' || host === 'music.youtube.com') {
+      if (isYoutubeHost(host)) {
         let videoId = null;
         if (host === 'youtu.be') {
           videoId = u.pathname.slice(1);
@@ -2963,7 +3026,7 @@
       if (!last) return null;
       try { return decodeURIComponent(last); } catch { return last; }
     }
-    if (host === 'soundcloud.com' || host === 'on.soundcloud.com' || host === 'm.soundcloud.com') {
+    if (isSoundcloudHost(host)) {
       let cached = soundcloudOembedCache.get(absLink);
       if (!cached) {
         try {
@@ -2977,7 +3040,7 @@
       }
       return cached.title || null;
     }
-    if (host === 'youtube.com' || host === 'youtu.be' || host === 'music.youtube.com') {
+    if (isYoutubeHost(host)) {
       let title = youtubeOembedTitleCache.get(absLink);
       if (!title) {
         try {
@@ -3016,9 +3079,7 @@
     const submission = allSubmissions.find(s => s.id === id);
     const link = submission ? (submission.link || '') : '';
     const host = getLinkHost(link);
-    const canResolve = host === 'soundcloud.com' || host === 'on.soundcloud.com' || host === 'm.soundcloud.com'
-      || host === 'youtube.com' || host === 'youtu.be' || host === 'music.youtube.com'
-      || host === 'dropbox.com';
+    const canResolve = canResolveTrackTitle(host);
 
     const requestId = ++stickyTitleRequestId;
     stickyPlayerTrack.textContent = canResolve ? 'Loading title…' : (placeholderLabelFor(link) || 'Now playing');
@@ -3152,10 +3213,13 @@
     }
   }
 
+  // Only ever called from pointerdown/pointermove listeners (below), so `e`
+  // is always a real PointerEvent — touch, mouse, and pen all already unify
+  // into .clientX through the Pointer Events API itself, no separate
+  // e.touches[0] branch needed (PointerEvent never has a .touches property).
   function ratioFromPointerEvent(e) {
     const rect = stickyPlayerProgress.getBoundingClientRect();
-    const clientX = (e.touches && e.touches[0]) ? e.touches[0].clientX : e.clientX;
-    return rect.width > 0 ? (clientX - rect.left) / rect.width : 0;
+    return rect.width > 0 ? (e.clientX - rect.left) / rect.width : 0;
   }
 
   let isDraggingStickyProgress = false;
@@ -3550,10 +3614,33 @@
   // (name, badge, link, actions, relative time) without touching its embed
   // wrapper, which is exactly what must stay untouched while something is
   // playing inside it.
-  function buildCardShellHtml(s, inTrash) {
-    const status = s.status || 'new';
-    const escName = escapeHtml(s.name || 'Unnamed');
-    const escNote = s.note ? escapeHtml(s.note) : '';
+  // Shared by buildCardShellHtml (brand-new cards) and updateCardShell
+  // (existing cards, re-run on every Firestore snapshot) so the two can
+  // never drift out of sync with each other — which is exactly what
+  // happened before this was factored out: updateCardShell's own inline
+  // copy of this logic was missing the status === 'listened' case entirely,
+  // so any listened card that survived to a second render (i.e. almost
+  // immediately, since ANY unrelated Firestore change re-renders every
+  // existing card) silently fell through to the default "Save" button
+  // (data-action="kept") instead of "Restore" (data-action="new") —
+  // wrong label AND a different underlying write.
+  function buildActionsHtml(status, inTrash) {
+    return inTrash
+      ? `<button class="action-btn keep" data-action="restore">Restore</button>
+         <button class="action-btn delete" data-action="delete-forever">Delete forever</button>`
+      : status === 'listened'
+        ? `<button class="action-btn keep" data-action="new">Restore</button>
+           <button class="action-btn delete" data-action="delete">Delete</button>`
+        : status === 'kept'
+          ? `<button class="action-btn unsave" data-action="new">Unsave</button>
+             <button class="action-btn delete" data-action="delete">Delete</button>`
+          : `<button class="action-btn keep" data-action="kept">Save</button>
+             <button class="action-btn delete" data-action="delete">Delete</button>`;
+  }
+
+  // Same reasoning as buildActionsHtml above — one copy, shared by both
+  // card-building paths, instead of two copies that can silently drift.
+  function buildLinkRowHtml(s) {
     const rawLink = s.link || '';
     const host = getLinkHost(rawLink);
     const escHost = host ? escapeHtml(host) : null;
@@ -3564,7 +3651,7 @@
     // out to the actual site. The displayed text stays as rawLink (exactly
     // what was submitted) so nothing looks altered.
     const hrefLink = (normalizeUrl(rawLink) || {}).href || rawLink;
-    const linkRowHtml = escHost
+    return escHost
       ? `<div class="submission-link-row">
            <a href="${escapeAttr(hrefLink)}" target="_blank" rel="noopener noreferrer" class="link-text${visibleLinkIds.has(s.id) ? '' : ' link-hidden'}" data-link-text>${escFullLink}</a>
            <button type="button" class="link-copy-btn" data-copy="${escapeAttr(hrefLink)}" aria-label="Copy link" title="Copy link">
@@ -3578,17 +3665,14 @@
       : `<div class="submission-link-row">
            <span class="link-invalid">Invalid link — not opening (${escFullLink || 'empty'})</span>
          </div>`;
-    const actionsHtml = inTrash
-      ? `<button class="action-btn keep" data-action="restore">Restore</button>
-         <button class="action-btn delete" data-action="delete-forever">Delete forever</button>`
-      : status === 'listened'
-        ? `<button class="action-btn keep" data-action="new">Restore</button>
-           <button class="action-btn delete" data-action="delete">Delete</button>`
-        : status === 'kept'
-          ? `<button class="action-btn unsave" data-action="new">Unsave</button>
-             <button class="action-btn delete" data-action="delete">Delete</button>`
-          : `<button class="action-btn keep" data-action="kept">Save</button>
-             <button class="action-btn delete" data-action="delete">Delete</button>`;
+  }
+
+  function buildCardShellHtml(s, inTrash) {
+    const status = s.status || 'new';
+    const escName = escapeHtml(s.name || 'Unnamed');
+    const escNote = s.note ? escapeHtml(s.note) : '';
+    const linkRowHtml = buildLinkRowHtml(s);
+    const actionsHtml = buildActionsHtml(status, inTrash);
     return `
         <div class="submission-top">
           <div>
@@ -3650,28 +3734,8 @@
       badgeEl.textContent = inTrash ? 'deleted' : statusLabel(status);
     }
 
-    const rawLink = s.link || '';
-    const host = getLinkHost(rawLink);
-    const escHost = host ? escapeHtml(host) : null;
-    const escFullLink = escapeHtml(rawLink);
-    const hrefLink = (normalizeUrl(rawLink) || {}).href || rawLink;
     const linkRowEl = card.querySelector('[data-hook="link-row"]');
-    if (linkRowEl) {
-      linkRowEl.innerHTML = escHost
-        ? `<div class="submission-link-row">
-             <a href="${escapeAttr(hrefLink)}" target="_blank" rel="noopener noreferrer" class="link-text${visibleLinkIds.has(s.id) ? '' : ' link-hidden'}" data-link-text>${escFullLink}</a>
-             <button type="button" class="link-copy-btn" data-copy="${escapeAttr(hrefLink)}" aria-label="Copy link" title="Copy link">
-               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 012-2h10"/></svg>
-             </button>
-             <button type="button" class="link-hide-btn" data-toggle-hide-id="${s.id}" aria-label="${visibleLinkIds.has(s.id) ? 'Hide link' : 'Show link'}" title="${visibleLinkIds.has(s.id) ? 'Hide link' : 'Show link'}">
-               ${visibleLinkIds.has(s.id) ? EYE_SVG : EYE_OFF_SVG}
-             </button>
-             <a href="${escapeAttr(hrefLink)}" target="_blank" rel="noopener noreferrer" class="link-arrow" aria-label="Open link" title="Open link">↗</a>
-           </div>`
-        : `<div class="submission-link-row">
-             <span class="link-invalid">Invalid link — not opening (${escFullLink || 'empty'})</span>
-           </div>`;
-    }
+    if (linkRowEl) linkRowEl.innerHTML = buildLinkRowHtml(s);
 
     const metaEl = card.querySelector('[data-hook="meta"]');
     if (metaEl) {
@@ -3687,16 +3751,7 @@
     }
 
     const actionsEl = card.querySelector('[data-hook="actions"]');
-    if (actionsEl) {
-      actionsEl.innerHTML = inTrash
-        ? `<button class="action-btn keep" data-action="restore">Restore</button>
-           <button class="action-btn delete" data-action="delete-forever">Delete forever</button>`
-        : status === 'kept'
-          ? `<button class="action-btn unsave" data-action="new">Unsave</button>
-             <button class="action-btn delete" data-action="delete">Delete</button>`
-          : `<button class="action-btn keep" data-action="kept">Save</button>
-             <button class="action-btn delete" data-action="delete">Delete</button>`;
-    }
+    if (actionsEl) actionsEl.innerHTML = buildActionsHtml(status, inTrash);
   }
 
   // If the direct-download URL 404s/403s (link set back to private, file
@@ -3853,21 +3908,60 @@
     }
   }
 
+  // Tracks cards mid fade-out so a render() that reuses one of them (see
+  // cancelPendingCardRemoval below) can find and cancel the pending removal.
+  const pendingCardRemovals = new WeakMap(); // card -> { timeoutId, doRemove }
+
   // Fades/scales a card out (reusing its own existing opacity/transform
   // transitions — see .card-exiting CSS) instead of yanking it out of the
   // DOM instantly. Falls back to a plain timeout if 'transitionend' never
   // fires for some reason (e.g. the card had zero visible change to
   // transition, or prefers-reduced-motion trims the duration to ~0).
+  //
+  // Tracking cleanup (cleanupEmbedTracking) is deliberately deferred until
+  // the card is ACTUALLY removed, not run eagerly when the fade-out is
+  // merely scheduled — see cancelPendingCardRemoval()'s comment for why
+  // that matters.
   function animateCardRemoval(card) {
     card.classList.add('card-exiting');
     let removed = false;
     const doRemove = () => {
       if (removed) return;
       removed = true;
+      pendingCardRemovals.delete(card);
+      cleanupEmbedTracking(card);
       card.remove();
     };
     card.addEventListener('transitionend', doRemove, { once: true });
-    setTimeout(doRemove, 400);
+    const timeoutId = setTimeout(doRemove, 400);
+    pendingCardRemovals.set(card, { timeoutId, doRemove });
+  }
+
+  // THE "CARD THAT COMES BACK STAYS INVISIBLE AND GETS DELETED ANYWAY" BUG:
+  // a card leaving the current filter/search view fades out over up to
+  // 400ms instead of being yanked immediately (animateCardRemoval, above).
+  // If the admin flips back within that window — e.g. a stray keystroke in
+  // the search box, which re-renders on every keystroke with no debounce —
+  // and this exact submission matches the view again, render()'s "existing
+  // card" branch reuses this same DOM node. Nothing used to stop the
+  // already-scheduled removal, though: the card stayed stuck at
+  // opacity:0/pointer-events:none (permanently invisible and unclickable
+  // even though the current filter says it belongs), and the pending
+  // timeout/transitionend listener still fired shortly after anyway,
+  // deleting a card the view was actively showing. Calling this the moment
+  // render() is about to reuse a card cancels the timer, drops the
+  // listener, and un-fades it — and because cleanupEmbedTracking() only
+  // actually runs from inside doRemove() (deferred, not eager — see
+  // animateCardRemoval's comment), cancelling in time means the card's
+  // SoundCloud/YouTube widget tracking was never torn down in the first
+  // place, so nothing needs to be rebuilt.
+  function cancelPendingCardRemoval(card) {
+    const pending = pendingCardRemovals.get(card);
+    if (!pending) return;
+    clearTimeout(pending.timeoutId);
+    card.removeEventListener('transitionend', pending.doRemove);
+    pendingCardRemovals.delete(card);
+    card.classList.remove('card-exiting');
   }
 
   // THE "SWITCHING TABS STOPS THE MUSIC" BUG: a card leaving the current
@@ -3897,7 +3991,9 @@
       card.classList.add('playing-offview');
       return;
     }
-    cleanupEmbedTracking(card);
+    // cleanupEmbedTracking() itself now happens inside animateCardRemoval's
+    // actual doRemove() (deferred, not run eagerly here) — see that
+    // function's comment and cancelPendingCardRemoval() for why.
     animateCardRemoval(card);
   }
 
@@ -3930,9 +4026,8 @@
       sorted.slice(1).forEach(s => toTrash.push(s)); // keep the earliest, trash the rest
     });
     if (toTrash.length === 0) return;
-    const batch = writeBatch(db);
-    toTrash.forEach(s => batch.update(doc(db, 'submissions', s.id), { status: 'deleted', deletedAt: serverTimestamp() }));
-    batch.commit().catch(err => console.error('Auto duplicate cleanup failed:', err));
+    commitInChunks(toTrash, (batch, s) => batch.update(doc(db, 'submissions', s.id), { status: 'deleted', deletedAt: serverTimestamp() }))
+      .catch(err => console.error('Auto duplicate cleanup failed:', err));
   }
 
   function render() {
@@ -4006,8 +4101,7 @@
     emptyState.style.display = 'none';
 
     const inTrash = currentFilter === 'trash';
-    const wantedIds = items.map(s => s.id);
-    const wantedIdSet = new Set(wantedIds);
+    const wantedIdSet = new Set(items.map(s => s.id));
 
     // THE "PLAYING CARD DRIFTS OFF-CENTER WHEN A NEW SUBMISSION ARRIVES"
     // BUG: inserting a brand-new card ABOVE whatever the admin is currently
@@ -4068,6 +4162,9 @@
         // it was hidden behind a different tab/search (see that function's
         // comment) so it renders normally again.
         card.classList.remove('playing-offview');
+        // And cancel any fade-out-to-removal still in flight for it — see
+        // cancelPendingCardRemoval()'s comment for the bug this fixes.
+        cancelPendingCardRemoval(card);
       }
       orderedCards.push(card);
     });
@@ -4291,6 +4388,7 @@
   // tracks and picks which one to actually listen to.
   let wheelEntries = [];
   let wheelSpinning = false;
+  let wheelSpinCompletionTimeoutId = null; // pending "spin finished" timeout — cancelled if the modal closes mid-spin, see closeWheel()
   let wheelCurrentRotation = 0;
   let wheelSkippedNames = new Set(); // "Remove from wheel" removes a PERSON, tracked per modal session
 
@@ -4325,11 +4423,12 @@
     const n = entries.length;
     const size = 460, cx = size / 2, cy = size / 2, r = size / 2;
     const totalWeight = entries.reduce((sum, e) => sum + e.weight, 0);
-    // Each slice's angular size is proportional to its weight (not equal
-    // slices) — this is what actually makes someone with more tracks more
-    // likely to be picked: their wedge is visibly bigger, in fair
-    // proportion to sqrt(track count), not just "more often by chance"
-    // despite an equal-sized wedge.
+    // Each slice's angular size is proportional to its weight. Every entry
+    // currently gets weight: 1 (see getWheelCandidates' comment — equal odds
+    // per person, regardless of how many tracks they sent), so in practice
+    // every slice ends up equal-sized; this stays weight-proportional rather
+    // than hardcoding equal division so a future change to how weight is
+    // computed wouldn't need to touch the drawing math too.
     let cursor = 0; // running angle, in SVG-space degrees (0 = right, clockwise)
     const slices = entries.map(e => {
       const sliceAngle = (e.weight / totalWeight) * 360;
@@ -4415,6 +4514,24 @@
     wheelModal.classList.remove('open');
     document.body.style.overflow = '';
     clearWheelTicks();
+    // THE "STALE WINNER POPS UP AFTER CLOSING MID-SPIN" BUG: closing the
+    // modal while a spin's completion timeout was still pending used to
+    // leave that timeout running — wheelSpinning stayed stuck `true`
+    // forever (blocking every future Spin click after reopening, since
+    // renderWheel() only gates the button on entry count, not this flag),
+    // and when the original timer eventually fired anyway, it played the
+    // winner sound, launched confetti, and popped open a result for a spin
+    // the admin had already abandoned by closing the modal — potentially
+    // clobbering whatever a freshly-started spin was about to show.
+    // Cancelling here, and manually resetting the state the timeout would
+    // otherwise have reset, makes closing mid-spin behave as if the spin
+    // never happened.
+    if (wheelSpinCompletionTimeoutId !== null) {
+      clearTimeout(wheelSpinCompletionTimeoutId);
+      wheelSpinCompletionTimeoutId = null;
+      wheelSpinning = false;
+      wheelSpinBtn.disabled = false;
+    }
     openWheelBtn.focus();
   }
   openWheelBtn.addEventListener('click', openWheel);
@@ -4553,12 +4670,12 @@
     const n = wheelEntries.length;
 
     // Weighted random pick: each entry's chance of winning is proportional
-    // to its weight (sqrt of track count) divided by the total weight —
-    // this is what actually implements "more tracks = somewhat better odds,
-    // but not proportionally," matching how the wedges are sized in
-    // buildWheelSvg. A plain Math.random()*n index pick (the old code) gave
-    // every entry equal odds regardless of weight, which is wrong now that
-    // entries represent people with different submission counts.
+    // to its weight divided by the total weight, matching how the wedges
+    // are sized in buildWheelSvg. Every entry currently gets weight: 1 (see
+    // getWheelCandidates), so this reduces to equal odds per person in
+    // practice — written generically against `weight` rather than a plain
+    // Math.random()*n index pick so a future change to how weight is
+    // computed wouldn't need matching changes here too.
     const totalWeight = wheelEntries.reduce((sum, e) => sum + e.weight, 0);
     let roll = Math.random() * totalWeight;
     let winnerIndex = 0;
@@ -4613,7 +4730,8 @@
     wheelCurrentRotation = targetRotation; // keep growing — never reduce mod 360 here
     trackWheelRotationForTicks(n, durationMs);
 
-    setTimeout(() => {
+    wheelSpinCompletionTimeoutId = setTimeout(() => {
+      wheelSpinCompletionTimeoutId = null;
       wheelSpinning = false;
       wheelSpinBtn.disabled = false;
       const winner = wheelEntries[winnerIndex];
@@ -4723,8 +4841,8 @@
 
   async function resolveWheelTrackTitle(track) {
     const host = getLinkHost(track.link);
-    const isSoundcloud = host === 'soundcloud.com' || host === 'on.soundcloud.com' || host === 'm.soundcloud.com';
-    const isYoutube = host === 'youtube.com' || host === 'youtu.be' || host === 'music.youtube.com';
+    const isSoundcloud = isSoundcloudHost(host);
+    const isYoutube = isYoutubeHost(host);
     const isDropbox = host === 'dropbox.com';
     // Spotify links keep showing their domain — its oEmbed doesn't support
     // CORS from browser JS, so there's no way to fetch its title client-side
