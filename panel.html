@@ -977,10 +977,21 @@
 
   /* Embed on the left, Save/Delete stacked vertically on the right — icons
      only, sitting right next to the player instead of buried in the queue
-     list. */
-  .sm-embed-row { display: flex; align-items: stretch; gap: 10px; }
-  .sm-embed-row .stream-embed-wrap { flex: 1; min-width: 0; }
-  .sm-main-actions { display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; justify-content: center; }
+     list.
+     THE "EMBED LOOKS OFF-CENTER FROM THE LISTENED BUTTON" BUG: this used to
+     be a plain two-item flex row ([embed][icons]), which meant the embed
+     itself only ever got the row's width MINUS the icon column (44px) and
+     its gap (10px) — so its true visual center sat ~27px left of the row's
+     actual center. Everything else on the card (title, note, the Listened
+     button) is centered via .stream-card's text-align:center, which centers
+     against the FULL card width with no such deduction — so the embed
+     visibly drifted left of them despite the Listened button actually being
+     dead center. A 3-column grid with an empty spacer column matching the
+     icon column's own width on the opposite side balances it out, so the
+     middle (embed) column lands on the same center line as everything else. */
+  .sm-embed-row { display: grid; grid-template-columns: 44px 1fr 44px; gap: 10px; align-items: stretch; }
+  .sm-embed-row .stream-embed-wrap { grid-column: 2; min-width: 0; }
+  .sm-main-actions { grid-column: 3; display: flex; flex-direction: column; gap: 8px; justify-content: center; }
   .sl-icon-btn {
     width: 44px; height: 44px; border-radius: 12px; flex-shrink: 0;
     background: var(--surface); border: 1px solid var(--line); color: var(--ink-dim);
@@ -992,8 +1003,11 @@
   .sl-icon-btn.sl-delete:hover { border-color: #ff8080; color: #ff8080; background: rgba(255,128,128,0.1); }
   .sl-icon-btn:disabled { opacity: 0.5; cursor: default; }
   @media (max-width: 640px) {
-    .sm-embed-row { flex-direction: column-reverse; }
-    .sm-main-actions { flex-direction: row; justify-content: center; }
+    /* No room for a balanced 3-column layout at this width — stack instead,
+       same as before this fix (the spacer column only matters side-by-side). */
+    .sm-embed-row { display: flex; flex-direction: column-reverse; }
+    .sm-embed-row .stream-embed-wrap { grid-column: unset; }
+    .sm-main-actions { grid-column: unset; flex-direction: row; justify-content: center; }
   }
 
   .stream-listened-btn {
@@ -2764,6 +2778,29 @@
   let currentPlayingIframe = null; // tracks which iframe is "now playing", for the sticky bar's controls
   let currentPlayingPaused = false; // true while currentPlayingIframe is paused (not ended) — lets the sticky bar resume it
 
+  // Centers whichever card just started (or resumed) playing. This is a
+  // deliberate response to the admin pressing play — not the same thing as
+  // growIframeWithScrollCompensation's anti-jump behavior, which exists to
+  // stop an UNRELATED resize from moving the page out from under someone;
+  // here the resize IS the direct result of the action, so actually
+  // scrolling to it is the wanted outcome. Waits out grow's own debounce
+  // (180ms) plus its ~300ms CSS height transition before scrolling, so the
+  // card centers against its final grown size instead of landing centered
+  // and then drifting off-center a moment later as it finishes resizing.
+  // Debounced the same way grow is — rapid play/pause toggling collapses
+  // to a single scroll once things settle, instead of fighting itself with
+  // a new smooth-scroll on every toggle.
+  let centerNowPlayingTimeout = null;
+  const CENTER_ON_PLAY_DELAY_MS = 500;
+  function centerNowPlayingCard(card) {
+    if (centerNowPlayingTimeout) clearTimeout(centerNowPlayingTimeout);
+    if (!card) return;
+    centerNowPlayingTimeout = setTimeout(() => {
+      centerNowPlayingTimeout = null;
+      card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, CENTER_ON_PLAY_DELAY_MS);
+  }
+
   function markNowPlaying(iframe) {
     listEl.querySelectorAll('.submission-card.now-playing').forEach(c => {
       c.classList.remove('now-playing');
@@ -2774,6 +2811,7 @@
     currentPlayingIframe = iframe;
     currentPlayingPaused = false;
     updateStickyPlayer();
+    centerNowPlayingCard(card);
   }
   // Paused (not ended): keeps currentPlayingIframe set so the sticky bar's
   // play/pause button can resume the SAME track from where it left off,
