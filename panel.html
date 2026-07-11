@@ -2947,35 +2947,48 @@
   // growIframeWithScrollCompensation's anti-jump behavior, which exists to
   // stop an UNRELATED resize from moving the page out from under someone;
   // here the resize IS the direct result of the action, so actually
-  // scrolling to it is the wanted outcome. Waits out grow's own debounce
-  // (GROW_DEBOUNCE_MS, 180ms) plus its full compensation window
-  // (GROW_COMPENSATION_DURATION_MS, 360ms — covering the ~300ms CSS height
-  // transition) before scrolling, with a little margin on top, so this
-  // smooth scrollIntoView never starts while that other (instant, per-frame)
-  // compensation loop is still actively correcting scroll position — the
-  // two fighting over the scroll position at the same time is exactly what
-  // used to make switching tracks look like it visually bounced through the
-  // old one first. Landing after both finish means the card centers against
-  // its own final grown size too, instead of landing centered and then
-  // drifting off-center a moment later as the grow animation keeps going.
-  // Debounced the same way grow is — rapid play/pause toggling collapses to
-  // a single scroll once things settle, instead of fighting itself with a
-  // new smooth-scroll on every toggle.
+  // scrolling to it is the wanted outcome.
+  //
+  // THE "SWITCHING TRACKS BOUNCES THROUGH THE OLD ONE FIRST" BUG: this used
+  // to fire after one fixed guessed delay (long enough to usually outlast
+  // grow's debounce plus its compensation window). The problem is "usually"
+  // — pausing the OLD track is a real round-trip through SoundCloud's/
+  // YouTube's postMessage API, and that round-trip's timing varies. When it
+  // landed late, the old track's own shrink was STILL being compensated
+  // (applyIframeGrowState's per-frame scrollBy loop, below) at the exact
+  // moment this fixed-delay smooth scrollIntoView kicked in — two different
+  // mechanisms fighting to own scrollY at once, which is what actually
+  // produced the visible "jumps back to the old track, then to the new
+  // one" — NOT the growth animation itself (that part was already fixed
+  // separately), but this race between the two scroll-controlling
+  // mechanisms. Rather than guess a delay long enough to "usually" avoid
+  // that race, this now directly checks whether that other loop
+  // (scrollAnchorRafId, see applyIframeGrowState) is still actively
+  // running, and simply waits — however long that actually takes — before
+  // ever touching scrollY itself. It can never fire early or overlap,
+  // regardless of how slow or fast any given track's pause round-trip
+  // happens to be.
   let centerNowPlayingTimeout = null;
-  // 620 = GROW_DEBOUNCE_MS (180) + GROW_COMPENSATION_DURATION_MS (360, see
-  // applyIframeGrowState below) + 80ms margin. Kept as a literal rather than
-  // referencing those constants directly because they're declared later in
-  // module-load order and this runs at module-init time, before a `const`
-  // declared further down is available. If either of those two numbers
-  // changes, update this one to match — it needs to stay >= their sum.
-  const CENTER_ON_PLAY_DELAY_MS = 620;
   function centerNowPlayingCard(card) {
     if (centerNowPlayingTimeout) clearTimeout(centerNowPlayingTimeout);
     if (!card) return;
-    centerNowPlayingTimeout = setTimeout(() => {
+    const attemptCenter = () => {
+      if (scrollAnchorRafId !== null) {
+        // Still actively compensating for a grow/shrink transition
+        // somewhere (could be this card's own growth, the old track's
+        // shrink, or both) — check back shortly rather than stomping on it.
+        centerNowPlayingTimeout = setTimeout(attemptCenter, 60);
+        return;
+      }
       centerNowPlayingTimeout = null;
       card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }, CENTER_ON_PLAY_DELAY_MS);
+    };
+    // Initial wait covers grow's own debounce (GROW_DEBOUNCE_MS) so the
+    // compensation loop below has actually had a chance to START before the
+    // first check — otherwise this could see scrollAnchorRafId still null
+    // (nothing scheduled yet) and center immediately, before the card has
+    // even begun growing toward its final size.
+    centerNowPlayingTimeout = setTimeout(attemptCenter, GROW_DEBOUNCE_MS + 20);
   }
 
   function markNowPlaying(iframe) {
@@ -3472,24 +3485,30 @@
   // this used to do measured the anchor's position exactly ONE FRAME
   // (~16ms) into that 300ms animation, applied one scrollBy() correction
   // for that tiny sliver of movement, and then stopped — silently missing
-  // the other ~95% of the shift as the transition kept animating for the
-  // next ~280ms with nobody compensating for it anymore. The admin's
-  // screen doesn't "jump to the old track" on purpose — what they're
-  // actually seeing is the page holding still (scroll position frozen
-  // after that one early correction) while everything around the still-
-  // animating old (shrinking) and new (growing) cards keeps sliding
-  // underneath it, uncompensated, for a quarter of a second, before
-  // centerNowPlayingCard's deliberate scrollIntoView finally arrives 500ms
-  // later and snaps things to where they're actually supposed to end up.
-  // overflow-anchor: none (see body's CSS comment) removes the BROWSER's
-  // own competing auto-correction, but doesn't fix this — this file's own
-  // compensation genuinely wasn't tracking the whole animation.
+  // the other ~95% of the shift as the transition kept animating with
+  // nobody compensating for it anymore. overflow-anchor: none (see body's
+  // CSS comment) removes the BROWSER's own competing auto-correction, but
+  // doesn't fix this — this file's own compensation genuinely wasn't
+  // tracking the whole animation.
   //
-  // Fix: keep re-measuring and re-correcting on every single frame — not
-  // just once — for as long as the CSS transition is actually still
-  // running, using the SAME anchor-pin approach growIframeWithScrollCompensation
-  // was already built on, just sustained instead of one-shot.
-  const GROW_COMPENSATION_DURATION_MS = 360; // covers the 300ms CSS transition plus margin for frame-timing slack
+  // Switching tracks specifically involves TWO of these calls close
+  // together — the new track's grow AND the old track's shrink (that
+  // second one arriving whenever the old widget's PAUSE round-trip happens
+  // to land, which varies) — and a fixed compensation duration measured
+  // from only the FIRST call's start time could run out before a LATE-
+  // arriving second call's own transition had actually finished, leaving
+  // its tail end uncompensated too. Rather than guess a duration long
+  // enough to "usually" cover both, activeGrowTransitions tracks exactly
+  // which iframes are still genuinely transitioning (via the real
+  // `transitionend` event, with a timeout backstop for iframes whose
+  // height change doesn't actually animate — YouTube's aspect-ratio switch
+  // doesn't transition at all, and prefers-reduced-motion can trim any
+  // transition to ~0 without firing the event in some browsers) — the
+  // compensation loop keeps running for as long as that set is non-empty,
+  // so a shrink call arriving mid-loop correctly extends how long
+  // compensation continues, automatically, without any duration math.
+  const GROW_TRANSITION_BACKSTOP_MS = 360; // safety net for iframes whose height change doesn't actually fire transitionend — covers the real ~300ms transition plus margin
+  const activeGrowTransitions = new Set(); // iframes whose grow/shrink height change is still in flight
 
   function applyIframeGrowState(iframe, grow, growClass) {
     if (scrollAnchorEl === null) {
@@ -3500,7 +3519,12 @@
     if (grow) iframe.classList.add(growClass);
     else iframe.classList.remove(growClass);
 
-    if (scrollAnchorRafId !== null) return; // a compensation pass for this batch is already running
+    activeGrowTransitions.add(iframe);
+    const stopTracking = () => activeGrowTransitions.delete(iframe);
+    iframe.addEventListener('transitionend', stopTracking, { once: true });
+    setTimeout(stopTracking, GROW_TRANSITION_BACKSTOP_MS);
+
+    if (scrollAnchorRafId !== null) return; // a compensation loop already running will pick up this iframe too — activeGrowTransitions just grew
 
     const anchor = scrollAnchorEl;
     const pinnedTop = scrollAnchorTop;
@@ -3508,7 +3532,6 @@
     scrollAnchorTop = null;
     if (!anchor || pinnedTop === null) return;
 
-    const compensationStartedAt = performance.now();
     const tick = () => {
       if (!anchor.isConnected) { scrollAnchorRafId = null; return; }
       // Pinning against the ORIGINAL fixed position (not the previous
@@ -3517,7 +3540,7 @@
       // now, scroll by exactly enough to put it back where it started.
       const delta = anchor.getBoundingClientRect().top - pinnedTop;
       if (delta !== 0) window.scrollBy({ top: delta, left: 0, behavior: 'instant' });
-      if (performance.now() - compensationStartedAt < GROW_COMPENSATION_DURATION_MS) {
+      if (activeGrowTransitions.size > 0) {
         scrollAnchorRafId = requestAnimationFrame(tick);
       } else {
         scrollAnchorRafId = null;
