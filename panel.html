@@ -592,9 +592,26 @@
 
   .embed-wrap {
     margin-top: 10px; border-radius: 10px; overflow: hidden; border: 1px solid var(--line);
-    background: rgba(4,7,13,0.35);
+    background: rgba(4,7,13,0.35); position: relative;
   }
   .embed-wrap iframe { display: block; width: 100%; border: none; }
+  /* YouTube's own fullscreen button lives inside its player controls, which
+     only reveal on hover and can be genuinely hard to reach/hit at this
+     embed's compact size — this sits on top of the iframe as a direct,
+     always-visible way to blow the video up full screen instead. Shared
+     between the panel's cards (.embed-wrap) and Stream Mode
+     (.stream-embed-wrap), both of which are position:relative for it to
+     anchor against. */
+  .embed-fullscreen-btn {
+    position: absolute; top: 8px; right: 8px; z-index: 5;
+    width: 30px; height: 30px; border-radius: 8px;
+    background: rgba(4,7,13,0.65); backdrop-filter: blur(4px);
+    border: 1px solid rgba(168,200,236,0.25); color: var(--ink-dim); cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.15s var(--ease);
+  }
+  .embed-fullscreen-btn svg { width: 15px; height: 15px; }
+  .embed-fullscreen-btn:hover { color: var(--steel-bright); border-color: var(--steel-bright); background: rgba(4,7,13,0.85); }
   .embed-soundcloud iframe { height: 120px; }
   /* Compact by default — same as SoundCloud's collapsed state — and only
      grows to full size while actually playing (yt-playing, toggled by
@@ -964,7 +981,7 @@
   }
   .stream-embed-wrap {
     border-radius: 18px; overflow: hidden; border: 1px solid var(--line); background: var(--surface);
-    min-height: 80px;
+    min-height: 80px; position: relative;
   }
   .stream-embed-wrap iframe { display: block; width: 100%; border: none; }
   .stream-embed-wrap audio { display: block; width: 100%; height: 64px; }
@@ -1380,6 +1397,24 @@
 
   const EYE_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>';
   const EYE_OFF_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17.94 17.94A10.94 10.94 0 0112 19c-7 0-11-7-11-7a18.5 18.5 0 015.06-5.94M9.9 4.24A10.4 10.4 0 0112 4c7 0 11 7 11 7a18.5 18.5 0 01-2.16 3.19m-6.18-1.07a3 3 0 11-4.24-4.24" stroke-linecap="round" stroke-linejoin="round"/><path d="M1 1l22 22" stroke-linecap="round"/></svg>';
+  // Shared between the panel's cards and Stream Mode — see .embed-fullscreen-btn.
+  const FULLSCREEN_BTN_HTML = '<button type="button" class="embed-fullscreen-btn" title="Full screen" aria-label="Full screen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 00-2 2v3M16 3h3a2 2 0 012 2v3M8 21H5a2 2 0 01-2-2v-3M16 21h3a2 2 0 002-2v-3" stroke-linecap="round" stroke-linejoin="round"/></svg></button>';
+  // Requests fullscreen on the given iframe, covering the vendor-prefixed
+  // fallbacks older Safari/iOS still need. Exported to the click handlers
+  // below rather than inlined twice (panel + Stream Mode).
+  function requestIframeFullscreen(iframe) {
+    if (!iframe) return;
+    const req = iframe.requestFullscreen || iframe.webkitRequestFullscreen || iframe.mozRequestFullScreen || iframe.msRequestFullscreen;
+    if (!req) return;
+    try {
+      const result = req.call(iframe);
+      if (result && typeof result.catch === 'function') {
+        result.catch(err => console.error('Fullscreen request failed:', err));
+      }
+    } catch (err) {
+      console.error('Fullscreen request failed:', err);
+    }
+  }
 
   // ---- error message mapping --------------------------------------------
   // Firebase Auth error codes -> a plain-language explanation + (optional)
@@ -2145,7 +2180,13 @@
 
     const classForType = { youtube: 'stream-embed-youtube', spotify: 'stream-embed-spotify', drive: 'stream-embed-drive' }[info.type] || '';
     if (classForType) smEmbedWrap.classList.add(classForType);
-    smEmbedWrap.innerHTML = `<iframe src="${escapeAttr(info.src)}" allow="autoplay" loading="lazy"></iframe>`;
+    // See buildEmbedHtml's matching comment (panel side) — YouTube needs
+    // `fullscreen` in `allow` plus the allowfullscreen attribute(s) for any
+    // fullscreen request from inside the iframe to be permitted at all,
+    // including clicks on the dedicated button added below.
+    const allowAttr = info.type === 'youtube' ? 'autoplay; fullscreen' : 'autoplay';
+    const fullscreenAttrs = info.type === 'youtube' ? ' allowfullscreen webkitallowfullscreen mozallowfullscreen' : '';
+    smEmbedWrap.innerHTML = `<iframe src="${escapeAttr(info.src)}" allow="${allowAttr}"${fullscreenAttrs} loading="lazy"></iframe>${info.type === 'youtube' ? FULLSCREEN_BTN_HTML : ''}`;
 
     if (info.type === 'youtube') {
       const iframe = smEmbedWrap.querySelector('iframe');
@@ -2233,6 +2274,15 @@
   }
   smSaveBtn.addEventListener('click', () => smActOnCurrent('kept'));
   smDeleteBtn.addEventListener('click', () => smActOnCurrent('deleted'));
+
+  // smEmbedWrap itself is stable across renders (only its innerHTML is
+  // replaced by smRenderEmbed) — attaching once here and delegating is the
+  // same pattern listEl's click handler uses for the panel's cards.
+  smEmbedWrap.addEventListener('click', (e) => {
+    const fullscreenBtn = e.target.closest('.embed-fullscreen-btn');
+    if (!fullscreenBtn) return;
+    requestIframeFullscreen(smEmbedWrap.querySelector('iframe'));
+  });
 
   function smShowListenedToast(info) {
     if (smToastHideTimeout) clearTimeout(smToastHideTimeout);
@@ -3457,7 +3507,22 @@
   // hook node's content/className directly instead.
   function updateCardShell(card, s, inTrash) {
     const status = s.status || 'new';
-    card.className = `submission-card status-${status}`;
+    // THE "PLAYING CARD LOSES ITS HIGHLIGHT" BUG: this used to reassign
+    // card.className outright (`submission-card status-${status}`), which
+    // silently wiped out any OTHER class something else had put on this
+    // same card — now-playing, is-paused, wheel-highlight. render() calls
+    // updateCardShell() for every EXISTING card on every single Firestore
+    // snapshot, not just when that particular card's own status changed —
+    // so a brand-new submission landing anywhere else in the queue was
+    // enough to strip .now-playing off whatever was actually playing right
+    // now, dropping its glow border and making the has-playing blur/dim
+    // rule apply to it too, exactly as if nothing were playing there at
+    // all. Only touch the one class that's actually this function's job
+    // (status-*) and leave every other class already on the card alone.
+    Array.from(card.classList)
+      .filter(cls => cls.startsWith('status-'))
+      .forEach(cls => card.classList.remove(cls));
+    card.classList.add(`status-${status}`);
 
     const titleEl = card.querySelector('[data-hook="title"]');
     if (titleEl) titleEl.textContent = s.name || 'Unnamed';
@@ -3595,9 +3660,12 @@
       // (encrypted-media + clipboard-write on top of autoplay) — using the
       // same minimal "autoplay" for it as SoundCloud/YouTube can cause
       // playback controls to silently misbehave inside the iframe.
+      // YouTube gets `fullscreen` added on top — see allowfullscreen below.
       const allowAttr = embedInfo.type === 'spotify'
         ? 'autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture'
-        : 'autoplay';
+        : embedInfo.type === 'youtube'
+          ? 'autoplay; fullscreen'
+          : 'autoplay';
       const tallClass = (embedInfo.type === 'spotify' && embedInfo.height === 352) ? ' embed-spotify-tall' : '';
       // Both of these are platform-side restrictions, not something this
       // embed can configure around — surfaced directly under the player so
@@ -3607,8 +3675,18 @@
         : embedInfo.type === 'drive'
           ? '<p class="embed-hint">If this doesn\'t load, the file\'s Drive sharing needs to be set to "Anyone with the link".</p>'
           : '';
+      // THE "CAN'T FULL SCREEN A YOUTUBE VIDEO" GAP: the iframe never had
+      // `allowfullscreen` (or `fullscreen` in its `allow` list), so the
+      // browser silently refused any fullscreen request from inside it —
+      // including clicks on YouTube's own built-in fullscreen button in its
+      // player controls. allowfullscreen (plus the vendor-prefixed
+      // attributes some older WebKit builds still check) grants that
+      // permission; the dedicated button on top is a bigger, always-visible
+      // way to trigger it without hunting for YouTube's own hover-only one.
+      const fullscreenAttrs = embedInfo.type === 'youtube' ? ' allowfullscreen webkitallowfullscreen mozallowfullscreen' : '';
+      const fullscreenBtnHtml = embedInfo.type === 'youtube' ? FULLSCREEN_BTN_HTML : '';
       return {
-        html: `<div class="embed-wrap embed-${embedInfo.type}${tallClass}" data-embed-type="${embedInfo.type}" id="${embedId}"><iframe src="${escapeAttr(embedInfo.src)}" allow="${allowAttr}" loading="lazy"></iframe></div>${hintHtml}`,
+        html: `<div class="embed-wrap embed-${embedInfo.type}${tallClass}" data-embed-type="${embedInfo.type}" id="${embedId}"><iframe src="${escapeAttr(embedInfo.src)}" allow="${allowAttr}"${fullscreenAttrs} loading="lazy"></iframe>${fullscreenBtnHtml}</div>${hintHtml}`,
         info: embedInfo
       };
     }
@@ -3876,6 +3954,13 @@
   }
 
   listEl.addEventListener('click', async (e) => {
+    const fullscreenBtn = e.target.closest('.embed-fullscreen-btn');
+    if (fullscreenBtn) {
+      const iframe = fullscreenBtn.closest('.embed-wrap')?.querySelector('iframe');
+      requestIframeFullscreen(iframe);
+      return;
+    }
+
     const copyBtn = e.target.closest('.link-copy-btn');
     if (copyBtn) {
       const text = copyBtn.dataset.copy;
