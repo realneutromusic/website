@@ -502,6 +502,17 @@
     pointer-events: none;
   }
 
+  /* A card whose track is actively playing, but whose submission no longer
+     matches the current filter/search tab (admin switched to Save/Listened/
+     Trash, or typed in the search box) — see removeOrKeepStaleCard(). Kept
+     in the DOM (so its iframe/audio element and widget binding survive
+     completely untouched) but hidden from the visible list; the sticky
+     player surfaces its controls instead, same as when it's simply
+     scrolled out of view. */
+  .submission-card.playing-offview {
+    display: none;
+  }
+
   /* When something is actually playing AND its card is in view: that card
      gets full focus (subtle glowing border + pulse), everything else dims
      and blurs slightly so attention naturally goes to what's actually
@@ -3193,7 +3204,32 @@
   stickyPlayerJump.addEventListener('click', () => {
     if (!currentPlayingIframe) return;
     const card = currentPlayingIframe.closest('.submission-card');
-    if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (!card) return;
+    // The playing card can be sitting behind a different tab or an active
+    // search right now (removeOrKeepStaleCard marks it .playing-offview —
+    // display:none — instead of killing it, precisely so it can keep
+    // playing there). scrollIntoView on a display:none element is a no-op,
+    // so "jump to track" needs to first switch back to whichever tab (and
+    // clear whatever search) actually shows this submission, THEN scroll.
+    if (card.classList.contains('playing-offview') || searchQuery) {
+      const submission = allSubmissions.find(s => s.id === card.dataset.id);
+      const targetFilter = !submission ? 'all'
+        : submission.status === 'deleted' ? 'trash'
+        : submission.status === 'listened' ? 'listened'
+        : submission.status === 'kept' ? 'kept'
+        : 'all';
+      if (searchQuery) {
+        searchInput.value = '';
+        searchQuery = '';
+        searchClear.style.display = 'none';
+      }
+      if (currentFilter !== targetFilter) {
+        currentFilter = targetFilter;
+        filterBtns.forEach(b => b.classList.toggle('active', b.dataset.filter === targetFilter));
+      }
+      render();
+    }
+    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
   });
   // Keep/Delete on the sticky bar act on whatever submission is currently
   // playing — same Firestore update the regular card buttons trigger,
@@ -3239,6 +3275,31 @@
   // grow/shrink calls arriving close together share the SAME anchor
   // measurement and get resolved together in one requestAnimationFrame,
   // so there's nothing left to race.
+  // Every scroll-compensation pass in this file (iframe grow/shrink below,
+  // render()'s card insertion, resolveSoundcloudEmbed()'s async placeholder
+  // swap) used to anchor on "whatever element happens to be sitting at the
+  // top of the viewport" as a stand-in for "the thing the admin is actually
+  // looking at". That's only a good stand-in when the admin is looking at
+  // the top of the page. THE "CENTERED TRACK STILL DRIFTS" BUG: when the
+  // admin is listening to a track that's scrolled to the vertical CENTER of
+  // the screen (which is exactly where markNowPlaying's centering puts it —
+  // see centerNowPlayingCard), the element sitting at y=10 is some OTHER
+  // card entirely, and that other card moving by the "correct" compensated
+  // amount says nothing about whether the centered playing card also stayed
+  // put — with .sort-reversed active (newest-first), a brand-new submission
+  // is appended at the end of the DOM but rendered at the visual TOP via
+  // flex-direction, which can shift everything below it, including a
+  // centered card, by an amount the top-of-viewport anchor doesn't capture
+  // correctly. Anchoring directly to the currently-playing card itself —
+  // when there is one — fixes this at the root: it's no longer a proxy for
+  // "the thing the admin cares about staying still", it IS that thing, so
+  // whatever screen position it's at (top, center, bottom) is preserved
+  // exactly, and it never drifts unless the admin scrolls it themselves.
+  function getScrollAnchorEl() {
+    const playingCard = currentPlayingIframe ? currentPlayingIframe.closest('.submission-card') : null;
+    return playingCard || document.elementFromPoint(Math.floor(window.innerWidth / 2), 10);
+  }
+
   let scrollAnchorEl = null;
   let scrollAnchorTop = null;
   let scrollAnchorRafId = null;
@@ -3272,7 +3333,7 @@
 
   function applyIframeGrowState(iframe, grow, growClass) {
     if (scrollAnchorEl === null) {
-      scrollAnchorEl = document.elementFromPoint(Math.floor(window.innerWidth / 2), 10);
+      scrollAnchorEl = getScrollAnchorEl();
       scrollAnchorTop = scrollAnchorEl ? scrollAnchorEl.getBoundingClientRect().top : null;
     }
 
@@ -3425,8 +3486,10 @@
         // compensating for, so a track the admin had centered could still
         // drift down a moment later even with render()'s fix in place.
         // Same anchor-before/scroll-by-the-delta-after technique, just
-        // wrapped around this specific mutation too.
-        const scAnchorEl = document.elementFromPoint(Math.floor(window.innerWidth / 2), 10);
+        // wrapped around this specific mutation too — and, same as every
+        // other anchor pass in this file, prioritizing the currently-playing
+        // card itself over a generic viewport guess (see getScrollAnchorEl).
+        const scAnchorEl = getScrollAnchorEl();
         const scAnchorTop = scAnchorEl ? scAnchorEl.getBoundingClientRect().top : null;
         stillThere.innerHTML = cached.html;
         if (scAnchorEl && scAnchorEl.isConnected && scAnchorTop !== null) {
@@ -3459,7 +3522,7 @@
         // Same scroll-anchor compensation as the success path above — an
         // error message swapping in for the placeholder is still a height
         // change that can shift a centered card below it.
-        const scAnchorEl = document.elementFromPoint(Math.floor(window.innerWidth / 2), 10);
+        const scAnchorEl = getScrollAnchorEl();
         const scAnchorTop = scAnchorEl ? scAnchorEl.getBoundingClientRect().top : null;
         stillThere.innerHTML = is403
           ? '<p class="embed-error">This track can\'t be embedded — the artist has disabled embedding for it on SoundCloud (separate from public/private). Use the link above to open it directly on SoundCloud.</p>'
@@ -3797,6 +3860,37 @@
     setTimeout(doRemove, 400);
   }
 
+  // THE "SWITCHING TABS STOPS THE MUSIC" BUG: a card leaving the current
+  // filter/search view (admin taps Save/Listened/Trash, or types in the
+  // search box) used to always be torn down the same way a genuinely
+  // deleted submission is — cleanupEmbedTracking() + animateCardRemoval(),
+  // which detaches its iframe/audio element and kills playback outright.
+  // But "no longer matches this tab" and "no longer exists" are very
+  // different situations: the submission is still sitting right there in
+  // Firestore, the admin just looked at a different tab. Silently stopping
+  // their music because they clicked "Save" to check what they'd kept was
+  // never the intent. If this card holds whatever's currently playing AND
+  // its submission still exists in allSubmissions (i.e. it's a real
+  // filter/search mismatch, not an actual delete-forever), it's kept alive
+  // in the DOM — just visually hidden via .playing-offview — so its
+  // iframe/audio element, and the SoundCloud/YouTube widget bound to it,
+  // are completely undisturbed. The sticky player (already wired to appear
+  // whenever the playing card isn't visible on screen — see
+  // updateStickyPlayer) is what gives the admin controls for it while it's
+  // off-view like this, exactly as it already does when they simply scroll
+  // past it. render()'s "existing card" branch clears .playing-offview the
+  // moment this submission matches the view again.
+  function removeOrKeepStaleCard(card) {
+    const holdsCurrentlyPlaying = currentPlayingIframe && card.contains(currentPlayingIframe);
+    const stillExists = allSubmissions.some(s => s.id === card.dataset.id);
+    if (holdsCurrentlyPlaying && stillExists) {
+      card.classList.add('playing-offview');
+      return;
+    }
+    cleanupEmbedTracking(card);
+    animateCardRemoval(card);
+  }
+
   // Runs once per render(): if two or more active (non-deleted)
   // submissions share the exact same (normalized) link, silently keeps
   // whichever was submitted FIRST and moves the rest straight to Trash —
@@ -3884,8 +3978,19 @@
           ? 'Trash is empty.'
           : currentFilter === 'all' ? 'No submissions yet.' : `Nothing in "${currentFilter}".`;
       emptyState.style.display = 'block';
-      listEl.innerHTML = '';
+      // THE "SWITCHING TABS STOPS THE MUSIC" BUG, empty-view case: this used
+      // to be a blanket listEl.innerHTML = '', which — same as any innerHTML
+      // reassignment on an ancestor of a live iframe (see updateCardShell's
+      // comment) — detaches and kills whatever's currently playing the
+      // instant this filter/search has zero matches, even though the
+      // playing track's submission still exists and the admin never asked
+      // for it to stop. removeOrKeepStaleCard() below is the same "is this
+      // the card that's actually playing right now?" check used in the
+      // non-empty path just below; reuse it here too instead of a shortcut
+      // that bypasses it.
+      Array.from(listEl.children).forEach(removeOrKeepStaleCard);
       queuePositionBadge.style.display = 'none';
+      updateStickyPlayer();
       return;
     }
     emptyState.style.display = 'none';
@@ -3901,12 +4006,16 @@
     // height — including a track that's centered on-screen because it's the
     // one currently playing. Nothing compensated for that shift, so the
     // admin's view visibly slid down the instant an unrelated new track
-    // came in. Anchoring to whatever's at the top of the viewport before the
-    // DOM changes below, then scrolling by however far that same anchor
-    // moved once they're applied, keeps the admin looking at exactly what
-    // they were looking at — same technique growIframeWithScrollCompensation
-    // already uses for iframe resizes, just covering card insertion too.
-    const renderScrollAnchorEl = document.elementFromPoint(Math.floor(window.innerWidth / 2), 10);
+    // came in. Anchoring directly to the currently-playing card when there
+    // is one (falling back to whatever's at the top of the viewport only
+    // when nothing is playing) and scrolling by however far that anchor
+    // moved once the DOM changes below are applied keeps the admin's
+    // playing track locked to its exact on-screen position — same technique
+    // growIframeWithScrollCompensation already uses for iframe resizes, just
+    // covering card insertion too. See getScrollAnchorEl() for why anchoring
+    // on the playing card itself (rather than "whatever's near the top")
+    // matters specifically for a card centered mid-screen.
+    const renderScrollAnchorEl = getScrollAnchorEl();
     const renderScrollAnchorTop = renderScrollAnchorEl ? renderScrollAnchorEl.getBoundingClientRect().top : null;
 
     // Remove cards that no longer belong in this view (filtered out,
@@ -3919,8 +4028,7 @@
     // future pauseAllExcept() call would try to control a dead reference.
     listEl.querySelectorAll('.submission-card').forEach(card => {
       if (wantedIdSet.has(card.dataset.id)) return;
-      cleanupEmbedTracking(card);
-      animateCardRemoval(card);
+      removeOrKeepStaleCard(card);
     });
 
     const newlyAddedSubmissions = [];
@@ -3945,6 +4053,11 @@
         // kills) any playing iframe inside .embed-wrap before it can be
         // rescued. See updateCardShell()'s comment for the full reasoning.
         updateCardShell(card, s, inTrash);
+        // This submission matches the current view again — clear whatever
+        // removeOrKeepStaleCard() may have set on a previous render() while
+        // it was hidden behind a different tab/search (see that function's
+        // comment) so it renders normally again.
+        card.classList.remove('playing-offview');
       }
       orderedCards.push(card);
     });
@@ -3973,19 +4086,27 @@
     // the queue being deleted/filtered out at the same time). Filtering
     // .card-exiting nodes out before indexing — same technique already used
     // for queue position tracking above — keeps a mid-fade-out card from
-    // corrupting the alignment for everything after it.
+    // corrupting the alignment for everything after it. .playing-offview
+    // cards (removeOrKeepStaleCard, above) need the exact same treatment —
+    // they're also physically present but absent from orderedCards.
     orderedCards.forEach((card, index) => {
-      const liveChildren = Array.from(listEl.children).filter(c => !c.classList.contains('card-exiting'));
+      const liveChildren = Array.from(listEl.children)
+        .filter(c => !c.classList.contains('card-exiting') && !c.classList.contains('playing-offview'));
       if (liveChildren[index] !== card) {
         listEl.insertBefore(card, liveChildren[index] || null);
       }
     });
 
     // Compensation pass for the anchor captured above — see that comment.
-    // Skipped harmlessly if there was nothing to anchor to, or if it got
+    // Skipped harmlessly if there was nothing to anchor to, if it got
     // removed from the view by this same render() (animateCardRemoval keeps
-    // it in the DOM for its fade-out, so .isConnected still holds briefly).
-    if (renderScrollAnchorEl && renderScrollAnchorEl.isConnected && renderScrollAnchorTop !== null) {
+    // it in the DOM for its fade-out, so .isConnected still holds briefly),
+    // or if it just became .playing-offview (removeOrKeepStaleCard, above) —
+    // a display:none element's rect collapses to all-zeros, which would
+    // otherwise read as a huge bogus delta and throw the scroll position
+    // way off for everyone else still visible in the list.
+    if (renderScrollAnchorEl && renderScrollAnchorEl.isConnected && renderScrollAnchorTop !== null
+      && !renderScrollAnchorEl.classList.contains('playing-offview')) {
       const renderScrollAnchorDelta = renderScrollAnchorEl.getBoundingClientRect().top - renderScrollAnchorTop;
       if (renderScrollAnchorDelta !== 0) {
         window.scrollBy({ top: renderScrollAnchorDelta, left: 0, behavior: 'instant' });
@@ -4037,6 +4158,15 @@
     });
 
     updateQueuePosition();
+    // A card just switching to/from .playing-offview (removeOrKeepStaleCard,
+    // above) changes whether the playing card is visible on screen, but that
+    // only reaches nowPlayingCardVisible asynchronously via the
+    // IntersectionObserver callback (display:none genuinely stops
+    // intersecting, so it will fire — just not necessarily before the next
+    // paint). Calling this directly here means the sticky bar — the admin's
+    // only controls for a track that just got tucked behind a different
+    // tab — shows up immediately instead of on the observer's own schedule.
+    updateStickyPlayer();
   }
 
   listEl.addEventListener('click', async (e) => {
