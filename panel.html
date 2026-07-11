@@ -2948,14 +2948,27 @@
   // stop an UNRELATED resize from moving the page out from under someone;
   // here the resize IS the direct result of the action, so actually
   // scrolling to it is the wanted outcome. Waits out grow's own debounce
-  // (180ms) plus its ~300ms CSS height transition before scrolling, so the
-  // card centers against its final grown size instead of landing centered
-  // and then drifting off-center a moment later as it finishes resizing.
-  // Debounced the same way grow is — rapid play/pause toggling collapses
-  // to a single scroll once things settle, instead of fighting itself with
-  // a new smooth-scroll on every toggle.
+  // (GROW_DEBOUNCE_MS, 180ms) plus its full compensation window
+  // (GROW_COMPENSATION_DURATION_MS, 360ms — covering the ~300ms CSS height
+  // transition) before scrolling, with a little margin on top, so this
+  // smooth scrollIntoView never starts while that other (instant, per-frame)
+  // compensation loop is still actively correcting scroll position — the
+  // two fighting over the scroll position at the same time is exactly what
+  // used to make switching tracks look like it visually bounced through the
+  // old one first. Landing after both finish means the card centers against
+  // its own final grown size too, instead of landing centered and then
+  // drifting off-center a moment later as the grow animation keeps going.
+  // Debounced the same way grow is — rapid play/pause toggling collapses to
+  // a single scroll once things settle, instead of fighting itself with a
+  // new smooth-scroll on every toggle.
   let centerNowPlayingTimeout = null;
-  const CENTER_ON_PLAY_DELAY_MS = 500;
+  // 620 = GROW_DEBOUNCE_MS (180) + GROW_COMPENSATION_DURATION_MS (360, see
+  // applyIframeGrowState below) + 80ms margin. Kept as a literal rather than
+  // referencing those constants directly because they're declared later in
+  // module-load order and this runs at module-init time, before a `const`
+  // declared further down is available. If either of those two numbers
+  // changes, update this one to match — it needs to stay >= their sum.
+  const CENTER_ON_PLAY_DELAY_MS = 620;
   function centerNowPlayingCard(card) {
     if (centerNowPlayingTimeout) clearTimeout(centerNowPlayingTimeout);
     if (!card) return;
@@ -3452,6 +3465,32 @@
     }, GROW_DEBOUNCE_MS));
   }
 
+  // THE "SWITCHING TRACKS BOUNCES THROUGH THE OLD ONE FIRST" BUG, the real
+  // cause: the height change these classes trigger isn't instant — SoundCloud's
+  // grow/shrink is a real 300ms CSS transition (.embed-soundcloud-oembed
+  // iframe's `transition: height 0.3s`). The single requestAnimationFrame
+  // this used to do measured the anchor's position exactly ONE FRAME
+  // (~16ms) into that 300ms animation, applied one scrollBy() correction
+  // for that tiny sliver of movement, and then stopped — silently missing
+  // the other ~95% of the shift as the transition kept animating for the
+  // next ~280ms with nobody compensating for it anymore. The admin's
+  // screen doesn't "jump to the old track" on purpose — what they're
+  // actually seeing is the page holding still (scroll position frozen
+  // after that one early correction) while everything around the still-
+  // animating old (shrinking) and new (growing) cards keeps sliding
+  // underneath it, uncompensated, for a quarter of a second, before
+  // centerNowPlayingCard's deliberate scrollIntoView finally arrives 500ms
+  // later and snaps things to where they're actually supposed to end up.
+  // overflow-anchor: none (see body's CSS comment) removes the BROWSER's
+  // own competing auto-correction, but doesn't fix this — this file's own
+  // compensation genuinely wasn't tracking the whole animation.
+  //
+  // Fix: keep re-measuring and re-correcting on every single frame — not
+  // just once — for as long as the CSS transition is actually still
+  // running, using the SAME anchor-pin approach growIframeWithScrollCompensation
+  // was already built on, just sustained instead of one-shot.
+  const GROW_COMPENSATION_DURATION_MS = 360; // covers the 300ms CSS transition plus margin for frame-timing slack
+
   function applyIframeGrowState(iframe, grow, growClass) {
     if (scrollAnchorEl === null) {
       scrollAnchorEl = getScrollAnchorEl();
@@ -3461,18 +3500,30 @@
     if (grow) iframe.classList.add(growClass);
     else iframe.classList.remove(growClass);
 
-    if (scrollAnchorRafId !== null) return; // a compensation pass for this batch is already scheduled
-    scrollAnchorRafId = requestAnimationFrame(() => {
-      scrollAnchorRafId = null;
-      const anchor = scrollAnchorEl;
-      const beforeTop = scrollAnchorTop;
-      scrollAnchorEl = null;
-      scrollAnchorTop = null;
-      if (!anchor || !anchor.isConnected || beforeTop === null) return;
-      const afterTop = anchor.getBoundingClientRect().top;
-      const delta = afterTop - beforeTop;
+    if (scrollAnchorRafId !== null) return; // a compensation pass for this batch is already running
+
+    const anchor = scrollAnchorEl;
+    const pinnedTop = scrollAnchorTop;
+    scrollAnchorEl = null;
+    scrollAnchorTop = null;
+    if (!anchor || pinnedTop === null) return;
+
+    const compensationStartedAt = performance.now();
+    const tick = () => {
+      if (!anchor.isConnected) { scrollAnchorRafId = null; return; }
+      // Pinning against the ORIGINAL fixed position (not the previous
+      // frame's reading) every tick is self-correcting and never
+      // accumulates drift — whatever the anchor's real position is right
+      // now, scroll by exactly enough to put it back where it started.
+      const delta = anchor.getBoundingClientRect().top - pinnedTop;
       if (delta !== 0) window.scrollBy({ top: delta, left: 0, behavior: 'instant' });
-    });
+      if (performance.now() - compensationStartedAt < GROW_COMPENSATION_DURATION_MS) {
+        scrollAnchorRafId = requestAnimationFrame(tick);
+      } else {
+        scrollAnchorRafId = null;
+      }
+    };
+    scrollAnchorRafId = requestAnimationFrame(tick);
   }
 
   async function setupSoundcloudGrowOnPlay(iframe) {
