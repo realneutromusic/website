@@ -3155,7 +3155,34 @@
   let scrollAnchorTop = null;
   let scrollAnchorRafId = null;
 
+  // THE "WAVEFORM COVERED BY RELATED-TRACK COVERS" BUG: growing/shrinking
+  // the iframe (below) is what makes SoundCloud's own widget re-lay out its
+  // content — that responsive reflow on the SoundCloud side is exactly how
+  // "grows while playing" reaches all the way down to the waveform.
+  // Pausing and resuming a track several times in a row fired that resize
+  // on every single toggle, back-to-back, in a very short window.
+  // SoundCloud's own layout doesn't reliably keep up with rapid-fire
+  // resizes like that — its "related tracks" row can end up rendered ON TOP
+  // of the waveform instead of below it, so a click meant to seek lands on
+  // one of those covers instead and jumps to a different track entirely.
+  // Waiting for a brief pause in play/pause activity before actually
+  // resizing — instead of resizing on every single toggle — gives
+  // SoundCloud's layout time to finish settling before it's asked to
+  // resize again, so it's never caught mid-reflow. Tracked per-iframe (not
+  // globally) so growing one card's embed can't delay or cancel another's.
+  const growDebounceTimers = new WeakMap(); // iframe -> pending timeout id
+  const GROW_DEBOUNCE_MS = 180;
+
   function growIframeWithScrollCompensation(iframe, grow, growClass = 'sc-playing') {
+    const pendingTimer = growDebounceTimers.get(iframe);
+    if (pendingTimer) clearTimeout(pendingTimer);
+    growDebounceTimers.set(iframe, setTimeout(() => {
+      growDebounceTimers.delete(iframe);
+      applyIframeGrowState(iframe, grow, growClass);
+    }, GROW_DEBOUNCE_MS));
+  }
+
+  function applyIframeGrowState(iframe, grow, growClass) {
     if (scrollAnchorEl === null) {
       scrollAnchorEl = document.elementFromPoint(Math.floor(window.innerWidth / 2), 10);
       scrollAnchorTop = scrollAnchorEl ? scrollAnchorEl.getBoundingClientRect().top : null;
@@ -3547,7 +3574,23 @@
         info: embedInfo
       };
     }
-    return { html: '', info: null };
+    // THE "NEW SUBMISSION SOMETIMES DOESN'T OPEN" BUG: an unsupported host
+    // (or a link that doesn't parse at all) used to fall all the way
+    // through to an empty string here, which made buildCardShellHtml's
+    // caller just delete the embed slot outright — no player, no message,
+    // nothing. A brand-new card for exactly that kind of link genuinely
+    // looked like "the embed didn't open" with zero indication why, while
+    // every other submission (with a supported link) opened fine right
+    // next to it. Stream Mode already explains this case clearly
+    // (smRenderEmbed's `!info` branch) — mirror that here instead of
+    // silently showing nothing.
+    const hrefLink = (normalizeUrl(rawLink) || {}).href || rawLink;
+    return {
+      html: `<div class="embed-wrap embed-invalid"><p class="embed-error">${host
+        ? `No inline player for this link — <a href="${escapeAttr(hrefLink)}" target="_blank" rel="noopener noreferrer">open it directly</a>.`
+        : 'Invalid link.'}</p></div>`,
+      info: null
+    };
   }
 
   // Called right before a card is removed from the DOM (filtered out,
