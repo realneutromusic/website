@@ -30,7 +30,27 @@
     --ease-spring: cubic-bezier(.34, 1.45, .64, 1);
   }
 
-  * { margin: 0; padding: 0; box-sizing: border-box; }
+  /* THE "SWITCHING TRACKS BOUNCES THROUGH THE OLD ONE FIRST" BUG: browsers
+     run their OWN automatic scroll-anchoring on top of whatever JS does —
+     when layout shifts near the top of the viewport, the browser silently
+     nudges scrollTop using ITS OWN heuristically-picked anchor node,
+     completely unaware of getScrollAnchorEl()'s currently-playing-card-
+     aware compensation (growIframeWithScrollCompensation, render(), etc.)
+     running right alongside it. Switching tracks changes TWO cards' heights
+     within a moment of each other (the new one grows, the old one shrinks)
+     — exactly the kind of near-simultaneous shift the native heuristic is
+     documented to handle unreliably, especially combined with this page's
+     reversed (.sort-reversed, newest-first) flex layout elsewhere. The two
+     systems fighting over the same scroll position is what produced the
+     visible "jumps back to the old track first, then to the new one" — the
+     browser's own correction landing on the old track's shrinking card,
+     immediately followed by this file's own correction landing where it
+     was actually supposed to. Applied on the universal selector (rather
+     than guessing whether html or body ends up being the actual scrolling
+     box) so it's disabled everywhere, leaving this page's fully custom
+     (and specifically now-playing-card-aware) compensation as the only
+     thing moving the scroll position — nothing left to fight with. */
+  * { margin: 0; padding: 0; box-sizing: border-box; overflow-anchor: none; }
 
   body {
     background-color: var(--bg);
@@ -1153,7 +1173,7 @@
           <span class="submit-toggle-dot" id="submit-toggle-dot"></span>
           <span id="submit-toggle-label">Submissions: loading…</span>
         </button>
-        <button type="button" class="autoclean-toggle-btn" id="autoclean-toggle-btn" title="When on, automatically sends anything older than 12 hours straight to Trash">
+        <button type="button" class="autoclean-toggle-btn" id="autoclean-toggle-btn" title="When on, automatically sends anything older than 12 hours straight to Trash (Saved tracks are never auto-cleaned)">
           <span class="autoclean-toggle-dot" id="autoclean-toggle-dot"></span>
           <span id="autoclean-toggle-label">Auto-clean: loading…</span>
         </button>
@@ -1236,7 +1256,7 @@
             <svg class="sm-tucked-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 9l6 6 6-6" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
           <div class="sm-tucked-panel">
-            <button type="button" class="autoclean-toggle-btn sm-autoclean-toggle-btn" id="sm-autoclean-toggle-btn" title="When on, automatically sends anything older than 12 hours straight to Trash">
+            <button type="button" class="autoclean-toggle-btn sm-autoclean-toggle-btn" id="sm-autoclean-toggle-btn" title="When on, automatically sends anything older than 12 hours straight to Trash (Saved tracks are never auto-cleaned)">
               <span class="autoclean-toggle-dot" id="sm-autoclean-toggle-dot"></span>
               <span id="sm-autoclean-toggle-label">Auto-clean: loading…</span>
             </button>
@@ -1849,9 +1869,10 @@
   autocleanToggleBtn.addEventListener('click', () => toggleAutoClean(autocleanToggleBtn));
   smAutocleanToggleBtn.addEventListener('click', () => toggleAutoClean(smAutocleanToggleBtn));
 
-  // Sweeps everything active (not already deleted) older than the
-  // threshold straight to Trash — same soft-delete every other Delete
-  // action uses, so anything swept by mistake is still recoverable there.
+  // Sweeps everything active (not already deleted, and not Saved — see
+  // below) older than the threshold straight to Trash — same soft-delete
+  // every other Delete action uses, so anything swept by mistake is still
+  // recoverable there.
   //
   // Age is measured from submittedAt normally, but restoredAt — stamped by
   // the 'restore' action above whenever the admin brings something back
@@ -1859,10 +1880,19 @@
   // Without that, a restored track (almost always already >12h old, since
   // that's usually why it was in Trash to begin with) would get swept
   // again on the very next tick, undoing the restore within minutes.
+  //
+  // status === 'kept' (Save) is excluded entirely, same as 'deleted'. This
+  // used to sweep Saved tracks right along with everything else — "Save"
+  // existing as a button strongly implies it protects something from being
+  // auto-trashed, and having auto-clean silently undo a deliberate Save
+  // after 12 hours with zero warning contradicted that. "Clean all" (see
+  // its own comment) can still bulk-trash Saved tracks, deliberately and
+  // with a confirmation — this exclusion is specifically about the
+  // *silent, automatic* sweep, not about Saved tracks being untouchable.
   async function runAutoCleanSweep() {
     const cutoff = Date.now() - AUTO_CLEAN_THRESHOLD_MS;
     const stale = allSubmissions.filter(s => {
-      if (s.status === 'deleted') return false;
+      if (s.status === 'deleted' || s.status === 'kept') return false;
       const submittedMs = s.submittedAt && s.submittedAt.toMillis ? s.submittedAt.toMillis() : null;
       const restoredMs = s.restoredAt && s.restoredAt.toMillis ? s.restoredAt.toMillis() : null;
       if (submittedMs === null && restoredMs === null) return false;
@@ -3371,7 +3401,24 @@
   // exactly, and it never drifts unless the admin scrolls it themselves.
   function getScrollAnchorEl() {
     const playingCard = currentPlayingIframe ? currentPlayingIframe.closest('.submission-card') : null;
-    return playingCard || document.elementFromPoint(Math.floor(window.innerWidth / 2), 10);
+    // THE "TRACK JUMPS TO THE TOP WHEN YOU RETURN TO ALL" BUG: a card hidden
+    // via .playing-offview (removeOrKeepStaleCard — kept alive off-screen
+    // while a different tab/search is active, see that function's comment)
+    // has display:none, so its getBoundingClientRect() reads all-zeros. If
+    // it's used as the anchor for the render() pass that's ABOUT to unhide
+    // it (switching back to a tab/search that shows it again), the
+    // before-mutation measurement is a meaningless (0,0) reading, not its
+    // real position — there IS no "real position" yet, it wasn't on screen.
+    // The after-mutation compensation math (delta = new real position minus
+    // that bogus zero) then computes a huge, wrong scrollBy(), which is
+    // exactly what was flinging the view to some arbitrary spot (often
+    // reading as "jumped to the top") the instant the track came back into
+    // view. A card mid-.playing-offview has nothing on-screen worth
+    // preserving, so it's excluded here — render()'s existing-card branch
+    // handles bringing it back into view properly instead, via
+    // centerNowPlayingCard(), once it's actually visible again.
+    if (playingCard && !playingCard.classList.contains('playing-offview')) return playingCard;
+    return document.elementFromPoint(Math.floor(window.innerWidth / 2), 10);
   }
 
   let scrollAnchorEl = null;
@@ -4052,14 +4099,19 @@
     emptyTrashBtn.style.display = (currentFilter === 'trash' && trashCount > 0) ? 'inline-flex' : 'none';
 
     // "Clean all" only makes sense from a view where there's an active
-    // queue worth bulk-clearing: the main pile, or things you've already
-    // listened to and are ready to be done with. It never shows on Trash
-    // (nothing there needs "sending to Trash" again — that's what "Empty
-    // trash" above is for) or on Save (that tab exists specifically to
-    // protect things you deliberately kept, a bulk-trash button there
-    // would be one accidental click away from wiping your favorites).
+    // queue worth bulk-clearing: the main pile, things already listened to
+    // and ready to be done with, or things saved and ready to be cleared
+    // out. It never shows on Trash (nothing there needs "sending to Trash"
+    // again — that's what "Empty trash" above is for). Save now shows it
+    // too, same as Listened — it's still a deliberate, confirmed action
+    // (see the confirm() below), not something that can happen by accident,
+    // so it doesn't undermine auto-clean now leaving Save alone (see
+    // runAutoCleanSweep's comment): auto-clean is the thing that silently
+    // sweeps things away with no confirmation, and Save is protected from
+    // THAT — a bulk action the admin explicitly clicked and confirmed is a
+    // different kind of action entirely.
     const activeCount = allSubmissions.filter(s => s.status !== 'deleted').length;
-    cleanAllBtn.style.display = ((currentFilter === 'all' || currentFilter === 'listened') && activeCount > 0) ? 'inline-flex' : 'none';
+    cleanAllBtn.style.display = ((currentFilter === 'all' || currentFilter === 'listened' || currentFilter === 'kept') && activeCount > 0) ? 'inline-flex' : 'none';
 
     if (searchQuery) {
       items = items.filter(s => {
@@ -4161,10 +4213,26 @@
         // removeOrKeepStaleCard() may have set on a previous render() while
         // it was hidden behind a different tab/search (see that function's
         // comment) so it renders normally again.
+        const wasOffview = card.classList.contains('playing-offview');
         card.classList.remove('playing-offview');
         // And cancel any fade-out-to-removal still in flight for it — see
         // cancelPendingCardRemoval()'s comment for the bug this fixes.
         cancelPendingCardRemoval(card);
+        // THE "TRACK JUMPS TO THE TOP WHEN YOU RETURN TO ALL" BUG, the other
+        // half: while this card was .playing-offview (hidden — admin was on
+        // a different tab/search), getScrollAnchorEl() stopped treating it
+        // as the scroll anchor, since a hidden element has no real on-screen
+        // position worth preserving (see that function's comment). That
+        // fixes the bogus scrollBy() jump, but leaves nothing actively
+        // bringing the track back into view now that it's visible again —
+        // it just lands wherever it happens to fall in the page flow.
+        // Re-centering it here, exactly like a fresh play does
+        // (markNowPlaying → centerNowPlayingCard), is what makes switching
+        // back to the tab this track lives in feel the same as if it had
+        // never left: still front and center, not scrolled off wherever.
+        if (wasOffview && currentPlayingIframe && card.contains(currentPlayingIframe)) {
+          centerNowPlayingCard(card);
+        }
       }
       orderedCards.push(card);
     });
