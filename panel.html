@@ -3356,8 +3356,26 @@
         // until the track is paused/resumed. isPaused() lets us check the
         // widget's actual current state right now and catch up immediately
         // instead of waiting for a future PLAY that's never coming.
+        //
+        // THE "NEW SUBMISSION STEALS THE HIGHLIGHT FROM WHAT'S ACTUALLY
+        // PLAYING" BUG: this ran unconditionally, and SoundCloud's own
+        // isPaused() has been observed (see the hide_related/show_teaser
+        // note above) to misreport "not paused" on a freshly-loaded widget
+        // that was never actually played. For a genuinely brand-new card,
+        // that false positive called the FULL onSoundcloudTrackStarted() —
+        // markNowPlaying() + pauseAllExcept() — which ripped .now-playing
+        // off whatever the admin was actually listening to and handed it to
+        // the new arrival instead, dimming/blurring the real track and
+        // literally pausing it. The race this guard exists for can only
+        // happen when NOTHING was already playing (there's no "admin
+        // clicked play in the split-second before READY" scenario for a
+        // card that already has something else legitimately underway) — so
+        // only trust the self-reported catch-up when there's no
+        // currentPlayingIframe to wrongly steal focus from. A genuine PLAY
+        // event from this widget (bound above) still switches tracks
+        // exactly as before.
         widget.isPaused((paused) => {
-          if (!paused) onSoundcloudTrackStarted();
+          if (!paused && !currentPlayingIframe) onSoundcloudTrackStarted();
         });
       });
     } catch (err) {
@@ -3397,7 +3415,24 @@
       // admin may have switched filters/search while it was in flight.
       const stillThere = document.getElementById(`embed-${submissionId}`);
       if (stillThere) {
+        // THE "PLAYING CARD DRIFTS OFF-CENTER, PART 2" BUG: render()'s own
+        // scroll compensation (see its comment) only covers what happens
+        // SYNCHRONOUSLY inside render() itself — inserting the new card's
+        // tiny "Loading player…" placeholder. This oEmbed fetch resolves
+        // well after render() has already returned, and swaps that small
+        // placeholder for the real (taller, height:120px+) iframe — a
+        // second, completely separate layout shift that nothing was
+        // compensating for, so a track the admin had centered could still
+        // drift down a moment later even with render()'s fix in place.
+        // Same anchor-before/scroll-by-the-delta-after technique, just
+        // wrapped around this specific mutation too.
+        const scAnchorEl = document.elementFromPoint(Math.floor(window.innerWidth / 2), 10);
+        const scAnchorTop = scAnchorEl ? scAnchorEl.getBoundingClientRect().top : null;
         stillThere.innerHTML = cached.html;
+        if (scAnchorEl && scAnchorEl.isConnected && scAnchorTop !== null) {
+          const scAnchorDelta = scAnchorEl.getBoundingClientRect().top - scAnchorTop;
+          if (scAnchorDelta !== 0) window.scrollBy({ top: scAnchorDelta, left: 0, behavior: 'instant' });
+        }
         // SoundCloud's iframe needs to finish loading before the Widget API
         // can bind to it reliably — both the volume call and the
         // grow-on-play setup wait for 'load' rather than running immediately
@@ -3421,9 +3456,18 @@
         // embeddable elsewhere. Other error types get a more generic message
         // since we can't be as sure of the cause.
         const is403 = String(err.message || '').includes('403');
+        // Same scroll-anchor compensation as the success path above — an
+        // error message swapping in for the placeholder is still a height
+        // change that can shift a centered card below it.
+        const scAnchorEl = document.elementFromPoint(Math.floor(window.innerWidth / 2), 10);
+        const scAnchorTop = scAnchorEl ? scAnchorEl.getBoundingClientRect().top : null;
         stillThere.innerHTML = is403
           ? '<p class="embed-error">This track can\'t be embedded — the artist has disabled embedding for it on SoundCloud (separate from public/private). Use the link above to open it directly on SoundCloud.</p>'
           : '<p class="embed-error">Couldn\'t load the SoundCloud player for this link — it may be private, deleted, or temporarily unavailable. The link above still works to open it directly.</p>';
+        if (scAnchorEl && scAnchorEl.isConnected && scAnchorTop !== null) {
+          const scAnchorDelta = scAnchorEl.getBoundingClientRect().top - scAnchorTop;
+          if (scAnchorDelta !== 0) window.scrollBy({ top: scAnchorDelta, left: 0, behavior: 'instant' });
+        }
       }
     }
   }
