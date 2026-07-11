@@ -294,13 +294,27 @@
   .floating-volume input[type="range"]::-webkit-slider-thumb {
     -webkit-appearance: none; appearance: none; width: 13px; height: 13px; border-radius: 50%;
     background: var(--steel-bright); cursor: pointer; box-shadow: 0 0 0 3px rgba(12,20,36,0.92);
-    transition: transform 0.15s var(--ease);
+    transition: box-shadow 0.15s var(--ease);
   }
+  /* Hover/drag feedback is a soft glow, not a resize. ::-webkit-slider-thumb is a
+     native, non-standard pseudo-element — Chrome/Edge clip it into a squared-off
+     shape as soon as its rendered box grows past its own native size (any bigger
+     than ~14px here), so the old `transform: scale(1.2)` on hover made the circle
+     look cut off / boxy instead of round while dragging. Growing a blurred
+     box-shadow instead keeps the thumb itself at its native, always-circular size
+     while still reading as "grew" on hover/active. */
   .floating-volume input[type="range"]:hover::-webkit-slider-thumb,
-  .floating-volume input[type="range"]:active::-webkit-slider-thumb { transform: scale(1.2); }
+  .floating-volume input[type="range"]:active::-webkit-slider-thumb {
+    box-shadow: 0 0 0 3px rgba(12,20,36,0.92), 0 0 8px 1px rgba(168,200,236,0.85);
+  }
   .floating-volume input[type="range"]::-moz-range-thumb {
     width: 13px; height: 13px; border-radius: 50%; background: var(--steel-bright); border: none; cursor: pointer;
     box-shadow: 0 0 0 3px rgba(12,20,36,0.92);
+    transition: box-shadow 0.15s var(--ease);
+  }
+  .floating-volume input[type="range"]:hover::-moz-range-thumb,
+  .floating-volume input[type="range"]:active::-moz-range-thumb {
+    box-shadow: 0 0 0 3px rgba(12,20,36,0.92), 0 0 8px 1px rgba(168,200,236,0.85);
   }
   .global-volume-value {
     font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--ink-faint);
@@ -1996,20 +2010,32 @@
     smNote.style.display = s.note ? 'block' : 'none';
     smNote.textContent = s.note || '';
 
-    const requestId = ++smTitleRequestId;
-    const host = getLinkHost(s.link || '');
-    const canResolveTitle = host === 'soundcloud.com' || host === 'on.soundcloud.com' || host === 'm.soundcloud.com'
-      || host === 'youtube.com' || host === 'youtu.be' || host === 'music.youtube.com'
-      || host === 'dropbox.com';
-    smTitle.textContent = canResolveTitle ? 'Loading title…' : (host || 'Untitled');
-    if (canResolveTitle) {
-      resolveTrackTitle(s.link || '').then(title => {
-        if (requestId !== smTitleRequestId) return;
-        smTitle.textContent = stripTrailingByline(title) || host || 'Untitled';
-      });
+    // THE "NEW SUBMISSION STOPS PLAYBACK" BUG: smRenderSelected() runs on
+    // every smRenderList() call, which itself runs on every single
+    // Firestore snapshot update — including one triggered by a totally
+    // unrelated NEW submission landing in the queue while an admin is
+    // listening to something else entirely. The title re-fetch and (worse)
+    // smRenderEmbed(s) below used to run unconditionally every time, so
+    // receiving a new submission tore down and rebuilt the currently
+    // *playing* track's iframe/widget from scratch — killing playback and
+    // restarting the title as "Loading title…" even though the selected
+    // track never actually changed. Both only need to happen once, the
+    // moment the selection itself changes.
+    if (isNewTrack) {
+      const requestId = ++smTitleRequestId;
+      const host = getLinkHost(s.link || '');
+      const canResolveTitle = host === 'soundcloud.com' || host === 'on.soundcloud.com' || host === 'm.soundcloud.com'
+        || host === 'youtube.com' || host === 'youtu.be' || host === 'music.youtube.com'
+        || host === 'dropbox.com';
+      smTitle.textContent = canResolveTitle ? 'Loading title…' : (host || 'Untitled');
+      if (canResolveTitle) {
+        resolveTrackTitle(s.link || '').then(title => {
+          if (requestId !== smTitleRequestId) return;
+          smTitle.textContent = stripTrailingByline(title) || host || 'Untitled';
+        });
+      }
+      smRenderEmbed(s);
     }
-
-    smRenderEmbed(s);
   }
 
   async function smRenderEmbed(s) {
@@ -2017,6 +2043,16 @@
     const host = getLinkHost(link);
     const info = getEmbedInfo(link, host);
     smEmbedWrap.className = 'stream-embed-wrap';
+    // Release the outgoing YouTube player (if any) before it's abandoned —
+    // otherwise a torn-down-but-never-destroyed YT.Player pile up in the
+    // YouTube IFrame API's shared internal state (it keeps every Player
+    // instance registered globally to dispatch postMessage events to).
+    // Enough orphaned instances pointing at now-detached iframes is what
+    // made embeds elsewhere on the page — the main panel, after leaving
+    // Stream Mode — silently fail to open on the next play.
+    if (smCurrentYoutubePlayer && typeof smCurrentYoutubePlayer.destroy === 'function') {
+      try { smCurrentYoutubePlayer.destroy(); } catch (err) { console.error('Failed to destroy previous Stream Mode YouTube player:', err); }
+    }
     smCurrentSoundcloudWidget = null;
     smCurrentYoutubePlayer = null;
     smCurrentDropboxAudio = null;
