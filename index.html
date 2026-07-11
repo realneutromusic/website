@@ -2900,33 +2900,57 @@
       // semitones down through the octave that matters most for reading
       // the track's actual root/bass note.
       const fftSize = 8192, hop = 4096;
-      const chroma = new Float64Array(12);
+      const chromaEnergy = new Float64Array(12);
+      const chromaPeaks = new Float64Array(12);
       const window = hannWindow(fftSize);
       let energy = 0;
+      const minBin = Math.max(1, Math.floor(130 * fftSize / sampleRate));
+      const maxBin = Math.min(fftSize / 2 - 1, Math.floor(5000 * fftSize / sampleRate));
+      const TOP_K = 8;
+      // Blends two views of the same spectrum instead of picking one:
+      // raw per-bin energy (chromaEnergy) reflects true relative loudness
+      // per pitch class, but a loud sustained pad/bass dumps energy into
+      // dozens of bins every frame and can out-vote a clearer, quieter
+      // lead or arp when summed directly — that's what let a track's
+      // signature arp (clearly and correctly G# minor on its own) get
+      // drowned out in the full mix. Spectral peaks (chromaPeaks)
+      // approximate "which notes are actually sounding" the way a
+      // listener follows a melodic line, which catches that lead — but
+      // peaks alone skew toward "Major" (the natural harmonic series
+      // emphasizes major-3rd-ish overtones even under a minor chord), so
+      // neither signal is reliable completely on its own.
       for (let start = 0; start + fftSize <= segment.length; start += hop) {
         const frame = new Float64Array(fftSize);
         for (let i = 0; i < fftSize; i++) frame[i] = segment[start + i] * window[i];
         const mags = fftMagnitudes(frame);
-        const minBin = Math.max(1, Math.floor(130 * fftSize / sampleRate));
-        const maxBin = Math.min(mags.length - 1, Math.floor(5000 * fftSize / sampleRate));
-        for (let bin = minBin; bin <= maxBin; bin++) {
+        const peaks = [];
+        for (let bin = minBin + 1; bin < maxBin - 1; bin++) {
+          const contribution = Math.log1p(mags[bin] * mags[bin]);
           const freq = bin * sampleRate / fftSize;
           const midi = 69 + 12 * Math.log2(freq / 440);
           const pitchClass = ((Math.round(midi) % 12) + 12) % 12;
-          const contribution = Math.log1p(mags[bin] * mags[bin]);
-          chroma[pitchClass] += contribution;
+          chromaEnergy[pitchClass] += contribution;
           energy += contribution;
+          if (mags[bin] > mags[bin-1] && mags[bin] > mags[bin+1]) peaks.push({ bin, mag: mags[bin] });
         }
+        peaks.sort((a, b) => b.mag - a.mag);
+        for (const p of peaks.slice(0, TOP_K)) {
+          const freq = p.bin * sampleRate / fftSize;
+          const midi = 69 + 12 * Math.log2(freq / 440);
+          const pitchClass = ((Math.round(midi) % 12) + 12) % 12;
+          chromaPeaks[pitchClass] += Math.log1p(p.mag * p.mag);
+        }
+      }
+      const eMax = Math.max(...chromaEnergy) || 1;
+      const pMax = Math.max(...chromaPeaks) || 1;
+      const PEAK_WEIGHT = 0.3;
+      const chroma = new Float64Array(12);
+      for (let i = 0; i < 12; i++) {
+        chroma[i] = (1 - PEAK_WEIGHT) * (chromaEnergy[i] / eMax) + PEAK_WEIGHT * (chromaPeaks[i] / pMax);
       }
       return { chroma, energy };
     }
 
-    // ---- multi-window key: samples three stretches spread across the
-    // track (~15%, ~45%, ~75% in) instead of one fixed segment, and blends
-    // their chroma together — a quiet intro naturally contributes less
-    // (lower energy = fewer log-magnitude contributions), the loud main
-    // sections dominate, without needing to explicitly detect "which
-    // section is the real song" at all.
     // ---- bass-register chroma: sub/bassline content usually states the
     // track's actual root far more clearly than the full mix, especially
     // in bass-forward electronic music — but the main chromaForSegment
@@ -2960,6 +2984,12 @@
       return { chroma, energy };
     }
 
+    // ---- multi-window key: samples three stretches spread across the
+    // track (~15%, ~45%, ~75% in) instead of one fixed segment, and blends
+    // their chroma together — a quiet intro naturally contributes less
+    // (lower energy = fewer log-magnitude contributions), the loud main
+    // sections dominate, without needing to explicitly detect "which
+    // section is the real song" at all.
     function detectKey(sampleRate, data) {
       const windowSec = Math.min(35, (data.length / sampleRate) / 3);
       const positions = [0.15, 0.45, 0.75].map(f => Math.floor(f * data.length));
@@ -3014,6 +3044,17 @@
       const bassPitchClass = (bassMax > 1e-6 && bassMax > bassMean * 1.3)
         ? combinedBass.reduce((best, v, i) => v > combinedBass[best] ? i : best, 0)
         : null;
+      // How close counts as "close enough for the bass to break the
+      // tie". 0.12 sounds generous, but it's calibrated against how
+      // spread out scores are with the energy+peaks blended chroma above
+      // — with that blend, the correct candidate on a real bass-forward
+      // track sat ~0.11 behind the top scorer, while a genuinely wrong
+      // override on another track needed a ~0.065 gap to sneak in. There
+      // isn't a single margin that cleanly separates "real near-tie" from
+      // "clearly behind" in the abstract; this value is whatever tested
+      // correctly against real tracks with the current chroma blend, not
+      // a principle on its own — if chromaForSegment's blend changes,
+      // recheck this against real audio rather than assuming it still holds.
       const contenders = allScores.filter(c => c.score > best.score - 0.12);
       const bassMatch = bassPitchClass !== null
         ? contenders.find(c => c.root === bassPitchClass)
@@ -3026,6 +3067,26 @@
         // recompute "second" relative to the chosen candidate so the
         // margin/runner-up below still reflects real ambiguity
         second = allScores.find(c => c.key !== chosen.key) || second;
+      }
+
+      // Full-profile correlation judges major-vs-minor off all 12
+      // scale-degree weights at once, which can get swayed by things that
+      // have nothing to do with actual chord quality — the natural
+      // harmonic series emphasizes major-3rd-ish overtones even over a
+      // minor chord, and that alone was enough to flip a real minor track
+      // to "Major" in testing. Whether the 3rd itself is major or minor
+      // is the one thing that actually, directly defines the difference,
+      // so it settles the major/minor call directly here instead of
+      // trusting profile correlation for it — keeping the root from the
+      // correlation/bass step above, which is a separate and more
+      // reliable question.
+      const minorThird = chroma[(chosen.root + 3) % 12];
+      const majorThird = chroma[(chosen.root + 4) % 12];
+      const isMinor = chosen.key.endsWith('Minor');
+      if (isMinor && majorThird > minorThird * 1.08) {
+        chosen = allScores.find(c => c.root === chosen.root && c.key.endsWith('Major')) || chosen;
+      } else if (!isMinor && minorThird > majorThird * 1.08) {
+        chosen = allScores.find(c => c.root === chosen.root && c.key.endsWith('Minor')) || chosen;
       }
 
       const margin = chosen.score - (second.score || 0);
