@@ -1838,12 +1838,22 @@
   // Sweeps everything active (not already deleted) older than the
   // threshold straight to Trash — same soft-delete every other Delete
   // action uses, so anything swept by mistake is still recoverable there.
+  //
+  // Age is measured from submittedAt normally, but restoredAt — stamped by
+  // the 'restore' action above whenever the admin brings something back
+  // from Trash — takes over as the reference point whenever it's later.
+  // Without that, a restored track (almost always already >12h old, since
+  // that's usually why it was in Trash to begin with) would get swept
+  // again on the very next tick, undoing the restore within minutes.
   async function runAutoCleanSweep() {
     const cutoff = Date.now() - AUTO_CLEAN_THRESHOLD_MS;
     const stale = allSubmissions.filter(s => {
       if (s.status === 'deleted') return false;
-      const ms = s.submittedAt && s.submittedAt.toMillis ? s.submittedAt.toMillis() : null;
-      return ms !== null && ms < cutoff;
+      const submittedMs = s.submittedAt && s.submittedAt.toMillis ? s.submittedAt.toMillis() : null;
+      const restoredMs = s.restoredAt && s.restoredAt.toMillis ? s.restoredAt.toMillis() : null;
+      if (submittedMs === null && restoredMs === null) return false;
+      const referenceMs = Math.max(submittedMs || 0, restoredMs || 0);
+      return referenceMs < cutoff;
     });
     if (stale.length === 0) return;
     try {
@@ -4225,7 +4235,18 @@
         // Nothing is actually destroyed here — recoverable via "Restore".
         await updateDoc(doc(db, 'submissions', id), { status: 'deleted', deletedAt: serverTimestamp() });
       } else if (action === 'restore') {
-        await updateDoc(doc(db, 'submissions', id), { status: 'new', deletedAt: null });
+        // THE "RESTORED TRACK GETS INSTANTLY RE-AUTO-CLEANED" BUG: auto-clean's
+        // 12h countdown (runAutoCleanSweep, below) used to key purely off
+        // submittedAt — the ORIGINAL submission time, which this update never
+        // touched. Anything that had already passed 12h (exactly how most
+        // things land in Trash via auto-clean in the first place) would still
+        // read as "more than 12h old" the instant it came back to
+        // status:'new', so the very next sweep (within 5 minutes) sent it
+        // straight back to Trash — as if Restore had never happened.
+        // Stamping restoredAt here gives runAutoCleanSweep() a second,
+        // independent clock, so restoring gives the track a genuinely fresh
+        // 12 hours before auto-clean can touch it again.
+        await updateDoc(doc(db, 'submissions', id), { status: 'new', deletedAt: null, restoredAt: serverTimestamp() });
       } else if (action === 'delete-forever') {
         if (!confirm('Permanently delete this submission? This can\'t be undone.')) return;
         await deleteDoc(doc(db, 'submissions', id));
