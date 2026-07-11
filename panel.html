@@ -3959,9 +3959,25 @@
     // item — means a card already sitting correctly is never touched at
     // all, so e.g. a brand-new submission appended at the end never
     // disturbs any card before it.
+    //
+    // THE "PLAYBACK RANDOMLY STOPS AND RESTARTS FROM 0" BUG: a card being
+    // removed (animateCardRemoval, above) stays physically in listEl for up
+    // to 400ms — it fades out via .card-exiting instead of being yanked
+    // instantly. It's already excluded from `items`/`orderedCards` at that
+    // point, but comparing against raw listEl.children[index] still counted
+    // it as an occupied slot. That shifted every index comparison after it
+    // by one, so this loop concluded every following card — including
+    // whichever one has a track actively playing — was "out of place" and
+    // moved it, reloading its iframe from scratch for no reason visible to
+    // the admin (it was triggered by some UNRELATED submission elsewhere in
+    // the queue being deleted/filtered out at the same time). Filtering
+    // .card-exiting nodes out before indexing — same technique already used
+    // for queue position tracking above — keeps a mid-fade-out card from
+    // corrupting the alignment for everything after it.
     orderedCards.forEach((card, index) => {
-      if (listEl.children[index] !== card) {
-        listEl.insertBefore(card, listEl.children[index] || null);
+      const liveChildren = Array.from(listEl.children).filter(c => !c.classList.contains('card-exiting'));
+      if (liveChildren[index] !== card) {
+        listEl.insertBefore(card, liveChildren[index] || null);
       }
     });
 
