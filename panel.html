@@ -3850,6 +3850,21 @@
     const wantedIds = items.map(s => s.id);
     const wantedIdSet = new Set(wantedIds);
 
+    // THE "PLAYING CARD DRIFTS OFF-CENTER WHEN A NEW SUBMISSION ARRIVES"
+    // BUG: inserting a brand-new card ABOVE whatever the admin is currently
+    // looking at (which, in "newest first" sort, is exactly where a new
+    // submission lands) pushes everything below it down by that new card's
+    // height — including a track that's centered on-screen because it's the
+    // one currently playing. Nothing compensated for that shift, so the
+    // admin's view visibly slid down the instant an unrelated new track
+    // came in. Anchoring to whatever's at the top of the viewport before the
+    // DOM changes below, then scrolling by however far that same anchor
+    // moved once they're applied, keeps the admin looking at exactly what
+    // they were looking at — same technique growIframeWithScrollCompensation
+    // already uses for iframe resizes, just covering card insertion too.
+    const renderScrollAnchorEl = document.elementFromPoint(Math.floor(window.innerWidth / 2), 10);
+    const renderScrollAnchorTop = renderScrollAnchorEl ? renderScrollAnchorEl.getBoundingClientRect().top : null;
+
     // Remove cards that no longer belong in this view (filtered out,
     // deleted, search no longer matches). This is the only case where a
     // card with a possibly-playing embed gets torn down — which is correct,
@@ -3905,6 +3920,17 @@
         listEl.insertBefore(card, listEl.children[index] || null);
       }
     });
+
+    // Compensation pass for the anchor captured above — see that comment.
+    // Skipped harmlessly if there was nothing to anchor to, or if it got
+    // removed from the view by this same render() (animateCardRemoval keeps
+    // it in the DOM for its fade-out, so .isConnected still holds briefly).
+    if (renderScrollAnchorEl && renderScrollAnchorEl.isConnected && renderScrollAnchorTop !== null) {
+      const renderScrollAnchorDelta = renderScrollAnchorEl.getBoundingClientRect().top - renderScrollAnchorTop;
+      if (renderScrollAnchorDelta !== 0) {
+        window.scrollBy({ top: renderScrollAnchorDelta, left: 0, behavior: 'instant' });
+      }
+    }
 
     // Resolve SoundCloud players via oEmbed only for genuinely new cards —
     // existing ones either already resolved, or are still loading from a
