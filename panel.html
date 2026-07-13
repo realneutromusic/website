@@ -1007,6 +1007,21 @@
     font-family: 'Unbounded', sans-serif; font-weight: 800; font-size: clamp(1.6rem, 4vw, 2.6rem);
     letter-spacing: -0.02em; line-height: 1.15; margin-bottom: 8px; word-break: break-word;
   }
+  .stream-empty {
+    width: 100%; max-width: 480px; margin: 0 auto; text-align: center;
+  }
+  .stream-empty .big-check {
+    width: 72px; height: 72px; margin: 0 auto 22px; border-radius: 50%;
+    background: var(--steel-soft); border: 1px solid rgba(79,123,176,0.4);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .stream-empty .big-check svg { width: 32px; height: 32px; color: var(--steel-bright); }
+  .stream-empty h2 {
+    font-family: 'Unbounded', sans-serif; font-size: 1.4rem; font-weight: 800; margin-bottom: 10px;
+  }
+  .stream-empty p {
+    font-size: 14px; color: var(--ink-dim); max-width: 420px; margin: 0 auto; line-height: 1.5;
+  }
   .stream-note {
     font-size: 14px; color: var(--ink-dim); max-width: 600px; margin: 0 auto 26px; line-height: 1.5;
   }
@@ -1308,7 +1323,7 @@
         </div>
 
         <div class="stream-empty" id="sm-empty" style="display:none">
-          <div class="big-check"><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div class="big-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6L9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
           <h2>All caught up.</h2>
           <p>Nothing left in the New queue right now — new submissions will show up here automatically.</p>
         </div>
