@@ -1,5 +1,19 @@
 [
 {
+    "catalog": "NTR#009",
+    "artist": "Neutro & Scarlett",
+    "title": "Say It Again",
+    "image": "NTR009.jpg",
+    "spotify_link": "https://open.spotify.com/intl-es/album/7hoAgexJBqpMbnPP9nVQxL?si=TbeJnWXaR2iA9wdjk7_ZVg",
+    "soundcloud_link": "https://soundcloud.com/realneutromusic/neutro-scarlett-say-it-again",
+    "applemusic_link": "https://music.apple.com/us/song/say-it-again/6781948868",
+    "youtubemusic_link": "https://music.youtube.com/watch?v=ACCW2z6B73A&si=QzXNElDoa2Qd5GQd",
+    "collab_links": {
+      "Scarlett": "https://open.spotify.com/intl-es/artist/06ahQOusxyLRkcUMrXts8s?si=mS89FKagQkOhxD7fadRVXw"
+    },
+    "label": "spiration music"
+  },
+{
     "catalog": "NTR#008",
     "artist": "Neutro & TAIGA",
     "title": "Say You Miss Me",
