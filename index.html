@@ -75,16 +75,20 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 
 <!-- hero photo is the largest-contentful-paint element, so hint the
-     browser to fetch it immediately — one link per breakpoint AND per
-     format, since desktop/mobile are different files and webp/jpg are
-     alternate formats of the same image, not different breakpoints.
-     `type` makes the browser skip whichever format it can't use, and
-     `media` makes it skip whichever breakpoint doesn't apply, so each
-     visitor ends up actually fetching exactly one of these four. -->
+     browser to fetch it immediately — one link per breakpoint, webp only.
+     The CSS below (.hero-photo) picks the image via image-set(), webp
+     listed first, jpg as its fallback for browsers that can't decode
+     webp at all. That's the same near-100%-of-visitors case these
+     preloads should cover, so preloading the jpg here too used to just
+     buy a second, wasted fetch of the *other* format on every load, on
+     top of the one actually used to paint — confirmed in practice by
+     Chrome's own "preloaded but not used" console warning on the jpg
+     every time. The plain jpg url() in the CSS is still there as a real
+     fallback for that rare non-webp browser; it just loads normally
+     instead of being preloaded, since we can't cheaply know in advance
+     which of the two it'll need. -->
 <link rel="preload" as="image" href="./hero/hero-mobile.webp" type="image/webp" media="(max-width: 767px)">
-<link rel="preload" as="image" href="./hero/hero-mobile.jpg" type="image/jpeg" media="(max-width: 767px)">
 <link rel="preload" as="image" href="./hero/hero-desktop.webp" type="image/webp" media="(min-width: 768px)">
-<link rel="preload" as="image" href="./hero/hero-desktop.jpg" type="image/jpeg" media="(min-width: 768px)">
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;600;700;800;900&family=Sora:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 
@@ -185,12 +189,13 @@
     padding: 8px 14px 8px 10px;
     border-radius: 999px;
     background: rgba(12,20,36,0.78);
+    /* this is a <button> — border reset first, custom border on top */
+    border: none;
     border: 1px solid var(--line);
     backdrop-filter: blur(10px);
-    cursor: pointer; border: none;
+    cursor: pointer;
     transition: border-color 0.3s var(--ease), background 0.3s var(--ease);
   }
-  .topbar .mark { border: 1px solid var(--line); }
   .topbar .mark:hover { border-color: var(--ink-faint); }
   .topbar .mark-dot {
     width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
