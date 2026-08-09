@@ -2751,12 +2751,81 @@
     function pickBestCandidate(candidates) {
       if (!candidates.length) return null;
       const topScore = candidates.reduce((m, c) => Math.max(m, c.score), 0);
-      function inDanceRange(bpm) { return bpm >= 90 && bpm <= 175; }
-      const tied = candidates.filter(c => c.score >= topScore * 0.88);
-      const tiedInRange = tied.filter(c => inDanceRange(c.bpm));
-      let chosen;
-      if (tiedInRange.length > 0) chosen = tiedInRange.reduce((a, b) => (b.score > a.score ? b : a));
-      else chosen = candidates.reduce((a, b) => (b.score > a.score ? b : a));
+
+      // find the strongest candidate near a given BPM (used to look up the
+      // octave-shifted reading of whatever we're currently holding)
+      function scoreNearBpm(targetBpm) {
+        let best = null;
+        for (const c of candidates) {
+          if (Math.abs(c.bpm - targetBpm) / targetBpm < 0.03) {
+            if (!best || c.score > best.score) best = c;
+          }
+        }
+        return best;
+      }
+
+      // Autocorrelation of a periodic beat is strong at EVERY integer
+      // multiple of the true period, not just the fundamental -- a track
+      // with a strong 2-beat accent (clap/open-hat every other kick, a
+      // 2-bar chord change, etc.) routinely scores higher at 2x the beat
+      // period (half the real BPM) than at the beat period itself, which
+      // is what turned a real 120 BPM track into a reported 60 BPM.
+      //
+      // A fixed "preferred range" to fold toward (e.g. 90-175) was tried
+      // first and made things worse: it punished tracks that are
+      // genuinely fast (drum & bass, hardcore, 175-200 BPM) by folding a
+      // correct, clearly-dominant 180 BPM reading down to a weaker 90 BPM
+      // one just for sitting outside the window. There's no fixed BPM
+      // window that's "the dance range" -- the tool's own search bounds
+      // already are 60-200.
+      //
+      // What actually distinguishes the two failure modes is direction:
+      // spurious accents inflate the SLOWER octave's score (an accent
+      // every other beat is still periodic at the true beat rate, so it
+      // never inflates the faster reading), never the faster one. So walk
+      // from the raw winner toward double- and triple-time, one step at a
+      // time, and keep going as long as the faster candidate is still
+      // reasonably well supported on its own -- not just close to the
+      // current pick, which would also accept a fast reading propped up
+      // by mere proximity to an already-inflated slow pick. Triple-time
+      // needs a higher bar since a 3x coincidence is more likely to be
+      // spurious than a 2x one.
+      const rawBest = candidates.reduce((a, b) => (b.score > a.score ? b : a));
+      const DOUBLE_TIME_RATIO = 0.7;
+      const TRIPLE_TIME_RATIO = 0.85;
+      let chosen = rawBest;
+      let guard = 0;
+      while (guard++ < 3) {
+        const double = scoreNearBpm(chosen.bpm * 2);
+        const triple = scoreNearBpm(chosen.bpm * 3);
+        const options = [];
+        if (double && double.score >= topScore * DOUBLE_TIME_RATIO) options.push(double);
+        if (triple && triple.score >= topScore * TRIPLE_TIME_RATIO) options.push(triple);
+        if (!options.length) break;
+        chosen = options.reduce((a, b) => (b.score > a.score ? b : a));
+      }
+
+      // Sub-integer refinement: the search above only tests whole-sample
+      // lags, so at higher BPM (where one sample of lag is a bigger jump
+      // in BPM) the true peak often falls between two tested lags and the
+      // raw integer answer is off by a BPM or two even when the right lag
+      // was found. Parabolic interpolation across the winning lag and its
+      // immediate neighbors estimates where the peak actually sits between
+      // them -- the standard trick for sharpening a discretely sampled peak.
+      const idx = candidates.indexOf(chosen);
+      if (idx > 0 && idx < candidates.length - 1) {
+        const left = candidates[idx - 1].score;
+        const center = chosen.score;
+        const right = candidates[idx + 1].score;
+        const denom = left - 2 * center + right;
+        if (Math.abs(denom) > 1e-12) {
+          let offset = 0.5 * (left - right) / denom;
+          offset = Math.max(-0.5, Math.min(0.5, offset));
+          const refinedLag = chosen.lag + offset;
+          chosen = { ...chosen, bpm: (candidates[idx].bpm * chosen.lag) / refinedLag };
+        }
+      }
+
       return { chosen, topScore };
     }
 
@@ -2766,6 +2835,22 @@
     // them — this is what actually protects the result against a breakdown
     // or intro/outro that doesn't represent the track's main tempo.
     function detectBPM(sampleRate, channelData) {
+      // Silence (or noise low enough to be effectively silence) makes
+      // every autocorrelation score collapse to ~0 -- every lag ties, and
+      // the tie-break picks whichever comes first in the search order,
+      // which is always the fastest tempo in range (200 BPM). That's a
+      // confident-*looking* number with nothing real behind it. Gate on
+      // actual signal peak first and say so honestly instead of
+      // guessing — the same thing detectKey already does for silence.
+      let peak = 0;
+      for (let i = 0; i < channelData.length; i++) {
+        const v = Math.abs(channelData[i]);
+        if (v > peak) peak = v;
+      }
+      if (peak < 0.005) {
+        return { bpm: null, isExact: false, confidence: 0, altBpm: null };
+      }
+
       const { diff, envRate } = computeOnsetEnvelope(sampleRate, channelData);
       const minBpm = 60, maxBpm = 200;
 
@@ -2884,10 +2969,20 @@
     const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
     const MAJOR_PROFILE = [6.35,2.23,3.48,2.33,4.38,4.09,2.52,5.19,2.39,3.66,2.29,2.88];
     const MINOR_PROFILE = [6.33,2.68,3.52,5.38,2.60,3.53,2.54,4.75,3.98,2.69,3.34,3.17];
+    // Keyed with the same sharp-only spelling NOTE_NAMES always produces
+    // (chosen.key is built by joining NOTE_NAMES[root] with Major/Minor,
+    // and NOTE_NAMES has no flats) -- this table used to mix in flat spellings
+    // for a few entries (Db/Ab/Eb/Bb), which meant the detector's actual
+    // output could never match them: a track detected as "D# Major" would
+    // look up CAMELOT['D# Major'], find nothing (the table only had 'Eb
+    // Major'), and silently show a blank Camelot code instead of 5B. That
+    // hit 5 of the 24 possible keys — the single most important number on
+    // this screen for the tool's actual DJ/harmonic-mixing use case,
+    // missing outright almost a quarter of the time.
     const CAMELOT = {
-      'B Major':'1B','F# Major':'2B','Db Major':'3B','Ab Major':'4B','Eb Major':'5B','Bb Major':'6B',
+      'B Major':'1B','F# Major':'2B','C# Major':'3B','G# Major':'4B','D# Major':'5B','A# Major':'6B',
       'F Major':'7B','C Major':'8B','G Major':'9B','D Major':'10B','A Major':'11B','E Major':'12B',
-      'G# Minor':'1A','D# Minor':'2A','Bb Minor':'3A','F Minor':'4A','C Minor':'5A','G Minor':'6A',
+      'G# Minor':'1A','D# Minor':'2A','A# Minor':'3A','F Minor':'4A','C Minor':'5A','G Minor':'6A',
       'D Minor':'7A','A Minor':'8A','E Minor':'9A','B Minor':'10A','F# Minor':'11A','C# Minor':'12A'
     };
 
@@ -2963,23 +3058,43 @@
     function bassChromaForSegment(sampleRate, segment) {
       const fftSize = 16384, hop = 8192;
       if (segment.length < fftSize) return { chroma: new Float64Array(12), energy: 0 };
-      const chroma = new Float64Array(12);
       const window = hannWindow(fftSize);
-      let energy = 0;
+      const minBin = Math.max(1, Math.floor(40 * fftSize / sampleRate));
+      const maxBin = Math.min(fftSize / 2 - 1, Math.floor(300 * fftSize / sampleRate));
+
+      // Collect every frame's spectrum instead of summing them straight in
+      // — a pitched kick/sub hit (extremely common in house/techno: a
+      // thump that sweeps from ~150Hz down to ~50Hz on every single kick)
+      // shows up as a spike in whichever frame(s) catch it, while a
+      // genuine sustained bassline note holds roughly steady across most
+      // frames in the window. A straight energy sum can't tell those
+      // apart and lets the kick's pitch envelope outweigh the actual
+      // bassline, steering the detected root toward a note with nothing
+      // to do with the song's key. Taking the per-bin MEDIAN across
+      // frames instead of the sum discounts a bin that's only loud in a
+      // minority of frames, which favors whatever's actually sustained.
+      const frames = [];
       for (let start = 0; start + fftSize <= segment.length; start += hop) {
         const frame = new Float64Array(fftSize);
         for (let i = 0; i < fftSize; i++) frame[i] = segment[start + i] * window[i];
-        const mags = fftMagnitudes(frame);
-        const minBin = Math.max(1, Math.floor(40 * fftSize / sampleRate));
-        const maxBin = Math.min(mags.length - 1, Math.floor(300 * fftSize / sampleRate));
-        for (let bin = minBin; bin <= maxBin; bin++) {
-          const freq = bin * sampleRate / fftSize;
-          const midi = 69 + 12 * Math.log2(freq / 440);
-          const pitchClass = ((Math.round(midi) % 12) + 12) % 12;
-          const contribution = Math.log1p(mags[bin] * mags[bin]);
-          chroma[pitchClass] += contribution;
-          energy += contribution;
-        }
+        frames.push(fftMagnitudes(frame));
+      }
+      if (!frames.length) return { chroma: new Float64Array(12), energy: 0 };
+
+      const chroma = new Float64Array(12);
+      let energy = 0;
+      const buf = new Float64Array(frames.length);
+      for (let bin = minBin; bin <= maxBin; bin++) {
+        for (let f = 0; f < frames.length; f++) buf[f] = frames[f][bin];
+        buf.sort();
+        const mid = Math.floor(frames.length / 2);
+        const med = frames.length % 2 === 0 ? (buf[mid - 1] + buf[mid]) / 2 : buf[mid];
+        const freq = bin * sampleRate / fftSize;
+        const midi = 69 + 12 * Math.log2(freq / 440);
+        const pitchClass = ((Math.round(midi) % 12) + 12) % 12;
+        const contribution = Math.log1p(med * med);
+        chroma[pitchClass] += contribution;
+        energy += contribution;
       }
       return { chroma, energy };
     }
@@ -2991,6 +3106,19 @@
     // sections dominate, without needing to explicitly detect "which
     // section is the real song" at all.
     function detectKey(sampleRate, data) {
+      // Silence isn't the only "nothing here" case -- quantization/noise
+      // floor content still produces nonzero FFT energy in every bin, so
+      // a plain energy>0 check basically always passes on real audio
+      // buffers even when there's no actual musical signal. Gate on peak
+      // amplitude first, same threshold and reasoning as detectBPM's
+      // silence check.
+      let peak = 0;
+      for (let i = 0; i < data.length; i++) {
+        const v = Math.abs(data[i]);
+        if (v > peak) peak = v;
+      }
+      if (peak < 0.005) return { key: '—', camelot: '—', relative: '—', confidence: 0.3 };
+
       const windowSec = Math.min(35, (data.length / sampleRate) / 3);
       const positions = [0.15, 0.45, 0.75].map(f => Math.floor(f * data.length));
       const combined = new Float64Array(12);
@@ -3011,99 +3139,79 @@
       const chromaMax = Math.max(...combined) || 1;
       const chroma = Array.from(combined, v => v / chromaMax);
 
-      // rank every one of the 24 candidates instead of only tracking the
-      // top two — needed below to check whether the bass root corroborates
-      // one of the close contenders, not just the single highest scorer
+      // only trust the bass chroma as a corroborating signal if it's an
+      // actual, reasonably clear peak above the general bass noise floor —
+      // a track with little or no real bassline shouldn't get steered by
+      // whatever low content happens to be loudest by a hair
+      const bassMax = Math.max(...combinedBass);
+      const bassMean = combinedBass.reduce((s, v) => s + v, 0) / 12;
+      const hasBassSignal = bassMax > 1e-6 && bassMax > bassMean * 1.3;
+      const bassNorm = hasBassSignal ? Array.from(combinedBass, v => v / bassMax) : new Array(12).fill(0);
+
+      // Score every one of the 24 candidates on profile-correlation AND
+      // third-interval quality AT ONCE, instead of picking a root from
+      // profile correlation alone and only patching the mode afterward.
+      // That sequential approach has a blind spot: relative major/minor
+      // keys share all 7 notes (literally the same pitch-class
+      // histogram), so it's the single most common key-detection mistake
+      // there is — and once profile correlation locks onto the WRONG one
+      // of the pair, a downstream mode check that only asks "is *this*
+      // root's own 3rd major or minor" gets answered in a perfectly
+      // self-consistent way by the wrong root too (its "3rd" is just some
+      // other degree of the real key), rubber-stamping the mistake
+      // instead of catching it. Scoring all 24 together lets third-degree
+      // evidence actually outvote a profile-correlation pick it disagrees
+      // with, rather than only ever refining whatever profile correlation
+      // already committed to.
+      //   - profile: the trained major/minor pitch-class template match
+      //   - third: does *this* candidate's own major/minor 3rd actually
+      //     dominate — i.e. is its claimed mode self-consistent
+      //
+      // Bass-root corroboration (how much bass energy sits on a
+      // candidate's root) was tried as a third scored signal here too,
+      // and reliably made things worse in testing: a kick with any pitch
+      // envelope (near-universal in house/techno — a thump sweeping from
+      // ~150Hz down to ~50Hz) plants real, sustained-looking energy
+      // across exactly the 40-300Hz range a bassline lives in, and
+      // nothing in a frequency analysis alone can fully tell "note being
+      // played" apart from "drum transient passing through this pitch".
+      // That's reliable enough to outvote a correct profile+third pick
+      // more often than it rescues a wrong one. It's kept below purely as
+      // a confidence *booster* when it happens to agree with what
+      // profile+third already decided — cheap to use that way since it
+      // can't steer the answer, only report more or less certainty in it.
+      const THIRD_WEIGHT = 0.2;
       const allScores = [];
       for (let root = 0; root < 12; root++) {
-        allScores.push({ score: correlate(chroma, rotate(MAJOR_PROFILE, root)), key: NOTE_NAMES[root] + ' Major', root });
-        allScores.push({ score: correlate(chroma, rotate(MINOR_PROFILE, root)), key: NOTE_NAMES[root] + ' Minor', root });
+        const minorThird = chroma[(root + 3) % 12];
+        const majorThird = chroma[(root + 4) % 12];
+        allScores.push({ root, key: NOTE_NAMES[root] + ' Major', profile: correlate(chroma, rotate(MAJOR_PROFILE, root)), third: majorThird - minorThird });
+        allScores.push({ root, key: NOTE_NAMES[root] + ' Minor', profile: correlate(chroma, rotate(MINOR_PROFILE, root)), third: minorThird - majorThird });
       }
-      allScores.sort((a, b) => b.score - a.score);
-      let best = allScores[0];
-      let second = allScores[1];
-
-      // Profile correlation alone genuinely can't separate relative
-      // major/minor (or modal siblings like Dorian, common in house/
-      // electronic music, which share the same 7 notes as a different
-      // major/minor pair) — the pitch-class histogram is identical either
-      // way. What actually distinguishes them is which note the music
-      // resolves to, and the clearest signal for that in bass-forward
-      // music is literally which note the bassline centers on — much
-      // more reliable here than another pass of profile-shape matching.
-      // So: take the profile correlation's top few close contenders
-      // (it's still what determines major-vs-minor "color"), then prefer
-      // whichever of those has its tonic matching the dominant bass note.
-      const bassSorted = Array.from(combinedBass).sort((a, b) => b - a);
-      const bassMax = bassSorted[0] || 0;
-      const bassMean = combinedBass.reduce((s, v) => s + v, 0) / 12;
-      // only trust the bass note as a corroborating signal if it's an
-      // actual, reasonably clear peak above the general bass noise floor —
-      // a track with little or no real bassline shouldn't get overridden
-      // by whatever low content happens to be loudest by a hair
-      const bassPitchClass = (bassMax > 1e-6 && bassMax > bassMean * 1.3)
-        ? combinedBass.reduce((best, v, i) => v > combinedBass[best] ? i : best, 0)
-        : null;
-      // How close counts as "close enough for the bass to break the
-      // tie". 0.12 sounds generous, but it's calibrated against how
-      // spread out scores are with the energy+peaks blended chroma above
-      // — with that blend, the correct candidate on a real bass-forward
-      // track sat ~0.11 behind the top scorer, while a genuinely wrong
-      // override on another track needed a ~0.065 gap to sneak in. There
-      // isn't a single margin that cleanly separates "real near-tie" from
-      // "clearly behind" in the abstract; this value is whatever tested
-      // correctly against real tracks with the current chroma blend, not
-      // a principle on its own — if chromaForSegment's blend changes,
-      // recheck this against real audio rather than assuming it still holds.
-      const contenders = allScores.filter(c => c.score > best.score - 0.12);
-      const bassMatch = bassPitchClass !== null
-        ? contenders.find(c => c.root === bassPitchClass)
-        : null;
-      let chosen = best;
-      let bassCorroborated = false;
-      if (bassMatch) {
-        chosen = bassMatch;
-        bassCorroborated = true;
-        // recompute "second" relative to the chosen candidate so the
-        // margin/runner-up below still reflects real ambiguity
-        second = allScores.find(c => c.key !== chosen.key) || second;
+      for (const c of allScores) {
+        c.combined = c.profile + THIRD_WEIGHT * c.third;
       }
+      allScores.sort((a, b) => b.combined - a.combined);
+      const chosen = allScores[0];
+      const second = allScores[1];
+      const bassCorroborated = hasBassSignal && bassNorm[chosen.root] > 0.5;
 
-      // Full-profile correlation judges major-vs-minor off all 12
-      // scale-degree weights at once, which can get swayed by things that
-      // have nothing to do with actual chord quality — the natural
-      // harmonic series emphasizes major-3rd-ish overtones even over a
-      // minor chord, and that alone was enough to flip a real minor track
-      // to "Major" in testing. Whether the 3rd itself is major or minor
-      // is the one thing that actually, directly defines the difference,
-      // so it settles the major/minor call directly here instead of
-      // trusting profile correlation for it — keeping the root from the
-      // correlation/bass step above, which is a separate and more
-      // reliable question.
-      const minorThird = chroma[(chosen.root + 3) % 12];
-      const majorThird = chroma[(chosen.root + 4) % 12];
-      const isMinor = chosen.key.endsWith('Minor');
-      if (isMinor && majorThird > minorThird * 1.08) {
-        chosen = allScores.find(c => c.root === chosen.root && c.key.endsWith('Major')) || chosen;
-      } else if (!isMinor && minorThird > majorThird * 1.08) {
-        chosen = allScores.find(c => c.root === chosen.root && c.key.endsWith('Minor')) || chosen;
-      }
-
-      const margin = chosen.score - (second.score || 0);
-      let confidence = clamp(0.55 + margin * 1.8, 0.35, 0.97);
+      const margin = chosen.combined - second.combined;
+      let confidence = clamp(0.55 + margin * 1.4, 0.35, 0.97);
       // corroborated by an independent signal (the actual bass note, not
       // just another profile-shape comparison) — that's worth more
-      // confidence than profile correlation margin alone would justify,
-      // exactly in the cases profile correlation is weakest at
-      // (bass-forward, modally-ambiguous electronic music)
-      if (bassCorroborated) confidence = clamp(confidence + 0.15, 0.35, 0.97);
-      // Profile-correlation key detection is a genuinely harder problem
-      // than tempo: bass-forward, filtered, or non-functional-harmony
-      // material (a lot of electronic music) can leave two or three keys
-      // in a near-tie. Rather than assert one answer with false certainty
-      // when that happens, surface the runner-up so the result is honest
-      // about the ambiguity instead of hiding it.
-      const runnerUp = margin < 0.05 ? second.key : null;
+      // confidence than the combined margin alone would justify, exactly
+      // in the cases profile correlation is weakest at (bass-forward,
+      // modally-ambiguous electronic music). Confidence-only, deliberately
+      // never allowed to change *which* key gets picked — see above.
+      if (bassCorroborated) confidence = clamp(confidence + 0.1, 0.35, 0.97);
+      // Key detection is a genuinely harder problem than tempo:
+      // bass-forward, filtered, or non-functional-harmony material (a lot
+      // of electronic music) can leave two or three keys in a near-tie.
+      // Rather than assert one answer with false certainty when that
+      // happens, surface the runner-up so the result is honest about the
+      // ambiguity instead of hiding it.
+      const runnerUp = margin < 0.1 ? second.key : null;
       return { key: chosen.key, camelot: CAMELOT[chosen.key] || '—', relative: relativeKey(chosen.key), confidence, runnerUp };
     }
 
@@ -3166,14 +3274,15 @@
     }
 
     self.onmessage = function (e) {
+      const requestId = e.data && e.data.requestId;
       try {
         const { sampleRate, channelData } = e.data;
         const mono = channelData.length > 1 ? mixToMono(channelData) : channelData[0];
         const bpmResult = detectBPM(sampleRate, mono);
         const keyResult = detectKey(sampleRate, mono);
-        self.postMessage({ bpmResult, keyResult });
+        self.postMessage({ bpmResult, keyResult, requestId });
       } catch (err) {
-        self.postMessage({ error: (err && err.message) || 'Analysis failed' });
+        self.postMessage({ error: (err && err.message) || 'Analysis failed', requestId });
       }
     };
   `;
@@ -3187,12 +3296,25 @@
     return analysisWorker;
   }
 
+  // Every call reuses the same persistent worker, so if a second file gets
+  // dropped before the first one's analysis finishes, two runAnalysis
+  // calls are in flight on the same worker at once. Without a requestId,
+  // BOTH calls' message listeners fire on every message the worker posts
+  // — whichever resolves first grabs the wrong call's promise, so the
+  // second upload can end up displaying the FIRST file's numbers under
+  // the second file's name, and the second file's real result gets
+  // dropped with no listener left to receive it. Tagging each request and
+  // ignoring messages that don't match it makes each promise wait for its
+  // own response specifically.
+  let analysisRequestCounter = 0;
   function runAnalysis(sampleRate, channelData) {
     return new Promise((resolve, reject) => {
       const worker = getAnalysisWorker();
+      const requestId = ++analysisRequestCounter;
       function onMessage(e) {
+        if (!e.data || e.data.requestId !== requestId) return;
         cleanup();
-        if (e.data && e.data.error) reject(new Error(e.data.error));
+        if (e.data.error) reject(new Error(e.data.error));
         else resolve(e.data);
       }
       function onError(err) {
@@ -3206,19 +3328,40 @@
       worker.addEventListener('message', onMessage);
       worker.addEventListener('error', onError);
       // hand the raw sample buffers over for zero-copy transfer
-      worker.postMessage({ sampleRate, channelData }, channelData.map(c => c.buffer));
+      worker.postMessage({ sampleRate, channelData, requestId }, channelData.map(c => c.buffer));
     });
   }
 
+  // Bumped on every new analyze() call so a still-running older call can
+  // tell it's been superseded. Without this, dropping a second file while
+  // the first is still decoding/analyzing lets both calls race to update
+  // the same status text and results UI — even with the requestId fix
+  // above keeping the two results from being swapped, whichever call's
+  // async chain happens to finish LAST still wins the UI update, which
+  // isn't necessarily the file the user most recently dropped.
+  let analysisGeneration = 0;
+
   async function analyze(file) {
+    const myGeneration = ++analysisGeneration;
+    const stillCurrent = () => myGeneration === analysisGeneration;
+
     toolStatus.classList.add('visible');
     toolStatusText.textContent = 'Reading file…';
+    // decodeAudioData needs *a* context but nothing here ever plays audio
+    // through it — it's created purely for decoding and must be closed
+    // once we're done, or every file dropped on this tool leaks another
+    // live AudioContext for the rest of the page's life (each one holds
+    // a real handle on the system's audio hardware; browsers cap how many
+    // can be open at once, so this degrades or starts failing outright
+    // after enough uploads in one visit).
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    const ctx = new AudioCtx();
     try {
       const arrayBuffer = await file.arrayBuffer();
-      const AudioCtx = window.AudioContext || window.webkitAudioContext;
-      const ctx = new AudioCtx();
+      if (!stillCurrent()) return;
       toolStatusText.textContent = 'Decoding audio…';
       const audioBuffer = await ctx.decodeAudioData(arrayBuffer.slice(0));
+      if (!stillCurrent()) return;
       drawWaveform(audioBuffer);
       toolStatusText.textContent = 'Analyzing tempo and key…';
       const channelData = [];
@@ -3226,10 +3369,13 @@
         channelData.push(Float32Array.from(audioBuffer.getChannelData(c)));
       }
       const { bpmResult, keyResult } = await runAnalysis(audioBuffer.sampleRate, channelData);
+      if (!stillCurrent()) return;
       showResults(bpmResult, keyResult);
     } catch (err) {
       console.error(err);
-      toolStatusText.textContent = 'Could not analyze this file. Try a different format.';
+      if (stillCurrent()) toolStatusText.textContent = 'Could not analyze this file. Try a different format.';
+    } finally {
+      ctx.close();
     }
   }
 
@@ -3252,10 +3398,15 @@
     toolStatus.classList.remove('visible');
     results.classList.add('visible');
     confidenceRow.classList.add('visible');
-    resultBpm.textContent = bpmResult.isExact ? String(bpmResult.bpm) : bpmResult.bpm.toFixed(1);
-    resultBpmSub.textContent = bpmResult.isExact
-      ? `exact · ${(bpmResult.confidence*100).toFixed(0)}% confidence`
-      : `closest match · ${(bpmResult.confidence*100).toFixed(0)}% confidence`;
+    if (bpmResult.bpm === null) {
+      resultBpm.textContent = '—';
+      resultBpmSub.textContent = 'No clear beat detected';
+    } else {
+      resultBpm.textContent = bpmResult.isExact ? String(bpmResult.bpm) : bpmResult.bpm.toFixed(1);
+      resultBpmSub.textContent = bpmResult.isExact
+        ? `exact · ${(bpmResult.confidence*100).toFixed(0)}% confidence`
+        : `closest match · ${(bpmResult.confidence*100).toFixed(0)}% confidence`;
+    }
     if (bpmResult.altBpm) {
       resultAltBpm.textContent = `Also readable as ${bpmResult.altBpm} (half/double-time)`;
       resultAltBpm.classList.add('visible');
