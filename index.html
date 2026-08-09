@@ -222,7 +222,7 @@
   .topbar .mark-wave span:nth-child(2) { height: 100%; animation-delay: -0.16s; }
   .topbar .mark-wave span:nth-child(3) { height: 65%; animation-delay: 0s; }
   @keyframes markWave { 0%, 100% { transform: scaleY(0.4); } 50% { transform: scaleY(1); } }
-  @media (max-width: 560px) { .topbar .mark { max-width: 150px; } }
+  @media (max-width: 560px) { .topbar .mark { max-width: 190px; } }
 
   .topbar nav {
     display: flex; align-items: center; gap: 4px;
@@ -1320,6 +1320,13 @@
   }
   .result-label { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 6px; }
   .result-value { font-size: 28px; font-weight: 600; color: var(--ink); }
+  /* The BPM card's value is always short (a 2-3 digit number), but the
+     Key card's can be "C# Major" or "A# Minor" — 8 characters of bold
+     monospace at 28px doesn't fit the ~100px a card actually has once the
+     modal's own padding and the two-column grid gap are accounted for on
+     a narrow phone screen, so the longer key names wrapped into an
+     awkward two-line stack instead of reading as one clean word. */
+  @media (max-width: 480px) { .result-value { font-size: 20px; } }
   .result-sub { font-size: 12px; color: var(--ink-dim); margin-top: 4px; }
   .result-alt-bpm {
     font-size: 11px; color: var(--ink-faint); margin-top: 6px;
