@@ -1161,17 +1161,9 @@
 <div id="login-gate">
   <div class="login-card">
     <h1>Neutro Admin</h1>
-    <p>Sign in with your admin account.</p>
+    <p>Sign in with the authorized Google account.</p>
 
-    <form id="email-login-form">
-      <div class="form-row">
-        <input type="email" id="email-input" placeholder="Email" required autocomplete="username">
-      </div>
-      <div class="form-row">
-        <input type="password" id="password-input" placeholder="Password" required autocomplete="current-password">
-      </div>
-      <button type="submit" class="email-btn" id="email-signin-btn">Sign in with email</button>
-    </form>
+    <button type="button" class="email-btn" id="google-signin-btn">Sign in with Google</button>
 
     <p class="login-error" id="login-error"></p>
     <p class="login-hint" id="login-hint"></p>
@@ -1351,7 +1343,7 @@
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
   import {
-    getAuth, signOut, onAuthStateChanged, signInWithEmailAndPassword
+    getAuth, signOut, onAuthStateChanged, signInWithPopup, GoogleAuthProvider
   } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
   import {
     getFirestore, collection, query, orderBy, onSnapshot, doc, setDoc, updateDoc, deleteDoc, serverTimestamp, writeBatch
@@ -1405,10 +1397,13 @@
 
   const loginGate = document.getElementById('login-gate');
   const adminShell = document.getElementById('admin-shell');
-  const emailForm = document.getElementById('email-login-form');
-  const emailInput = document.getElementById('email-input');
-  const passwordInput = document.getElementById('password-input');
-  const emailSigninBtn = document.getElementById('email-signin-btn');
+  const googleSigninBtn = document.getElementById('google-signin-btn');
+  // Only this Google account may use the panel. This check is for the UI; the
+  // real protection is the Firestore security rules, which enforce the same email.
+  const ADMIN_EMAIL = 'realneutromusic@gmail.com';
+  const isAdmin = (user) => !!user && user.emailVerified === true && (user.email || '').toLowerCase() === ADMIN_EMAIL;
+  const googleProvider = new GoogleAuthProvider();
+  googleProvider.setCustomParameters({ prompt: 'select_account', login_hint: ADMIN_EMAIL });
   const signoutBtn = document.getElementById('signout-btn');
   const loginError = document.getElementById('login-error');
   const loginHint = document.getElementById('login-hint');
@@ -1483,21 +1478,28 @@
   function describeAuthError(err) {
     const code = err && err.code ? err.code : 'unknown';
     switch (code) {
-      case 'auth/invalid-credential':
-      case 'auth/wrong-password':
+      case 'auth/not-admin':
         return {
-          message: "Incorrect email or password.",
-          hint: "Double-check both fields, or reset the password from Firebase Console → Authentication → Users."
+          message: "This Google account doesn't have access to the panel.",
+          hint: "Sign in with " + ADMIN_EMAIL + "."
         };
-      case 'auth/user-not-found':
+      case 'auth/popup-closed-by-user':
+      case 'auth/cancelled-popup-request':
+        return null; // the user just closed the Google window
+      case 'auth/popup-blocked':
         return {
-          message: "No account found with that email.",
-          hint: "Check the email, or add this user in Firebase Console → Authentication → Users."
+          message: "The browser blocked the Google sign-in window.",
+          hint: "Allow pop-ups for this site and try again."
         };
-      case 'auth/invalid-email':
+      case 'auth/operation-not-allowed':
         return {
-          message: "That email address doesn't look valid.",
-          hint: null
+          message: "Google sign-in is not enabled for this project.",
+          hint: "Enable it in Firebase Console → Authentication → Sign-in method → Google."
+        };
+      case 'auth/unauthorized-domain':
+        return {
+          message: "This domain is not authorized for sign-in.",
+          hint: "Add it in Firebase Console → Authentication → Settings → Authorized domains."
         };
       case 'auth/too-many-requests':
         return {
@@ -1599,25 +1601,29 @@
   })();
 
   // ---- sign-in --------------------------------------------------------
-  emailForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
+  googleSigninBtn.addEventListener('click', async () => {
     clearAuthError();
-    emailSigninBtn.disabled = true;
-    emailSigninBtn.textContent = 'Signing in…';
+    googleSigninBtn.disabled = true;
+    googleSigninBtn.textContent = 'Signing in…';
     try {
-      await signInWithEmailAndPassword(auth, emailInput.value.trim(), passwordInput.value);
+      const result = await signInWithPopup(auth, googleProvider);
+      if (!isAdmin(result.user)) {
+        await signOut(auth);
+        showAuthError({ code: 'auth/not-admin' });
+      }
       // onAuthStateChanged will fire and handle the UI switch.
     } catch (err) {
       showAuthError(err);
     } finally {
-      emailSigninBtn.disabled = false;
-      emailSigninBtn.textContent = 'Sign in with email';
+      googleSigninBtn.disabled = false;
+      googleSigninBtn.textContent = 'Sign in with Google';
     }
   });
 
   signoutBtn.addEventListener('click', () => signOut(auth));
 
   onAuthStateChanged(auth, (user) => {
+    if (user && !isAdmin(user)) { signOut(auth); return; } // any other account is signed out immediately
     if (user) {
       clearAuthError();
       loginGate.style.display = 'none';
