@@ -882,6 +882,17 @@
   #stream-mode-view {
     position: fixed; inset: 0; z-index: 200; background: var(--bg); height: 100vh;
   }
+  /* Stream Mode se ve siempre al 125 % (como el zoom del navegador al 125 %), sin tener que tocar el navegador.
+     Con zoom, las medidas del propio panel también se multiplican, así que se compensan dividiendo entre 1.25
+     para que siga ocupando exactamente la pantalla entera. */
+  #stream-mode-view {
+    zoom: 1.25;
+    inset: auto; top: 0; left: 0;
+    width: calc(100vw / 1.25); height: calc(100vh / 1.25);
+  }
+  /* Ventanas que se abren por encima del modo stream y no están dentro de él: mismo 125 % (sin duplicarlo si sí lo están). */
+  .stream-on .wheel-modal-inner { zoom: 1.25; }
+  #stream-mode-view .wheel-modal-inner { zoom: 1; }
   #sm-bg {
     position: fixed; inset: 0; z-index: -1; pointer-events: none;
     background-image:
@@ -2013,6 +2024,7 @@
   function enterStreamMode() {
     pauseAllExcept(null); // switching modes: stop whatever's playing, in either direction
     streamModeActive = true;
+    document.documentElement.classList.add('stream-on'); // ventanas encima del modo stream (ruleta, historial) también al 125 %
     streamModeView.style.display = 'block';
     queuePositionBadge.style.display = 'none';
     smRenderList();
@@ -2020,6 +2032,7 @@
   function exitStreamMode() {
     pauseAllExcept(null); // same here — leaving Stream Mode stops whatever's playing there
     streamModeActive = false;
+    document.documentElement.classList.remove('stream-on');
     streamModeView.style.display = 'none';
     updateQueuePosition();
   }
