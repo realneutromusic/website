@@ -3533,5 +3533,34 @@
   })();
 </script>
 
+<script>
+  /* Opening a section link from another page (e.g. the store's About -> realneutromusic.com/#contact):
+     the browser jumps to the section while the page is still loading, but Releases and Socials are
+     filled in afterwards and push the section down, so the visitor lands on Socials instead of
+     "Get in touch". Keep the target anchored below the fixed top bar until the layout settles
+     (fonts, images, release grid), and stop immediately if the visitor scrolls or interacts. */
+  (function anchorInitialHash() {
+    let id = '';
+    try { id = decodeURIComponent(location.hash.slice(1)); } catch (e) { return; }
+    const target = id && document.getElementById(id);
+    if (!target) return;
+    const bar = document.querySelector('.topbar');
+    let done = false;
+    const place = () => {
+      if (done) return;
+      const y = target.getBoundingClientRect().top + window.scrollY - (bar ? bar.offsetHeight : 0) - 12;
+      window.scrollTo({ top: Math.max(0, y), behavior: 'instant' });
+    };
+    const events = ['wheel', 'touchstart', 'keydown', 'pointerdown'];
+    const stop = () => { done = true; ro.disconnect(); events.forEach(t => removeEventListener(t, stop)); };
+    const ro = new ResizeObserver(place);
+    ro.observe(document.body);
+    events.forEach(t => addEventListener(t, stop, { passive: true }));
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(place);
+    addEventListener('load', () => { place(); setTimeout(() => { place(); stop(); }, 3000); });
+    place();
+  })();
+</script>
+
 </body>
 </html>
