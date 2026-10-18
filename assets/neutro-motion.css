@@ -1,4 +1,8 @@
 /* Shared Neutro visual language. Decorations never receive pointer events. */
+body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;background:linear-gradient(100deg,rgba(4,7,13,.94),rgba(4,7,13,.78)),url('../hero/hero-desktop.webp') 72% 35%/cover no-repeat}
+.hero{background:transparent}
+.hero-photo,.hero-veil,.hero-grain{display:none}
+@media(max-width:767px){body::before{background-image:linear-gradient(100deg,rgba(4,7,13,.94),rgba(4,7,13,.78)),url('../hero/hero-mobile.webp')}}
 .nt-brushes{position:fixed;inset:0;z-index:2;pointer-events:none;overflow:hidden;contain:layout paint}
 .hero-content{z-index:3}
 .block.wrap,main>footer{position:relative;z-index:3}

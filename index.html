@@ -125,15 +125,6 @@
     overflow-x: hidden;
   }
 
-  /* Background dot grid lives on a <canvas> (#bg-dots-canvas, see the
-     script at the end of the page) instead of a static CSS pattern — it
-     drifts down-right on its own, and dots near the cursor get pushed
-     outward from it. Matches the same effect used in the admin panel. */
-  #bg-dots-canvas {
-    position: fixed; inset: 0; z-index: -1; pointer-events: none;
-    width: 100%; height: 100%; display: block;
-  }
-
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after {
       animation-duration: 0.01ms !important;
@@ -1341,12 +1332,12 @@
   .confidence-fill { display: block; height: 100%; background: var(--steel); border-radius: 999px; width: 0%; transition: width 0.6s var(--ease); }
   .confidence-row .mono { font-size: 12px; color: var(--ink-dim); flex-shrink: 0; }
 </style>
-<link rel="stylesheet" href="./assets/neutro-motion.css?v=1">
+<link rel="stylesheet" href="./assets/neutro-motion.css?v=2">
 <script src="./assets/neutro-motion.js?v=1" defer></script>
 </head>
 <body>
 
-<canvas id="bg-dots-canvas" aria-hidden="true"></canvas>
+
 
 
 <a href="#main" class="skip-link">Skip to content</a>
@@ -3451,88 +3442,6 @@
     });
 
 })();
-</script>
-
-<script>
-  // ---- background dot grid: auto-drift only ------------------------------
-  // Just the constant down-right drift — no cursor interaction here (kept
-  // only on the submit page).
-  (function setupBackgroundDots() {
-    const canvas = document.getElementById('bg-dots-canvas');
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-    const SPACING = 28;
-    const DOT_RADIUS = 1;
-    const DOT_ALPHA = 0.2;
-    const DRIFT_SPEED = 2.5; // px/sec, down-right — slow and calm
-
-    let dpr = Math.min(window.devicePixelRatio || 1, 2);
-    let width = 0, height = 0;
-    let driftOffset = 0;
-
-    function resize() {
-      width = window.innerWidth;
-      height = window.innerHeight;
-      canvas.width = Math.round(width * dpr);
-      canvas.height = Math.round(height * dpr);
-      canvas.style.width = width + 'px';
-      canvas.style.height = height + 'px';
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    }
-
-    function drawFrame() {
-      ctx.clearRect(0, 0, width, height);
-      const offset = driftOffset % SPACING;
-      ctx.fillStyle = `rgba(168, 200, 236, ${DOT_ALPHA})`;
-      for (let x = offset - SPACING; x < width + SPACING; x += SPACING) {
-        for (let y = offset - SPACING; y < height + SPACING; y += SPACING) {
-          ctx.beginPath();
-          ctx.arc(x, y, DOT_RADIUS, 0, Math.PI * 2);
-          ctx.fill();
-        }
-      }
-    }
-
-    resize();
-    drawFrame();
-    window.addEventListener('resize', () => { resize(); drawFrame(); });
-
-    if (!prefersReducedMotion) {
-      let lastTime = performance.now();
-      let rafId = null;
-
-      function tick(now) {
-        const dt = (now - lastTime) / 1000;
-        lastTime = now;
-        driftOffset += DRIFT_SPEED * dt;
-        drawFrame();
-        rafId = requestAnimationFrame(tick);
-      }
-
-      function start() {
-        if (rafId !== null) return; // already running
-        lastTime = performance.now(); // avoid a big dt jump on resume
-        rafId = requestAnimationFrame(tick);
-      }
-
-      function stop() {
-        if (rafId === null) return;
-        cancelAnimationFrame(rafId);
-        rafId = null;
-      }
-
-      // Pause the loop while the tab isn't visible — this canvas redraws
-      // every frame forever otherwise, which just burns battery on a tab
-      // nobody is looking at (especially on mobile).
-      document.addEventListener('visibilitychange', () => {
-        if (document.hidden) stop(); else start();
-      });
-
-      if (!document.hidden) start();
-    }
-  })();
 </script>
 
 <script>
