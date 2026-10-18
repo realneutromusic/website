@@ -208,7 +208,11 @@ $('pr-clear').addEventListener('click', () => {
   render(); status('All projects cleared. Nothing was saved.');
 });
 $('pr-copy').addEventListener('click', async () => {
-  try { await navigator.clipboard.writeText(exportRows(shown)); status('Current view copied.'); }
+  const names = [...new Map(shown.map(row => {
+    const name = row.name.replace(/[\r\n]+/g, ' ').trim();
+    return [name.toLocaleLowerCase('en'), name];
+  })).values()].sort((a, b) => a.localeCompare(b, 'en', { numeric: true, sensitivity: 'base' }));
+  try { await navigator.clipboard.writeText(names.join('\n')); status('Plugin names copied, A–Z.'); }
   catch { status('Clipboard access is unavailable. Use TXT or CSV to save this view.'); }
 });
 function download(csv) {
