@@ -1334,6 +1334,8 @@
 </style>
 <link rel="stylesheet" href="./assets/neutro-motion.css?v=4">
 <script src="./assets/neutro-motion.js?v=1" defer></script>
+<link rel="stylesheet" href="./assets/plugin-reader.css?v=2">
+<script src="./assets/plugin-reader.js?v=2" type="module"></script>
 </head>
 <body>
 
@@ -1511,8 +1513,13 @@
 <div class="tools-modal" id="tools-modal" role="dialog" aria-modal="true" aria-labelledby="tools-modal-title">
   <div class="tools-modal-inner">
     <button class="tools-modal-close" id="close-tools" aria-label="Close tools">✕</button>
-    <div class="eyebrow">Tools</div>
-    <h2 class="display" id="tools-modal-title">BPM &amp; Key Detector</h2>
+    <div class="eyebrow" id="tools-modal-title">Producer tools</div>
+    <div class="nt-tool-tabs" role="tablist" aria-label="Producer tools">
+      <button type="button" id="tab-audio" role="tab" aria-controls="tool-audio" aria-selected="true">BPM &amp; Key</button>
+      <button type="button" id="tab-plugins" role="tab" aria-controls="tool-plugins" aria-selected="false" tabindex="-1">Plugin Reader</button>
+    </div>
+    <section id="tool-audio" role="tabpanel" aria-labelledby="tab-audio">
+    <h2 class="display">BPM &amp; Key Detector</h2>
     <p class="desc">Upload an audio file and we analyze it right in your browser — kick-emphasized onset autocorrelation across multiple stretches of the track for tempo, Krumhansl–Schmuckler key-profile matching (also multi-window) for tonality. Nothing is uploaded to a server.</p>
 
     <div class="drop-zone" id="drop-zone" tabindex="0" role="button" aria-label="Upload an audio file to analyze">
@@ -1557,6 +1564,8 @@
       <span class="confidence-bar"><span class="confidence-fill" id="confidence-fill"></span></span>
       <span id="confidence-value" class="mono"></span>
     </div>
+    </section>
+    <section id="tool-plugins" role="tabpanel" aria-labelledby="tab-plugins" hidden></section>
   </div>
 </div>
 
