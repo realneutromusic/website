@@ -1,4 +1,15 @@
 /* Shared Neutro visual language. Decorations never receive pointer events. */
+:root{--surface:#17283e;--surface-2:#223951;--line:#3b5573;--ink-dim:#bbcee3;--ink-faint:#9bb3d0}
+.block-count{color:#d8e6f5;background:#20364d;border-color:#6885a6}
+.block-count b{color:#fff;font-weight:600}
+.card,.now-playing-card{background:linear-gradient(145deg,#22374e,#16273c);border-color:#4b6684}
+.socials-card{background:linear-gradient(145deg,rgba(45,69,95,.94),rgba(24,43,64,.96));border-color:#4b6684}
+.socials-field{background:linear-gradient(135deg,rgba(39,62,88,.7),rgba(24,42,62,.8));border-color:#4b6684}
+.contact-panel{background:linear-gradient(145deg,#223950,#192d43);border-color:#4b6684}
+.form-row input,.form-row textarea{background:#13263b;border-color:#607b98}
+.form-row input:focus,.form-row textarea:focus{background:#1b324b;border-color:var(--steel-bright)}
+.release-art-img{filter:none}
+.release-card:hover .release-art-img{filter:saturate(1.04) brightness(.92)}
 body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;background:linear-gradient(100deg,rgba(4,7,13,.78),rgba(4,7,13,.48)),url('../hero/hero-desktop.webp') 72% 35%/cover no-repeat}
 .hero{background:transparent}
 .hero-photo,.hero-veil,.hero-grain{display:none}
