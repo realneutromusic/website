@@ -68,7 +68,10 @@ function decode(bytes) {
 function wrapper(bytes) {
   if (bytes.length < 4) return null;
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  if (![8, 10].includes(view.getUint32(0, true))) return null;
+  // FL's wrapper serialization revision is not the VST version. Newer
+  // projects use revision 12 with the same length-prefixed metadata records.
+  // https://github.com/dawhubapp/flpdiff/blob/main/docs/fl-format/flp-format-spec.md
+  if (![6, 8, 9, 10, 11, 12].includes(view.getUint32(0, true))) return null;
   let offset = 4, name = '', vendor = '', path = '', format = 'VST';
   while (offset < bytes.length) {
     if (offset + 12 > bytes.length) throw Error('Truncated FL Studio plugin metadata.');
@@ -84,6 +87,7 @@ function wrapper(bytes) {
     offset += size;
   }
   if (/\.vst3$/i.test(path)) format = 'VST3';
+  if (/\.component$/i.test(path)) format = 'AU';
   if (!name && path) name = path.split(/[\\/]/).pop().replace(/\.(dll|vst3|vst|component)$/i, '');
   return { name, vendor, format };
 }
@@ -136,17 +140,25 @@ export function parseFLP(bytes) {
       }
     }
     if (id === 213 && pending) {
-      const info = wrapper(data);
-      if (info?.name) { plugins.push({ ...info, stock: false }); pending = false; }
+      try {
+        const info = wrapper(data);
+        if (info?.name) {
+          plugins.push({ ...info, stock: false }); pending = false;
+          if (/^waveshell/i.test(info.name)) warnings.push('WaveShell exposes its host name here. The contained Waves plugin is not identified by this metadata.');
+        }
+      } catch {
+        // One damaged wrapper must not discard every readable plugin in a set.
+        warnings.push('One plugin has damaged metadata. Other readable plugins are still listed.');
+      }
     }
   }
   flush();
   return { daw: 'FL Studio', plugins, warnings: [...new Set(warnings)] };
 }
-export async function readProject(file) {
+export async function readProject(file, suppliedBytes) {
   if (!/\.(als|flp)$/i.test(file.name)) throw Error('Choose an Ableton .als or FL Studio .flp project.');
   if (file.size > MAX_FILE) throw Error('This project exceeds the 32 MB file limit.');
-  const bytes = new Uint8Array(await file.arrayBuffer());
+  const bytes = suppliedBytes || new Uint8Array(await file.arrayBuffer());
   if (/\.flp$/i.test(file.name)) return parseFLP(bytes);
   let xml;
   if (bytes[0] === 31 && bytes[1] === 139) {
@@ -175,7 +187,7 @@ export function aggregate(projects, { stock = false, project = '', format = '', 
       // Keep format, vendor and version intact; unresolved instances cannot be deduplicated safely.
       const key = [plugin.name.trim().toLowerCase(), plugin.vendor.trim().toLowerCase(), plugin.format,
         plugin.unresolved ? `${item.id}:${index}` : ''].join('\u0000');
-      if (!rows.has(key)) rows.set(key, { ...plugin, uses: 0, projects: new Map(), tracks: new Set() });
+      if (!rows.has(key)) rows.set(key, { ...plugin, key, uses: 0, projects: new Map(), tracks: new Set() });
       const row = rows.get(key);
       row.uses++;
       row.projects.set(item.id, item.name);

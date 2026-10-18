@@ -1,4 +1,4 @@
-import { readProject, aggregate, exportRows } from './plugin-reader-core.js?v=1';
+import { readProject, aggregate, exportRows, MAX_FILE } from './plugin-reader-core.js?v=2';
 
 const root = document.getElementById('tool-plugins');
 root.innerHTML = `
@@ -118,10 +118,13 @@ function render() {
     remove.type = 'button'; remove.setAttribute('aria-label', `Remove ${project.name}`);
     remove.addEventListener('click', () => {
       projects = projects.filter(p => p.id !== project.id); render(); status(`Removed ${project.name}.`);
+      $('pr-projects').querySelector('summary').focus();
     });
     li.append(body, remove); projectList.append(li);
   }
-  const list = $('pr-list'); list.replaceChildren();
+  const list = $('pr-list');
+  const expanded = new Set([...list.querySelectorAll('details[open]')].map(el => el.dataset.key));
+  list.replaceChildren();
   if (!shown.length) {
     list.append(node('p', !projects.length ? 'Add a project to see what’s inside.' :
       projects.every(p => p.error) ? 'No readable projects yet. Open Projects above for details.' :
@@ -130,6 +133,8 @@ function render() {
   }
   for (const row of shown) {
     const card = node('details', undefined, 'pr-row');
+    card.dataset.key = row.key;
+    card.open = expanded.has(row.key);
     const summary = node('summary');
     const identity = node('span', undefined, 'pr-identity');
     identity.append(node('strong', row.name), node('small', row.vendor || (row.unresolved ? 'Identity unavailable' : 'Vendor not stored')));
@@ -150,25 +155,38 @@ async function addFiles(files, token) {
   let added = 0, skipped = 0, failed = 0, limited = false;
   for (const file of files) {
     if (token !== generation) return;
-    if (projects.length >= 50) { limited = true; break; }
-    if (projects.some(p => p.fingerprint === `${file.name}:${file.size}:${file.lastModified}`)) { skipped++; continue; }
     status(`Reading ${file.name}…`);
     // Let the loading message paint before XML parsing begins.
-    await new Promise(resolve => requestAnimationFrame(resolve));
-    const project = { id: ++nextId, name: file.name, fingerprint: `${file.name}:${file.size}:${file.lastModified}`, plugins: [] };
-    try { Object.assign(project, await readProject(file)); added++; }
+    await new Promise(resolve => setTimeout(resolve, 0));
+    if (token !== generation) return;
+    const project = { id: ++nextId, name: file.name, plugins: [] };
+    try {
+      if (!/\.(als|flp)$/i.test(file.name)) throw Error('Choose an Ableton .als or FL Studio .flp project.');
+      if (file.size > MAX_FILE) throw Error('This project exceeds the 32 MB file limit.');
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      if (crypto.subtle) {
+        const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
+        project.fingerprint = file.name + ':' + [...digest].map(b => b.toString(16).padStart(2, '0')).join('');
+      }
+      if (token !== generation) return;
+      if (project.fingerprint && projects.some(p => !p.error && p.fingerprint === project.fingerprint)) { skipped++; continue; }
+      if (projects.length >= 50) { limited = true; break; }
+      Object.assign(project, await readProject(file, bytes)); added++;
+    }
     catch (error) { project.error = error.message || 'Could not read this project.'; failed++; }
     if (token !== generation) return;
+    if (projects.length >= 50) { limited = true; break; }
     projects.push(project); render();
   }
-  if (failed) $('pr-projects').open = true;
+  if (token !== generation) return;
+  if (failed || projects.some(p => p.warnings?.length)) $('pr-projects').open = true;
   if (token === generation) status(`${added} project(s) read · ${skipped} duplicate(s) skipped · ${failed} file(s) could not be read.${limited ? ' 50 project limit reached. Remove projects to add more.' : ''}${projects.some(p => p.warnings?.length) ? ' Check Projects for reading notes.' : ''}`);
 }
 function enqueue(files) {
   const batch = [...files], token = generation;
   if (!batch.length) return;
   pending++; render();
-  queue = queue.then(() => addFiles(batch, token)).catch(() => status('Reading stopped. Please try the project again.'))
+  queue = queue.then(() => addFiles(batch, token)).catch(() => { if (token === generation) status('Reading stopped. Please try the project again.'); })
     .finally(() => { pending--; render(); });
 }
 $('pr-files').addEventListener('change', event => { enqueue(event.target.files); event.target.value = ''; });
