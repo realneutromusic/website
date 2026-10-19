@@ -1,0 +1,5 @@
+Essentia.js 0.1.3 — Music Technology Group, Universitat Pompeu Fabra (https://essentia.upf.edu/)
+License: GNU Affero General Public License v3.0 (see LICENSE.txt in this folder).
+Unmodified files from the npm package essentia.js@0.1.3 (dist/essentia-wasm.umd.js, WebAssembly embedded,
+dist/essentia.js-core.umd.min.js). Corresponding source: https://github.com/MTG/essentia.js/tree/v0.1.3
+Used by the BPM & Key Detector (assets/bpm-key-worker.js), which runs entirely in the visitor's browser.

@@ -1366,6 +1366,9 @@
   .confidence-bar { flex: 1; height: 6px; border-radius: 999px; background: rgba(168,200,236,0.1); overflow: hidden; }
   .confidence-fill { display: block; height: 100%; background: linear-gradient(90deg, var(--steel), var(--steel-bright)); border-radius: 999px; width: 0%; transition: width 0.6s var(--ease); }
   .confidence-row .mono { font-size: 12px; color: var(--ink); flex-shrink: 0; }
+  .tool-credit { margin-top: 20px; font-size: 11.5px; color: var(--ink-faint); }
+  .tool-credit a { color: var(--ink-dim); text-decoration: underline; text-decoration-color: rgba(159,180,207,0.35); text-underline-offset: 2px; }
+  .tool-credit a:hover { color: var(--ink); }
   @media (max-width: 640px) {
     .tools-modal { padding: 12px; }
     .tools-modal-inner { padding: 26px 18px 22px; border-radius: 20px; }
@@ -1566,7 +1569,7 @@
     </div>
     <section id="tool-audio" role="tabpanel" aria-labelledby="tab-audio">
     <h2 class="display">BPM &amp; Key Detector</h2>
-    <p class="desc">Upload an audio file and we analyze it right in your browser — kick-emphasized onset autocorrelation across multiple stretches of the track for tempo, Krumhansl–Schmuckler key-profile matching (also multi-window) for tonality. Nothing is uploaded to a server.</p>
+    <p class="desc">Upload an audio file to detect its tempo and key. Everything is analyzed in your browser — nothing is uploaded to a server.</p>
 
     <div class="nt-tool-layout">
     <div class="nt-tool-input">
@@ -1610,12 +1613,13 @@
     </div>
 
     <div class="confidence-row" id="confidence-row">
-      <span class="confidence-label">Analysis confidence</span>
+      <span class="confidence-label">Key confidence</span>
       <span class="confidence-bar"><span class="confidence-fill" id="confidence-fill"></span></span>
       <span id="confidence-value" class="mono"></span>
     </div>
     </div>
     </div>
+    <p class="tool-credit">Analysis powered by <a href="https://essentia.upf.edu/" target="_blank" rel="noopener">Essentia.js</a> (AGPL-3.0) · <a href="./assets/vendor/essentia/LICENSE.txt" target="_blank" rel="noopener">License</a> · <a href="https://github.com/MTG/essentia.js/tree/v0.1.3" target="_blank" rel="noopener">Source</a></p>
     </section>
     <section id="tool-plugins" role="tabpanel" aria-labelledby="tab-plugins" hidden></section>
   </div>
@@ -2717,6 +2721,7 @@
   fileChipClear.addEventListener('click', (e) => { e.stopPropagation(); fileInput.value = ''; resetTool(); });
 
   function handleFile(file) {
+    getEssentia();
     resetTool();
     fileChipName.textContent = file.name;
     fileChip.classList.add('visible');
@@ -3398,6 +3403,96 @@
     });
   }
 
+  // ---- Essentia.js engine ---------------------------------------------
+  // Same open-source algorithms and settings as Tunebat's analyzer (see assets/bpm-key-worker.js).
+  // Loaded only when someone heads for the upload (about 2 MB, cached afterwards). If WebAssembly or
+  // the worker is unavailable, the built-in detector above is used instead.
+  // The worker says when Essentia is ready; listeners exist from creation, so a load failure that
+  // happens before any file is dropped is never missed (it falls back immediately, no waiting).
+  let essentiaEngine = null, essentiaRequestCounter = 0;
+  function getEssentia() {
+    if (essentiaEngine || typeof WebAssembly !== 'object' || typeof Worker !== 'function') return essentiaEngine;
+    let worker;
+    try { worker = new Worker('./assets/bpm-key-worker.js?v=2'); } catch (e) { return null; }
+    const ready = new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error('Essentia.js took too long to load')), 60000);
+      worker.addEventListener('message', function onReady(e) {
+        if (!e.data || (!e.data.ready && !e.data.loadError)) return;
+        clearTimeout(timer); worker.removeEventListener('message', onReady);
+        if (e.data.ready) resolve(worker); else reject(new Error(e.data.loadError));
+      });
+      worker.addEventListener('error', e => { e.preventDefault(); clearTimeout(timer); reject(new Error(e.message || 'Essentia.js failed to load')); });
+    });
+    const engine = { worker, ready };
+    ready.catch(() => { worker.terminate(); if (essentiaEngine === engine) essentiaEngine = null; });
+    return (essentiaEngine = engine);
+  }
+  async function runEssentia(signal) {
+    const engine = getEssentia();
+    if (!engine) throw new Error('Essentia.js unavailable');
+    const worker = await engine.ready;
+    return new Promise((resolve, reject) => {
+      const requestId = ++essentiaRequestCounter;
+      const timer = setTimeout(() => fail(new Error('Essentia.js analysis timed out')), 60000);
+      function onMessage(e) {
+        if (!e.data || e.data.requestId !== requestId) return;
+        cleanup();
+        if (e.data.error) reject(new Error(e.data.error)); else resolve(e.data);
+      }
+      function fail(err) { cleanup(); worker.terminate(); if (essentiaEngine === engine) essentiaEngine = null; reject(err); }
+      function onError(e) { e.preventDefault(); fail(new Error(e.message || 'Essentia.js failed')); }
+      function cleanup() { clearTimeout(timer); worker.removeEventListener('message', onMessage); worker.removeEventListener('error', onError); }
+      worker.addEventListener('message', onMessage);
+      worker.addEventListener('error', onError);
+      worker.postMessage({ requestId, signal }, [signal.buffer]);
+    });
+  }
+  // Essentia expects 16 kHz mono; the browser's own resampler does the conversion.
+  async function toMono16k(audioBuffer) {
+    const offline = new OfflineAudioContext(1, Math.max(1, Math.ceil(audioBuffer.duration * 16000)), 16000);
+    const source = offline.createBufferSource();
+    source.buffer = audioBuffer; source.connect(offline.destination); source.start();
+    const rendered = await offline.startRendering();
+    return Float32Array.from(rendered.getChannelData(0));
+  }
+  const SHARP_SPELLING = { Db: 'C#', Eb: 'D#', Gb: 'F#', Ab: 'G#', Bb: 'A#' };
+  const KEY_NOTES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+  const CAMELOT_CODES = {
+    'B Major':'1B','F# Major':'2B','C# Major':'3B','G# Major':'4B','D# Major':'5B','A# Major':'6B',
+    'F Major':'7B','C Major':'8B','G Major':'9B','D Major':'10B','A Major':'11B','E Major':'12B',
+    'G# Minor':'1A','D# Minor':'2A','A# Minor':'3A','F Minor':'4A','C Minor':'5A','G Minor':'6A',
+    'D Minor':'7A','A Minor':'8A','E Minor':'9A','B Minor':'10A','F# Minor':'11A','C# Minor':'12A'
+  };
+  function showEssentiaResults({ bpm, key, scale, strength }) {
+    const note = SHARP_SPELLING[key] || key, minor = String(scale).toLowerCase() === 'minor';
+    const keyName = note + (minor ? ' Minor' : ' Major');
+    const root = KEY_NOTES.indexOf(note);
+    const relative = root < 0 ? '—' : KEY_NOTES[(root + (minor ? 3 : 9)) % 12] + (minor ? ' Major' : ' Minor');
+    const tempo = Math.round(bpm);
+    const confidence = Math.max(0, Math.min(1, Number(strength) || 0));
+    toolStatus.classList.remove('visible');
+    results.classList.add('visible');
+    confidenceRow.classList.add('visible');
+    if (!(tempo > 0)) {
+      resultBpm.textContent = '—';
+      resultBpmSub.textContent = 'No clear beat detected';
+      resultAltBpm.classList.remove('visible');
+    } else {
+      resultBpm.textContent = String(tempo);
+      resultBpmSub.textContent = '';
+      const alt = tempo >= 120 ? tempo / 2 : tempo * 2;
+      resultAltBpm.textContent = 'Also readable as ' + (Number.isInteger(alt) ? alt : alt.toFixed(1)) + ' (half/double-time)';
+      resultAltBpm.classList.add('visible');
+    }
+    resultKey.textContent = keyName;
+    resultKeySub.textContent = 'Camelot ' + (CAMELOT_CODES[keyName] || '—') + ' · rel. ' + relative;
+    resultAltKey.classList.remove('visible');
+    confidenceFill.style.width = (confidence * 100) + '%';
+    confidenceValue.textContent = Math.round(confidence * 100) + '%';
+    bars.forEach(b => b.classList.add('active'));
+  }
+  ['pointerenter', 'focusin'].forEach(evt => dropZone.addEventListener(evt, getEssentia, { once: true }));
+
   // Bumped on every new analyze() call so a still-running older call can
   // tell it's been superseded. Without this, dropping a second file while
   // the first is still decoding/analyzing lets both calls race to update
@@ -3430,6 +3525,15 @@
       if (!stillCurrent()) return;
       drawWaveform(audioBuffer);
       toolStatusText.textContent = 'Analyzing tempo and key…';
+      try {
+        const essentiaResult = await runEssentia(await toMono16k(audioBuffer));
+        if (!stillCurrent()) return;
+        showEssentiaResults(essentiaResult);
+        return;
+      } catch (err) {
+        if (!stillCurrent()) return;
+        console.warn('Essentia.js analysis unavailable, using the built-in detector.', err);
+      }
       const channelData = [];
       for (let c = 0; c < audioBuffer.numberOfChannels; c++) {
         channelData.push(Float32Array.from(audioBuffer.getChannelData(c)));
