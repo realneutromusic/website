@@ -103,7 +103,7 @@ $('pr-copy').addEventListener('click', async () => {
   const current = generation;
   try {
     await navigator.clipboard.writeText(names.join('\n'));
-    if (current === generation) $('pr-copy').textContent = 'Copied';
+    if (current === generation) { $('pr-copy').textContent = '✓ Copied'; window.NTMotion?.feedback($('pr-copy')); }
   } catch {
     if (current === generation) status('Could not copy automatically. Select the names and copy them.');
   }

@@ -1,0 +1,6 @@
+.nt-scroll-depth{translate:0 var(--nt-depth,0px)}
+@media(hover:hover) and (prefers-reduced-motion:no-preference){:is(.btn,.cta,.pr-copy,.cart-fab){transition:background .18s,color .18s,border-color .18s,box-shadow .18s,scale .18s}:is(.btn,.cta,.pr-copy,.cart-fab):hover{scale:1.015}:is(.btn,.cta,.pr-copy,.cart-fab):active{scale:.98}}
+::view-transition-group(nt-cover){animation-duration:.44s;animation-timing-function:cubic-bezier(.22,1,.36,1);overflow:clip;border-radius:12px}
+::view-transition-old(nt-cover),::view-transition-new(nt-cover){height:100%;object-fit:cover;mix-blend-mode:normal}
+::view-transition-old(root),::view-transition-new(root){animation-duration:.2s}
+@media(prefers-reduced-motion:reduce){.nt-scroll-depth{translate:none}::view-transition-group(*),::view-transition-old(*),::view-transition-new(*){animation:none!important}}

@@ -1335,10 +1335,12 @@
 <link rel="stylesheet" href="./assets/neutro-motion.css?v=4">
 <script src="./assets/neutro-motion.js?v=1" defer></script>
 <link rel="stylesheet" href="./assets/plugin-reader.css?v=3">
-<script src="./assets/plugin-reader.js?v=5" type="module"></script>
+<script src="./assets/plugin-reader.js?v=6" type="module"></script>
 <link rel="stylesheet" href="./assets/vendor/lenis.css?v=1.3.26">
 <script src="./assets/vendor/lenis.min.js?v=1.3.26" defer></script>
 <script src="./assets/neutro-scroll.js?v=1" defer></script>
+<link rel="stylesheet" href="./assets/neutro-polish.css?v=1">
+<script src="./assets/neutro-polish.js?v=1" defer></script>
 </head>
 <body>
 
@@ -1836,7 +1838,8 @@
     }).join(' &amp; ');
   }
 
-  function openReleaseModal(r) {
+  function openReleaseModal(r, source, animate = true) {
+    if (animate && window.NTMotion) return window.NTMotion.cover(source, () => openReleaseModal(r,source,false), () => document.getElementById('release-modal-art'));
     document.getElementById('release-modal-art').style.backgroundImage = `url(${r.art})`;
     document.getElementById('release-modal-label').textContent = r.catalog || 'Neutro';
     document.getElementById('release-modal-title').textContent = r.title;
@@ -1989,9 +1992,9 @@
     });
     card.appendChild(meta);
 
-    card.addEventListener('click', () => openReleaseModal(r));
+    card.addEventListener('click', () => openReleaseModal(r,stage));
     card.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openReleaseModal(r); }
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openReleaseModal(r,stage); }
     });
 
     cardsFragment.appendChild(card);
