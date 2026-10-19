@@ -1,28 +1,26 @@
-/* Same modal and upload control as the BPM & Key detector. */
-.nt-tool-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:0 36px 26px 0;border-bottom:1px solid var(--line);padding-bottom:12px}
-.nt-tool-tabs button,.pr-copy{font:600 12px 'Manrope',sans-serif;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);padding:10px 14px;cursor:pointer}
-.nt-tool-tabs button[aria-selected=true],.pr-copy{color:var(--bg);background:var(--steel-bright);border-color:var(--steel-bright)}
+/* Producer tools: tabs, Plugin Reader results and the desktop two-column layout (modal base styles live in index.html). */
+.nt-tool-tabs{display:inline-flex;gap:4px;padding:4px;margin:0 48px 26px 0;border-radius:14px;background:rgba(4,7,13,.55);border:1px solid rgba(168,200,236,.12)}
+.nt-tool-tabs button{font:600 13px 'Sora',sans-serif;border:0;border-radius:10px;background:transparent;color:var(--ink-dim);padding:9px 16px;cursor:pointer;transition:background .2s var(--ease),color .2s var(--ease)}
+.nt-tool-tabs button:hover{color:var(--ink);background:rgba(238,243,250,.05)}
+.nt-tool-tabs button[aria-selected=true]{color:var(--bg);background:var(--steel-bright);box-shadow:0 6px 18px -8px rgba(168,200,236,.6)}
 #tool-audio[hidden],#tool-plugins[hidden],#pr-results[hidden]{display:none}
-.pr-drop{display:block}.pr-drop .drop-zone-label,.pr-drop .drop-zone-sub{display:block}
-.pr-status{font-size:12px;line-height:1.7;color:var(--ink-dim);overflow-wrap:anywhere;margin:14px 0}
+.pr-drop .drop-zone-label,.pr-drop .drop-zone-sub{display:block}
+.pr-status{display:flex;gap:8px;align-items:baseline;font-size:12.5px;line-height:1.6;color:var(--ink-faint);overflow-wrap:anywhere;margin:12px 2px 0}
+.pr-status::before{content:'';flex-shrink:0;width:5px;height:5px;border-radius:50%;background:var(--steel);transform:translateY(-2px)}
 .pr-status:empty{display:none}
-.pr-list{list-style:none;margin:12px 0 0;padding:0;border-top:1px solid var(--line)}
-.pr-copy{display:block;margin:18px 0 0 auto}
-.pr-list li{padding:11px 2px;border-bottom:1px solid var(--line);font-size:14px;color:var(--ink);overflow-wrap:anywhere}
-.pr-copy:hover{background:var(--ink);border-color:var(--ink)}
-#tool-plugins :is(button,input):focus-visible,.nt-tool-tabs button:focus-visible{outline:2px solid var(--steel-bright);outline-offset:4px}
-.pr-drop:focus-within{border-color:var(--steel-bright)}
-@media(max-width:640px){.tools-modal{padding:16px 10px}.tools-modal-inner{padding:28px 18px}.tools-modal-close{right:14px;top:16px}.nt-tool-tabs{gap:6px}.nt-tool-tabs button{padding:10px;font-size:11px}}
-@media(prefers-reduced-motion:reduce){.tools-modal-inner{animation:none;opacity:1;transform:none}}
-/* Desktop: use the width. Once a file is loaded, upload stays on the left and results fill the right;
-   the plugin list flows into columns instead of one long vertical list. Phones keep one column. */
+.pr-copy{display:inline-flex;align-items:center;gap:8px;margin:18px 0 0 auto;font:600 13px 'Sora',sans-serif;border:0;border-radius:12px;background:var(--steel-bright);color:var(--bg);padding:10px 16px;cursor:pointer;transition:background .2s var(--ease),box-shadow .2s var(--ease)}
+.pr-copy:hover{background:var(--ink);box-shadow:0 8px 22px -10px rgba(238,243,250,.55)}
+#pr-results{display:flex;flex-direction:column}
+.pr-list{list-style:none;margin:14px 0 0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px}
+.pr-list li{padding:11px 14px;border-radius:12px;background:rgba(22,38,63,.45);border:1px solid rgba(168,200,236,.09);font-size:13.5px;line-height:1.35;color:var(--ink);overflow-wrap:anywhere}
+#tool-plugins :is(button,input):focus-visible,.nt-tool-tabs button:focus-visible{outline:2px solid var(--steel-bright);outline-offset:3px}
+@media(max-width:640px){.nt-tool-tabs{display:flex;margin-right:44px}.nt-tool-tabs button{flex:1;padding:9px 8px;font-size:12px}.pr-list{grid-template-columns:1fr 1fr}}
+/* Desktop: use the width. Once a file is loaded, upload stays on the left and results fill the right. */
 @media(min-width:900px){
-.tools-modal-inner{max-width:1080px;padding:40px 44px}
+.tools-modal-inner{max-width:1080px;padding:38px 44px 40px}
 .tools-modal .desc{max-width:112ch}
-.nt-tool-layout:has(>.nt-tool-output>.visible),.nt-tool-layout:has(>#pr-results:not([hidden])){display:grid;grid-template-columns:minmax(260px,340px) minmax(0,1fr);gap:32px;align-items:start}
-.nt-tool-layout:has(>.nt-tool-output>.visible) .drop-zone,.nt-tool-layout:has(>#pr-results:not([hidden])) .drop-zone{padding:28px 16px}
+.nt-tool-layout:has(>.nt-tool-output>.visible),.nt-tool-layout:has(>#pr-results:not([hidden])){display:grid;grid-template-columns:minmax(260px,340px) minmax(0,1fr);gap:28px;align-items:start}
+.nt-tool-layout:has(>.nt-tool-output>.visible) .drop-zone,.nt-tool-layout:has(>#pr-results:not([hidden])) .drop-zone{padding:30px 16px}
 .nt-tool-layout:has(>.nt-tool-output>.visible) .waveform-wrap{margin-top:0}
 .nt-tool-layout:has(>#pr-results:not([hidden])) .pr-copy{margin-top:0}
-.nt-tool-layout:has(>#pr-results:not([hidden])) .pr-list{columns:180px 3;column-gap:24px}
-.pr-list li{break-inside:avoid}
 }

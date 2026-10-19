@@ -1237,105 +1237,146 @@
   .footer-icon:hover { color: #04070d; background: var(--steel); border-color: var(--steel); transform: translateY(-3px); }
 </style>
 <style>
-  /* ================== TOOLS MODAL ================== */
+  /* ================== TOOLS MODAL ==================
+     Centered glass panel in the site palette. Nothing in it scales or rotates text on hover
+     (scaled text rasterizes blurry until the transition ends). */
   .tools-modal {
     position: fixed; inset: 0; z-index: 100;
     display: none;
-    background: rgba(4,7,13,0.75);
-    backdrop-filter: blur(6px);
-    padding: 40px 20px;
-    overflow-y: auto;
+    background: rgba(2,4,9,0.72);
+    backdrop-filter: blur(14px) saturate(1.15); -webkit-backdrop-filter: blur(14px) saturate(1.15);
+    padding: 24px;
+    overflow-y: auto; overscroll-behavior: contain;
   }
-  .tools-modal.open { display: block; }
+  /* margin:auto on the panel centers it and still lets a tall panel scroll from its top. */
+  .tools-modal.open { display: flex; }
 
   .tools-modal-inner {
-    max-width: 640px; margin: 0 auto;
-    background: var(--bg);
-    border: 1px solid var(--line);
-    border-radius: 20px;
-    padding: 36px 28px;
+    width: 100%; max-width: 760px; margin: auto;
     position: relative;
-    opacity: 0; transform: translateY(16px);
-    animation: modalIn 0.4s var(--ease) forwards;
+    padding: 34px 36px 36px;
+    border-radius: 24px;
+    border: 1px solid rgba(168,200,236,0.12);
+    background:
+      radial-gradient(640px 260px at 0% 0%, rgba(79,123,176,0.16), transparent 70%),
+      linear-gradient(180deg, rgba(16,27,46,0.94), rgba(6,10,18,0.96));
+    box-shadow: 0 40px 120px -40px rgba(0,0,0,0.9), inset 0 1px 0 rgba(255,255,255,0.04);
+    opacity: 0; transform: translateY(12px) scale(0.985);
+    animation: toolsIn 0.42s var(--ease) forwards;
   }
+  @keyframes toolsIn { to { opacity: 1; transform: none; } }
   @keyframes modalIn { to { opacity: 1; transform: translateY(0); } }
 
   .tools-modal-close {
-    position: absolute; top: 20px; right: 20px;
-    width: 34px; height: 34px; border-radius: 50%;
-    background: var(--surface); border: 1px solid var(--line); color: var(--ink);
+    position: absolute; top: 24px; right: 24px;
+    width: 38px; height: 38px; border-radius: 50%;
+    background: rgba(238,243,250,0.04); border: 1px solid rgba(168,200,236,0.14); color: var(--ink-dim);
     display: flex; align-items: center; justify-content: center;
-    font-size: 16px; cursor: pointer;
-    transition: all 0.3s var(--ease-spring);
+    font-size: 15px; cursor: pointer;
+    transition: background 0.2s var(--ease), color 0.2s var(--ease), border-color 0.2s var(--ease);
   }
-  .tools-modal-close:hover { background: var(--steel); border-color: var(--steel); color: #060a12; transform: rotate(90deg); }
+  .tools-modal-close:hover { background: var(--steel-bright); border-color: var(--steel-bright); color: var(--bg); }
+  .tools-modal-close:focus-visible { outline: 2px solid var(--steel-bright); outline-offset: 3px; }
 
-  .tools-modal .eyebrow { font-size: 12px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: var(--steel-bright); margin-bottom: 14px; }
-  .tools-modal h2 { font-family: 'Unbounded', sans-serif; font-size: clamp(1.7rem, 4vw, 2.2rem); font-weight: 800; letter-spacing: -0.01em; margin-bottom: 12px; padding-right: 30px; }
-  .tools-modal .desc { font-size: 14px; line-height: 1.6; color: var(--ink-dim); margin-bottom: 28px; }
+  .tools-modal .eyebrow {
+    display: flex; align-items: center; gap: 9px;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: var(--steel-bright);
+    margin-bottom: 16px;
+  }
+  .tools-modal .eyebrow::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--steel-bright); box-shadow: 0 0 12px rgba(168,200,236,0.7); }
+  .tools-modal h2 { font-family: 'Unbounded', sans-serif; font-size: clamp(1.55rem, 2.6vw, 2rem); font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; margin-bottom: 10px; padding-right: 40px; }
+  .tools-modal .desc { font-size: 14px; line-height: 1.65; color: var(--ink-dim); margin-bottom: 26px; }
 
   .drop-zone {
-    border: 1.5px dashed var(--line); border-radius: 14px; padding: 38px 18px; text-align: center;
-    cursor: pointer; transition: border-color 0.3s var(--ease), background 0.3s var(--ease); position: relative;
+    position: relative; display: block; text-align: center; cursor: pointer;
+    padding: 40px 20px; border-radius: 18px;
+    border: 1px dashed rgba(168,200,236,0.28);
+    background: linear-gradient(180deg, rgba(22,38,63,0.38), rgba(12,20,36,0.28));
+    transition: border-color 0.25s var(--ease), background 0.25s var(--ease), box-shadow 0.25s var(--ease);
   }
-  .drop-zone:hover, .drop-zone.drag-over { border-color: var(--steel); background: var(--steel-soft); }
+  .drop-zone:hover, .drop-zone.drag-over, .drop-zone:focus-visible, .drop-zone:focus-within {
+    border-color: rgba(168,200,236,0.6); background: linear-gradient(180deg, rgba(42,72,112,0.34), rgba(16,27,46,0.4));
+    box-shadow: 0 0 0 4px rgba(168,200,236,0.07); outline: none;
+  }
   .drop-zone input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
-  .drop-zone-icon { width: 30px; height: 30px; margin: 0 auto 12px; color: var(--ink-faint); transition: color 0.3s var(--ease); pointer-events: none; }
-  .drop-zone:hover .drop-zone-icon { color: var(--steel); }
-  .drop-zone-label { font-size: 14px; font-weight: 600; margin-bottom: 4px; pointer-events: none; }
-  .drop-zone-sub { font-size: 12px; color: var(--ink-faint); pointer-events: none; }
+  .drop-zone-icon {
+    width: 48px; height: 48px; padding: 13px; margin: 0 auto 14px; box-sizing: border-box;
+    border-radius: 50%; color: var(--steel-bright); background: rgba(168,200,236,0.08); border: 1px solid rgba(168,200,236,0.18);
+    pointer-events: none; transition: background 0.25s var(--ease), color 0.25s var(--ease);
+  }
+  .drop-zone:hover .drop-zone-icon, .drop-zone.drag-over .drop-zone-icon { background: var(--steel-bright); color: var(--bg); }
+  .drop-zone-label { font-size: 15px; font-weight: 600; color: var(--ink); margin-bottom: 5px; pointer-events: none; }
+  .drop-zone-sub { font-size: 12px; color: var(--ink-faint); pointer-events: none; letter-spacing: 0.01em; }
 
-  .file-chip { display: none; align-items: center; justify-content: space-between; gap: 10px; margin-top: 14px; padding: 10px 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; font-size: 13px; }
+  .file-chip {
+    display: none; align-items: center; gap: 12px; margin-top: 12px; padding: 11px 12px 11px 14px;
+    border-radius: 14px; background: rgba(22,38,63,0.5); border: 1px solid rgba(168,200,236,0.12); font-size: 13px;
+  }
   .file-chip.visible { display: flex; }
-  .file-chip-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-dim); }
-  .file-chip button { background: none; border: none; color: var(--ink-faint); font-size: 14px; cursor: pointer; padding: 2px 6px; }
-  .file-chip button:hover { color: var(--ink); }
+  .file-chip::before {
+    content: ''; flex-shrink: 0; width: 30px; height: 30px; border-radius: 9px; background: rgba(168,200,236,0.1);
+    box-shadow: inset 0 0 0 1px rgba(168,200,236,0.18);
+    background-image: linear-gradient(var(--steel-bright), var(--steel-bright)), linear-gradient(var(--steel-bright), var(--steel-bright)), linear-gradient(var(--steel-bright), var(--steel-bright));
+    background-size: 12px 2px, 9px 2px, 12px 2px; background-repeat: no-repeat;
+    background-position: 9px 10px, 9px 14px, 9px 18px;
+  }
+  .file-chip-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); font-weight: 500; }
+  .file-chip button {
+    flex-shrink: 0; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center;
+    background: transparent; border: none; color: var(--ink-faint); font-size: 13px; cursor: pointer;
+    transition: background 0.2s var(--ease), color 0.2s var(--ease);
+  }
+  .file-chip button:hover { background: rgba(238,243,250,0.08); color: var(--ink); }
 
-  .waveform-wrap { margin-top: 18px; height: 50px; display: none; align-items: center; gap: 2px; }
+  .waveform-wrap {
+    margin-top: 18px; height: 64px; display: none; align-items: center; gap: 3px;
+    padding: 0 14px; border-radius: 14px; background: rgba(4,7,13,0.45); border: 1px solid rgba(168,200,236,0.08);
+  }
   .waveform-wrap.visible { display: flex; }
-  .wave-bar { flex: 1; background: var(--ink-faint); border-radius: 1px; min-width: 2px; transition: background 0.4s var(--ease), height 0.15s var(--ease); }
+  .wave-bar { flex: 1; background: rgba(168,200,236,0.28); border-radius: 2px; min-width: 2px; max-height: 44px; transition: background 0.4s var(--ease), height 0.15s var(--ease); }
+  .wave-bar.active { background: linear-gradient(180deg, var(--steel-bright), var(--steel)); }
 
-  .tool-status { display: none; align-items: center; gap: 10px; margin-top: 18px; font-size: 13px; color: var(--ink-dim); }
+  .tool-status { display: none; align-items: center; gap: 10px; margin-top: 16px; font-size: 13px; color: var(--ink-dim); }
   .tool-status.visible { display: flex; }
   .tool-status .spin {
     width: 14px; height: 14px; border-radius: 50%;
-    border: 2px solid var(--line); border-top-color: var(--steel);
+    border: 2px solid var(--line); border-top-color: var(--steel-bright);
     animation: spin 0.8s linear infinite; flex-shrink: 0;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  .results { display: none; margin-top: 22px; gap: 14px; grid-template-columns: 1fr 1fr; }
+  .results { display: none; margin-top: 16px; gap: 12px; grid-template-columns: 1fr 1fr; }
   .results.visible { display: grid; }
   .result-card {
-    border: 1px solid var(--line); border-radius: 14px; padding: 16px;
-    background: var(--surface);
+    position: relative; overflow: hidden;
+    border: 1px solid rgba(168,200,236,0.12); border-radius: 18px; padding: 18px 20px 20px;
+    background: radial-gradient(260px 120px at 100% 0%, rgba(79,123,176,0.18), transparent 70%), rgba(16,27,46,0.62);
   }
-  .result-label { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 6px; }
-  .result-value { font-size: 28px; font-weight: 600; color: var(--ink); }
-  /* The BPM card's value is always short (a 2-3 digit number), but the
-     Key card's can be "C# Major" or "A# Minor" — 8 characters of bold
-     monospace at 28px doesn't fit the ~100px a card actually has once the
-     modal's own padding and the two-column grid gap are accounted for on
-     a narrow phone screen, so the longer key names wrapped into an
-     awkward two-line stack instead of reading as one clean word. */
-  @media (max-width: 480px) { .result-value { font-size: 20px; } }
-  .result-sub { font-size: 12px; color: var(--ink-dim); margin-top: 4px; }
-  .result-alt-bpm {
-    font-size: 11px; color: var(--ink-faint); margin-top: 6px;
-    display: none;
-  }
+  .result-label { font-size: 11px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: var(--steel-bright); margin-bottom: 10px; }
+  .result-value { font-family: 'Unbounded', sans-serif; font-size: 32px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.05; color: var(--ink); }
+  /* "C# Major" must stay on one line inside a half-width card on phones. */
+  @media (max-width: 480px) { .result-value { font-size: 21px; } }
+  .result-sub { font-size: 12.5px; color: var(--ink-dim); margin-top: 8px; }
+  .result-alt-bpm { font-size: 11.5px; color: var(--ink-faint); margin-top: 6px; display: none; }
   .result-alt-bpm.visible { display: block; }
 
-  .confidence-row { display: none; align-items: center; gap: 10px; margin-top: 16px; }
+  .confidence-row { display: none; align-items: center; gap: 12px; margin-top: 16px; padding: 12px 16px; border-radius: 14px; background: rgba(4,7,13,0.45); border: 1px solid rgba(168,200,236,0.08); }
   .confidence-row.visible { display: flex; }
-  .confidence-label { font-size: 12px; color: var(--ink-faint); flex-shrink: 0; }
-  .confidence-bar { flex: 1; height: 6px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
-  .confidence-fill { display: block; height: 100%; background: var(--steel); border-radius: 999px; width: 0%; transition: width 0.6s var(--ease); }
-  .confidence-row .mono { font-size: 12px; color: var(--ink-dim); flex-shrink: 0; }
+  .confidence-label { font-size: 12px; color: var(--ink-dim); flex-shrink: 0; }
+  .confidence-bar { flex: 1; height: 6px; border-radius: 999px; background: rgba(168,200,236,0.1); overflow: hidden; }
+  .confidence-fill { display: block; height: 100%; background: linear-gradient(90deg, var(--steel), var(--steel-bright)); border-radius: 999px; width: 0%; transition: width 0.6s var(--ease); }
+  .confidence-row .mono { font-size: 12px; color: var(--ink); flex-shrink: 0; }
+  @media (max-width: 640px) {
+    .tools-modal { padding: 12px; }
+    .tools-modal-inner { padding: 26px 18px 22px; border-radius: 20px; }
+    .tools-modal-close { top: 18px; right: 16px; }
+    .drop-zone { padding: 30px 16px; }
+  }
+  @media (prefers-reduced-motion: reduce) { .tools-modal-inner { animation: none; opacity: 1; transform: none; } }
 </style>
 <link rel="stylesheet" href="./assets/neutro-motion.css?v=4">
 <script src="./assets/neutro-motion.js?v=1" defer></script>
-<link rel="stylesheet" href="./assets/plugin-reader.css?v=4">
+<link rel="stylesheet" href="./assets/plugin-reader.css?v=5">
 <script src="./assets/plugin-reader.js?v=7" type="module"></script>
 <link rel="stylesheet" href="./assets/neutro-scroll.css?v=2">
 <script src="./assets/vendor/lenis.min.js?v=1.3.26" defer></script>
