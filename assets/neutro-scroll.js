@@ -44,14 +44,16 @@
     lenis = new Lenis({
       autoRaf: true, lerp: 0.1, smoothWheel: true, syncTouch: false, anchors: false,
       allowNestedScroll: false, stopInertiaOnNavigate: true,
-      prevent: node => node.matches?.('textarea,select,[data-lenis-prevent]'),
+      // No Lenis "prevent" list: an element it skips (e.g. a form textarea or select) would let the browser
+      // scroll the page while the inertia keeps running. Every hand-over to the browser goes through settle().
       virtualScroll({ deltaX, deltaY, event }) {
         if (event.type !== 'wheel') return true; // touch stays native (syncTouch:false)
         sync();
         if (lenis.isStopped) return false; // overlay open: it scrolls natively, the page is locked by the site
         // Chrome makes the rest of a wheel sequence non-cancelable when its first event was not handled;
-        // those, zoom gestures and inner panels belong to the browser.
-        if (!event.cancelable || event.ctrlKey || innerScroll(event.target, deltaX, deltaY)) { settle(); return false; }
+        // those, zoom gestures, opted-out areas and inner panels that can still move belong to the browser.
+        const optOut = event.target instanceof Element && event.target.closest('[data-lenis-prevent]');
+        if (!event.cancelable || event.ctrlKey || optOut || innerScroll(event.target, deltaX, deltaY)) { settle(); return false; }
         if (lenis.dimensions.scrollHeight !== root.scrollHeight) lenis.dimensions.resize(); // content changed (SPA, releases)
         return true;
       },
