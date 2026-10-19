@@ -14,3 +14,15 @@
 .pr-drop:focus-within{border-color:var(--steel-bright)}
 @media(max-width:640px){.tools-modal{padding:16px 10px}.tools-modal-inner{padding:28px 18px}.tools-modal-close{right:14px;top:16px}.nt-tool-tabs{gap:6px}.nt-tool-tabs button{padding:10px;font-size:11px}}
 @media(prefers-reduced-motion:reduce){.tools-modal-inner{animation:none;opacity:1;transform:none}}
+/* Desktop: use the width. Once a file is loaded, upload stays on the left and results fill the right;
+   the plugin list flows into columns instead of one long vertical list. Phones keep one column. */
+@media(min-width:900px){
+.tools-modal-inner{max-width:1080px;padding:40px 44px}
+.tools-modal .desc{max-width:112ch}
+.nt-tool-layout:has(>.nt-tool-output>.visible),.nt-tool-layout:has(>#pr-results:not([hidden])){display:grid;grid-template-columns:minmax(260px,340px) minmax(0,1fr);gap:32px;align-items:start}
+.nt-tool-layout:has(>.nt-tool-output>.visible) .drop-zone,.nt-tool-layout:has(>#pr-results:not([hidden])) .drop-zone{padding:28px 16px}
+.nt-tool-layout:has(>.nt-tool-output>.visible) .waveform-wrap{margin-top:0}
+.nt-tool-layout:has(>#pr-results:not([hidden])) .pr-copy{margin-top:0}
+.nt-tool-layout:has(>#pr-results:not([hidden])) .pr-list{columns:180px 3;column-gap:24px}
+.pr-list li{break-inside:avoid}
+}

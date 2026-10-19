@@ -3,6 +3,8 @@ const root = document.getElementById('tool-plugins');
 root.innerHTML = `
   <h2 class="display">Plugin Reader</h2>
   <p class="desc">Drop a project to see its third-party plugins. Everything is read locally in your browser.</p>
+  <div class="nt-tool-layout">
+  <div class="nt-tool-input">
   <label class="drop-zone pr-drop" id="pr-drop">
     <input type="file" id="pr-files" accept=".als,.flp" aria-label="Choose a project to read">
     <svg class="drop-zone-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M12 16V4m0 0-4 4m4-4 4 4M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -11,7 +13,9 @@ root.innerHTML = `
   </label>
   <div class="file-chip" id="pr-file-chip"><span class="file-chip-name" id="pr-file-name"></span><button type="button" id="pr-clear" aria-label="Remove project">✕</button></div>
   <p id="pr-status" class="pr-status" role="status" aria-live="polite"></p>
-  <div id="pr-results" hidden><button type="button" id="pr-copy" class="pr-copy">Copy names</button><ul id="pr-list" class="pr-list" aria-label="Plugins used"></ul></div>
+  </div>
+  <div class="nt-tool-output" id="pr-results" hidden><button type="button" id="pr-copy" class="pr-copy">Copy names</button><ul id="pr-list" class="pr-list" aria-label="Plugins used"></ul></div>
+  </div>
 `;
 const $ = id => document.getElementById(id);
 const modal = $('tools-modal');
