@@ -31,7 +31,8 @@
   function innerScroll(target, dx, dy) {
     const vertical = Math.abs(dy) >= Math.abs(dx), delta = vertical ? dy : dx;
     for (let el = target instanceof Element ? target : target?.parentElement; el && el !== document.body && el !== root; el = el.parentElement) {
-      const overflow = getComputedStyle(el)[vertical ? 'overflowY' : 'overflowX'];
+      // Firefox reports overflow:visible for <textarea> even though it scrolls its own text.
+      const overflow = el.tagName === 'TEXTAREA' ? 'auto' : getComputedStyle(el)[vertical ? 'overflowY' : 'overflowX'];
       if (!/auto|scroll|overlay/.test(overflow)) continue;
       const max = vertical ? el.scrollHeight - el.clientHeight : el.scrollWidth - el.clientWidth;
       if (max <= 1) continue;
