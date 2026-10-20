@@ -7,6 +7,7 @@
   const root = document.documentElement;
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
   const desktop = matchMedia('(hover: hover) and (pointer: fine)');
+  const MIN_GLIDE = 60; // px/s: one pixel per 60 Hz frame
   let lenis = null, internal = false;
 
   // The sites lock the page themselves (modal <dialog>, or body overflow:hidden for the main site's overlays).
@@ -61,6 +62,23 @@
     });
     const setScroll = lenis.setScroll;
     lenis.setScroll = function (value) { internal = true; try { return setScroll.call(this, value); } finally { internal = false; } };
+    // Lenis's damping never reaches zero: over the last ~10 px it moves less than a pixel per frame, the browser
+    // paints whole pixels, and the glide ended in 1 px hops with growing pauses (the last one ~180 ms). Same
+    // damping, but never slower than MIN_GLIDE: the last pixels are covered at that steady pace, then it stops.
+    const animate = lenis.animate;
+    if (animate && typeof animate.advance === 'function') {
+      const advance = animate.advance;
+      animate.advance = function (dt) {
+        if (!this.isRunning || !this.lerp || (this.duration && this.easing)) return advance.call(this, dt);
+        const gap = this.to - this.value, floor = MIN_GLIDE * dt;
+        let step = gap * (1 - Math.exp(-this.lerp * 60 * dt));
+        if (Math.abs(step) < floor) step = Math.sign(gap) * Math.min(floor, Math.abs(gap));
+        this.value += step;
+        const done = Math.round(this.value) === Math.round(this.to);
+        if (done) { this.value = this.to; this.stop(); }
+        this.onUpdate?.(this.value, done);
+      };
+    }
     sync();
   }
   function setup() {
