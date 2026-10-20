@@ -1834,6 +1834,7 @@
   // collaborators and a clean "listen on" button grid — built once and
   // reused for whichever card was clicked ----------
   let modalBackdrop = document.getElementById('release-modal-backdrop');
+  let releaseModalOpener = null;
   if (!modalBackdrop) {
     modalBackdrop = document.createElement('div');
     modalBackdrop.className = 'release-modal-backdrop';
@@ -1858,11 +1859,20 @@
         </div>
       </div>
     `;
+    // Closed, the modal is only transparent: inert keeps its close button and
+    // "Listen on" links out of the Tab order and the accessibility tree.
+    modalBackdrop.inert = true;
     document.body.appendChild(modalBackdrop);
 
     function closeReleaseModal() {
+      if (!modalBackdrop.classList.contains('visible')) return;
       modalBackdrop.classList.remove('visible');
+      modalBackdrop.inert = true;
       document.body.style.overflow = '';
+      // hand focus back to the card that opened it (keyboard users keep their place)
+      const opener = releaseModalOpener;
+      releaseModalOpener = null;
+      if (opener && opener.isConnected) opener.focus({ preventScroll: true });
     }
     modalBackdrop.querySelector('#release-modal-close').addEventListener('click', closeReleaseModal);
     modalBackdrop.addEventListener('click', (e) => { if (e.target === modalBackdrop) closeReleaseModal(); });
@@ -1913,8 +1923,11 @@
     if (r.youtubemusic) linksHtml += `<a href="${r.youtubemusic}" target="_blank" rel="noopener" style="--brand-rgb:255,0,0"><span class="link-icon">${ICONS.youtubemusic}</span><span class="name">YouTube Music</span>${EXT_ICON}</a>`;
     document.getElementById('release-modal-links').innerHTML = linksHtml;
 
+    if (!modalBackdrop.classList.contains('visible')) releaseModalOpener = document.activeElement;
     modalBackdrop.classList.add('visible');
+    modalBackdrop.inert = false;
     document.body.style.overflow = 'hidden';
+    document.getElementById('release-modal-close').focus({ preventScroll: true });
   }
 
   function debounce(fn, ms) {
@@ -2529,10 +2542,12 @@
       reveal.classList.remove('open');
       document.body.style.overflow = '';
       audio.pause();
+      strip.focus({ preventScroll: true });
     }
     strip.addEventListener('click', () => {
       reveal.classList.add('open');
       document.body.style.overflow = 'hidden';
+      reveal.querySelector('#mystery-reveal-close').focus({ preventScroll: true });
     });
     reveal.querySelector('#mystery-reveal-close').addEventListener('click', closeReveal);
     reveal.addEventListener('click', (e) => { if (e.target === reveal) closeReveal(); });
