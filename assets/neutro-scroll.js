@@ -7,9 +7,10 @@
   const root = document.documentElement;
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
   const desktop = matchMedia('(hover: hover) and (pointer: fine)');
-  // px: final stretch that brakes with constant deceleration. 10 px is where Lenis's lerp 0.1 drops below one
-  // pixel per 60 Hz frame, i.e. where the hops started; everything before it is Lenis's original glide.
-  const SETTLE = 10;
+  const LERP = 0.085; // glide length: lower = longer inertia (Lenis default 0.1)
+  // The final stretch brakes with constant deceleration from the point where the glide drops below one pixel per
+  // 60 Hz frame (SETTLE_SPEED), i.e. where the hops started; everything before it is Lenis's own glide.
+  const SETTLE_SPEED = 60; // px/s
   let lenis = null, internal = false;
 
   // The sites lock the page themselves (modal <dialog>, or body overflow:hidden for the main site's overlays).
@@ -46,7 +47,7 @@
   }
   function create() {
     lenis = new Lenis({
-      autoRaf: true, lerp: 0.1, smoothWheel: true, syncTouch: false, anchors: false,
+      autoRaf: true, lerp: LERP, smoothWheel: true, syncTouch: false, anchors: false,
       allowNestedScroll: false, stopInertiaOnNavigate: true,
       // No Lenis "prevent" list: an element it skips (e.g. a form textarea or select) would let the browser
       // scroll the page while the inertia keeps running. Every hand-over to the browser goes through settle().
@@ -66,18 +67,18 @@
     lenis.setScroll = function (value) { internal = true; try { return setScroll.call(this, value); } finally { internal = false; } };
     // Lenis's damping never reaches zero: over the last ~10 px it moves less than a pixel per frame, the browser
     // paints whole pixels, and the glide ended in 1 px hops with growing pauses (85 and ~180 ms). A steady
-    // minimum speed fixed that but stopped dead. Now only the last SETTLE px brake with constant deceleration
+    // minimum speed fixed that but stopped dead. Now only the last few px brake with constant deceleration
     // (like friction), matched to Lenis's speed at that point: same glide, speed eases to zero without hops.
     const animate = lenis.animate;
     if (animate && typeof animate.advance === 'function') {
       const advance = animate.advance;
       animate.advance = function (dt) {
         if (!this.isRunning || !this.lerp || (this.duration && this.easing)) return advance.call(this, dt);
-        const lambda = this.lerp * 60, gap = this.to - this.value, dist = Math.abs(gap);
+        const lambda = this.lerp * 60, settle = SETTLE_SPEED / lambda, gap = this.to - this.value, dist = Math.abs(gap);
         let rest;
-        if (dist > SETTLE) rest = dist * Math.exp(-lambda * dt); // Lenis's own damping
+        if (dist > settle) rest = dist * Math.exp(-lambda * dt); // Lenis's own damping
         else {
-          const decel = lambda * lambda * SETTLE / 2, left = Math.sqrt(2 * dist / decel); // v = λ·√(SETTLE·dist)
+          const decel = lambda * lambda * settle / 2, left = Math.sqrt(2 * dist / decel); // v = λ·√(settle·dist)
           rest = dt >= left ? 0 : decel * (left - dt) ** 2 / 2;
         }
         this.value = this.to - Math.sign(gap) * rest;
