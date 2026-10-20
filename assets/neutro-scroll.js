@@ -7,7 +7,9 @@
   const root = document.documentElement;
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
   const desktop = matchMedia('(hover: hover) and (pointer: fine)');
-  const MIN_GLIDE = 60; // px/s: one pixel per 60 Hz frame
+  // px: final stretch that brakes with constant deceleration. 10 px is where Lenis's lerp 0.1 drops below one
+  // pixel per 60 Hz frame, i.e. where the hops started; everything before it is Lenis's original glide.
+  const SETTLE = 10;
   let lenis = null, internal = false;
 
   // The sites lock the page themselves (modal <dialog>, or body overflow:hidden for the main site's overlays).
@@ -63,17 +65,22 @@
     const setScroll = lenis.setScroll;
     lenis.setScroll = function (value) { internal = true; try { return setScroll.call(this, value); } finally { internal = false; } };
     // Lenis's damping never reaches zero: over the last ~10 px it moves less than a pixel per frame, the browser
-    // paints whole pixels, and the glide ended in 1 px hops with growing pauses (the last one ~180 ms). Same
-    // damping, but never slower than MIN_GLIDE: the last pixels are covered at that steady pace, then it stops.
+    // paints whole pixels, and the glide ended in 1 px hops with growing pauses (85 and ~180 ms). A steady
+    // minimum speed fixed that but stopped dead. Now only the last SETTLE px brake with constant deceleration
+    // (like friction), matched to Lenis's speed at that point: same glide, speed eases to zero without hops.
     const animate = lenis.animate;
     if (animate && typeof animate.advance === 'function') {
       const advance = animate.advance;
       animate.advance = function (dt) {
         if (!this.isRunning || !this.lerp || (this.duration && this.easing)) return advance.call(this, dt);
-        const gap = this.to - this.value, floor = MIN_GLIDE * dt;
-        let step = gap * (1 - Math.exp(-this.lerp * 60 * dt));
-        if (Math.abs(step) < floor) step = Math.sign(gap) * Math.min(floor, Math.abs(gap));
-        this.value += step;
+        const lambda = this.lerp * 60, gap = this.to - this.value, dist = Math.abs(gap);
+        let rest;
+        if (dist > SETTLE) rest = dist * Math.exp(-lambda * dt); // Lenis's own damping
+        else {
+          const decel = lambda * lambda * SETTLE / 2, left = Math.sqrt(2 * dist / decel); // v = λ·√(SETTLE·dist)
+          rest = dt >= left ? 0 : decel * (left - dt) ** 2 / 2;
+        }
+        this.value = this.to - Math.sign(gap) * rest;
         const done = Math.round(this.value) === Math.round(this.to);
         if (done) { this.value = this.to; this.stop(); }
         this.onUpdate?.(this.value, done);
