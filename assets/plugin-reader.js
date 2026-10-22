@@ -14,7 +14,7 @@ root.innerHTML = `
   <div class="file-chip" id="pr-file-chip"><span class="file-chip-name" id="pr-file-name"></span><button type="button" id="pr-clear" aria-label="Remove project">✕</button></div>
   <p id="pr-status" class="pr-status" role="status" aria-live="polite"></p>
   </div>
-  <div class="nt-tool-output" id="pr-results" hidden><button type="button" id="pr-copy" class="pr-copy">Copy names</button><ul id="pr-list" class="pr-list" aria-label="Plugins used"></ul></div>
+  <div class="nt-tool-output" id="pr-results" hidden><button type="button" id="pr-copy" class="pr-copy">Copy Names</button><ul id="pr-list" class="pr-list" aria-label="Plugins used"></ul></div>
   </div>
 `;
 const $ = id => document.getElementById(id);
@@ -54,7 +54,7 @@ let generation = 0, names = [];
 const status = message => { $('pr-status').textContent = message; };
 function clearResults() {
   names = []; $('pr-list').replaceChildren(); $('pr-results').hidden = true;
-  $('pr-copy').textContent = 'Copy names';
+  $('pr-copy').textContent = 'Copy Names';
 }
 async function analyze(file) {
   const current = ++generation;
