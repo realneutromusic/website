@@ -1,7 +1,9 @@
 'use strict';
 /* Smooth wheel scrolling with self-hosted Lenis (MIT, see vendor/LENIS-LICENSE.txt), desktop mouse/trackpad only.
    Lenis only takes wheel input it can fully own, so it never moves the page at the same time as the browser:
-   touch, keyboard, dialogs, inner scroll panels and every scroll requested by page code stay native. */
+   touch, keyboard, inner scroll panels and every scroll requested by page code stay native.
+   Overlays that scroll on their own ([data-lenis-panel], e.g. the product sheet) get their own instance while open,
+   with the same glide; the page's instance is stopped meanwhile. */
 (() => {
   if (!window.Lenis) return;
   const root = document.documentElement;
@@ -12,6 +14,7 @@
   // 60 Hz frame (SETTLE_SPEED), i.e. where the hops started; everything before it is Lenis's own glide.
   const SETTLE_SPEED = 60; // px/s
   let lenis = null, internal = false;
+  const panels = new Map(); // overlay scroller → its own Lenis
 
   // The sites lock the page themselves (modal <dialog>, or body overflow:hidden for the main site's overlays).
   function pageLocked() {
@@ -20,21 +23,28 @@
     const body = document.body.style;
     return !!modal || body.overflow === 'hidden' || body.position === 'fixed';
   }
+  const wanted = () => desktop.matches && !reduced.matches;
+  const shown = el => el.isConnected && el.getClientRects().length > 0 && (!el.closest('dialog') || el.closest('dialog').open);
   function sync() {
-    if (!lenis) return;
-    if (pageLocked()) { if (!lenis.isStopped) lenis.stop(); }
-    else if (lenis.isStopped) lenis.start();
+    if (lenis) {
+      if (pageLocked()) { if (!lenis.isStopped) lenis.stop(); }
+      else if (lenis.isStopped) lenis.start();
+    }
+    // One instance per visible overlay scroller: created when its dialog opens, destroyed when it closes.
+    for (const [el, inst] of panels) if (!wanted() || !shown(el)) { inst.destroy(); panels.delete(el); }
+    if (wanted()) document.querySelectorAll('[data-lenis-panel]').forEach(el => { if (!panels.has(el) && shown(el)) panels.set(el, create(el)); });
   }
-  // Stop smooth inertia before anything else scrolls the page, so two animations never compete.
+  // Stop smooth inertia before anything else scrolls, so two animations never compete.
   function settle() {
-    if (lenis && !internal && lenis.isScrolling === 'smooth') lenis.reset();
+    if (internal) return;
+    for (const inst of [lenis, ...panels.values()]) if (inst && inst.isScrolling === 'smooth') inst.reset();
   }
-  // Inner panels keep native scrolling while they can still move in that direction. <body> and <html> are
-  // skipped on purpose: overflow-x:hidden makes body report overflow-y:auto, and treating it as a nested
-  // scroller hands part of the wheel events back to the browser (mixed, flickering scroll).
-  function innerScroll(target, dx, dy) {
+  // Inner panels keep native scrolling while they can still move in that direction. <body> and <html> (and the
+  // overlay's own scroller) are skipped on purpose: overflow-x:hidden makes body report overflow-y:auto, and
+  // treating it as a nested scroller hands part of the wheel events back to the browser (mixed, flickering scroll).
+  function innerScroll(target, dx, dy, scroller) {
     const vertical = Math.abs(dy) >= Math.abs(dx), delta = vertical ? dy : dx;
-    for (let el = target instanceof Element ? target : target?.parentElement; el && el !== document.body && el !== root; el = el.parentElement) {
+    for (let el = target instanceof Element ? target : target?.parentElement; el && el !== document.body && el !== root && el !== scroller; el = el.parentElement) {
       // Firefox reports overflow:visible for <textarea> even though it scrolls its own text.
       const overflow = el.tagName === 'TEXTAREA' ? 'auto' : getComputedStyle(el)[vertical ? 'overflowY' : 'overflowX'];
       if (!/auto|scroll|overlay/.test(overflow)) continue;
@@ -45,31 +55,33 @@
     }
     return false;
   }
-  function create() {
-    lenis = new Lenis({
+  /** scroller: undefined = the page; an element = an overlay that scrolls on its own. */
+  function create(scroller) {
+    const inst = new Lenis({
+      ...(scroller && { wrapper: scroller, content: scroller }),
       autoRaf: true, lerp: LERP, smoothWheel: true, syncTouch: false, anchors: false,
       allowNestedScroll: false, stopInertiaOnNavigate: true,
       // No Lenis "prevent" list: an element it skips (e.g. a form textarea or select) would let the browser
-      // scroll the page while the inertia keeps running. Every hand-over to the browser goes through settle().
+      // scroll while the inertia keeps running. Every hand-over to the browser goes through settle().
       virtualScroll({ deltaX, deltaY, event }) {
         if (event.type !== 'wheel') return true; // touch stays native (syncTouch:false)
-        sync();
-        if (lenis.isStopped) return false; // overlay open: it scrolls natively, the page is locked by the site
+        if (!scroller) { sync(); if (inst.isStopped) return false; } // overlay open: the page stays locked
         // Chrome makes the rest of a wheel sequence non-cancelable when its first event was not handled;
         // those, zoom gestures, opted-out areas and inner panels that can still move belong to the browser.
         const optOut = event.target instanceof Element && event.target.closest('[data-lenis-prevent]');
-        if (!event.cancelable || event.ctrlKey || optOut || innerScroll(event.target, deltaX, deltaY)) { settle(); return false; }
-        if (lenis.dimensions.scrollHeight !== root.scrollHeight) lenis.dimensions.resize(); // content changed (SPA, releases)
+        if (!event.cancelable || event.ctrlKey || optOut || innerScroll(event.target, deltaX, deltaY, scroller)) { settle(); return false; }
+        const height = scroller ? scroller.scrollHeight : root.scrollHeight;
+        if (inst.dimensions.scrollHeight !== height) inst.dimensions.resize(); // content changed (SPA, releases, new product)
         return true;
       },
     });
-    const setScroll = lenis.setScroll;
-    lenis.setScroll = function (value) { internal = true; try { return setScroll.call(this, value); } finally { internal = false; } };
+    const setScroll = inst.setScroll;
+    inst.setScroll = function (value) { internal = true; try { return setScroll.call(this, value); } finally { internal = false; } };
     // Lenis's damping never reaches zero: over the last ~10 px it moves less than a pixel per frame, the browser
     // paints whole pixels, and the glide ended in 1 px hops with growing pauses (85 and ~180 ms). A steady
     // minimum speed fixed that but stopped dead. Now only the last few px brake with constant deceleration
     // (like friction), matched to Lenis's speed at that point: same glide, speed eases to zero without hops.
-    const animate = lenis.animate;
+    const animate = inst.animate;
     if (animate && typeof animate.advance === 'function') {
       const advance = animate.advance;
       animate.advance = function (dt) {
@@ -87,12 +99,19 @@
         this.onUpdate?.(this.value, done);
       };
     }
-    sync();
+    // The page swaps the overlay's content and resets its scroll (next/previous product): drop any glide in
+    // progress so it never drags the new content, and measure the new height.
+    const swap = scroller && new MutationObserver(() => { if (inst.isScrolling === 'smooth') inst.reset(); inst.dimensions.resize(); });
+    swap?.observe(scroller, { childList: true });
+    // Lenis leaves its 400 ms velocity timer running on destroy; it would put the "lenis" class back afterwards.
+    const destroy = inst.destroy.bind(inst);
+    inst.destroy = () => { swap?.disconnect(); clearTimeout(inst._resetVelocityTimeout); destroy(); };
+    return inst;
   }
   function setup() {
-    const wanted = desktop.matches && !reduced.matches;
-    if (wanted && !lenis) create();
-    else if (!wanted && lenis) { lenis.destroy(); lenis = null; }
+    if (wanted() && !lenis) lenis = create();
+    else if (!wanted() && lenis) { lenis.destroy(); lenis = null; }
+    sync();
   }
   for (const [owner, name] of [[window, 'scrollTo'], [window, 'scroll'], [window, 'scrollBy'], [Element.prototype, 'scrollIntoView']]) {
     const original = owner[name];
@@ -102,7 +121,7 @@
     if (/^(Arrow(Up|Down)|Page(Up|Down)|Home|End| )$/.test(event.key) && !event.target.closest?.('input,textarea,select,[contenteditable]')) settle();
   }, true);
   document.addEventListener('click', event => { const link = event.target.closest?.('a[href*="#"]'); if (link?.pathname === location.pathname) settle(); }, true);
-  addEventListener('pointerdown', event => { if (event.target === root) settle(); }, true); // scrollbar drag
+  addEventListener('pointerdown', event => { if (event.target === root || panels.has(event.target)) settle(); }, true); // scrollbar drag
   addEventListener('popstate', settle);
   addEventListener('pageshow', () => { lenis?.resize(); sync(); });
   const observer = new MutationObserver(sync);
@@ -112,5 +131,5 @@
   reduced.addEventListener('change', setup);
   desktop.addEventListener('change', setup);
   setup();
-  window.NTScroll = { get active() { return !!lenis && !lenis.isStopped; }, get lenis() { return lenis; } };
+  window.NTScroll = { get active() { return !!lenis && !lenis.isStopped; }, get lenis() { return lenis; }, get panels() { return panels; } };
 })();
