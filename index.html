@@ -936,16 +936,18 @@
      no inline embed cluttering the grid itself ---------- */
   .release-modal-backdrop {
     position: fixed; inset: 0; z-index: 200;
-    background: rgba(4,7,13,0.78); backdrop-filter: blur(6px);
+    background: rgba(4,7,13,0.78);
     display: flex; align-items: center; justify-content: center;
     padding: 24px;
     opacity: 0; pointer-events: none;
-    /* hidden once faded out: an invisible full-screen backdrop blur was still
-       computed every frame (Chrome without GPU: ~48 → ~65 fps) */
-    visibility: hidden;
-    transition: opacity 0.3s var(--ease), visibility 0s linear 0.3s;
+    /* no blur while closed: the invisible full-screen backdrop blur was still
+       computed every frame (Chrome without GPU: ~48 → ~65 fps). It fades with
+       the opacity. Not visibility:hidden — the close button inherits it through
+       its own transition and could not take focus right when the window opens. */
+    backdrop-filter: none;
+    transition: opacity 0.3s var(--ease), backdrop-filter 0.3s var(--ease);
   }
-  .release-modal-backdrop.visible { opacity: 1; pointer-events: auto; visibility: visible; transition: opacity 0.3s var(--ease); }
+  .release-modal-backdrop.visible { opacity: 1; pointer-events: auto; backdrop-filter: blur(6px); }
   .release-modal {
     position: relative; width: 100%; max-width: 520px;
     background: var(--surface-solid, #0c1424);
