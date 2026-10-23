@@ -1577,7 +1577,7 @@
     <div class="nt-tool-layout">
     <div class="nt-tool-input">
     <div class="drop-zone" id="drop-zone" tabindex="0" role="button" aria-label="Upload an audio file to analyze">
-      <input type="file" id="file-input" accept="audio/*">
+      <input type="file" id="file-input" accept="audio/*" aria-label="Choose an audio file to analyze">
       <svg class="drop-zone-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
         <path d="M12 16V4M12 4l-4 4M12 4l4 4" stroke-linecap="round" stroke-linejoin="round"/>
         <path d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -1680,6 +1680,8 @@
   // ./assets/thumbs/ with the same name ending in .webp (NTR011.webp) —
   // the cards and the "now playing" cover use it, the release window
   // keeps the full artwork. Without it the full artwork is used.
+  // If you ever replace a cover, replace (or delete) its copy in thumbs/ too,
+  // or the cards keep showing the old one.
   // ================================================================
   let RELEASES = [];
 
