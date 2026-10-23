@@ -1,5 +1,19 @@
 [
 {
+    "catalog": "NTR#011",
+    "artist": "SLNCEpls & Neutro",
+    "title": "Take It Higher",
+    "image": "NTR011.jpg",
+    "spotify_link": "https://open.spotify.com/intl-es/track/5JHcEtZVhUvwC8huZBbsS7?si=7b483f8b6a544c50",
+    "soundcloud_link": "https://soundcloud.com/ensismusicro/slncepls-neutro-take-it-higher",
+    "applemusic_link": "https://music.apple.com/us/song/take-it-higher/6817066231",
+    "youtubemusic_link": "https://youtu.be/g6vZz1bBCAI",
+    "collab_links": {
+      "SLNCEpls": "https://open.spotify.com/intl-es/artist/6O1angqhZUG4axxSNzbAmb?si=URkykarKTcSxfujVI4AeKg"
+    },
+    "label": "Ensis Music Group"
+  },
+{
     "catalog": "NTR#010",
     "artist": "Neutro",
     "title": "Everything's Fine (PM) (Neutro Flip)",
