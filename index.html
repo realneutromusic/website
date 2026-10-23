@@ -940,9 +940,12 @@
     display: flex; align-items: center; justify-content: center;
     padding: 24px;
     opacity: 0; pointer-events: none;
-    transition: opacity 0.3s var(--ease);
+    /* hidden once faded out: an invisible full-screen backdrop blur was still
+       computed every frame (Chrome without GPU: ~48 → ~65 fps) */
+    visibility: hidden;
+    transition: opacity 0.3s var(--ease), visibility 0s linear 0.3s;
   }
-  .release-modal-backdrop.visible { opacity: 1; pointer-events: auto; }
+  .release-modal-backdrop.visible { opacity: 1; pointer-events: auto; visibility: visible; transition: opacity 0.3s var(--ease); }
   .release-modal {
     position: relative; width: 100%; max-width: 520px;
     background: var(--surface-solid, #0c1424);
