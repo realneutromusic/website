@@ -2398,10 +2398,12 @@
   }
 
   function initMysteryCard() {
-    const probe = new Image();
-    probe.onload = () => buildMysteryCard();
-    probe.onerror = () => { /* no HIDDEN.jpg on the server — show nothing, ever */ };
-    probe.src = './assets/HIDDEN.jpg';
+    // HEAD only asks whether HIDDEN.jpg exists — the image itself (~240 KB) used
+    // to be downloaded on every visit just for this check; now it loads when
+    // someone heads for the strip (see buildMysteryCard).
+    fetch('./assets/HIDDEN.jpg', { method: 'HEAD' })
+      .then(res => { if (res.ok) buildMysteryCard(); })
+      .catch(() => { /* offline or blocked — show nothing, ever */ });
   }
 
   function buildMysteryCard() {
@@ -2566,6 +2568,10 @@
       audio.pause();
       strip.focus({ preventScroll: true });
     }
+    // fetch the artwork as soon as someone heads for the strip (pointer, keyboard
+    // or touch), so the reveal still opens with the image already there
+    const preloadArt = () => { new Image().src = './assets/HIDDEN.jpg'; };
+    ['pointerenter', 'focus', 'touchstart'].forEach(type => strip.addEventListener(type, preloadArt, { once: true, passive: true }));
     strip.addEventListener('click', () => {
       reveal.classList.add('open');
       document.body.style.overflow = 'hidden';
