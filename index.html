@@ -26,11 +26,28 @@
      time anyone reaches that section. loadReleases() further down just
      awaits this same promise instead of firing a second request. -->
 <script>
-  window.__releasesPromise = fetch('./releases.json?v=' + Date.now(), { cache: 'no-store' })
-    .then((res) => {
-      if (!res.ok) throw new Error('releases.json request failed: ' + res.status);
-      return res.json();
-    });
+  // Releases come from the admin panel ("Web oficial → Lanzamientos"): what is
+  // published there shows here at once. If that request fails, the last list
+  // this browser saw is used, and as a last resort the old releases.json.
+  window.__releasesPromise = (function () {
+    var KEY = 'nt_releases_v1';
+    var json = function (url) {
+      return fetch(url, { cache: 'no-store' }).then(function (res) {
+        if (!res.ok) throw new Error('releases request failed: ' + res.status);
+        return res.json();
+      });
+    };
+    return json('https://store.realneutromusic.com/api/releases')
+      .then(function (data) {
+        if (!data || !Array.isArray(data.releases) || !data.releases.length) throw new Error('no releases');
+        try { localStorage.setItem(KEY, JSON.stringify(data)); } catch (e) { /* no storage */ }
+        return data;
+      })
+      .catch(function () {
+        try { var saved = JSON.parse(localStorage.getItem(KEY)); if (saved && saved.releases && saved.releases.length) return saved; } catch (e) { /* no storage */ }
+        return json('./releases.json?v=' + Date.now());
+      });
+  })();
 </script>
 
 <title>Neutro — Official Website</title>
@@ -1693,13 +1710,21 @@
   // gets the full artwork. Resolves with the URL that was painted.
   const THUMB_PX = 720;
   const lightCovers = new Map(); // full artwork URL → light copy that loaded
+  // Text and links from releases go into HTML: escape the text, keep only https links.
+  const escHtml = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  function safeLink(v) {
+    try { const u = new URL(String(v || '')); return u.protocol === 'https:' ? u.href.replace(/"/g, '%22') : ''; } catch (e) { return ''; }
+  }
   function loadCover(thumb, full, el) {
     const px = el ? Math.max(el.clientWidth, el.clientHeight) * (window.devicePixelRatio || 1) : 0;
-    const size = thumb && px && px <= THUMB_PX
+    const wanted = thumb && px && px <= THUMB_PX;
+    // Covers from the panel come with their light copy's exact URL (made together): no size check needed.
+    const direct = wanted && /^https:\/\//.test(thumb);
+    const size = wanted && !direct
       ? fetch(full, { method: 'HEAD' }).then(res => (res.ok ? res.headers.get('Content-Length') : null)).catch(() => null)
       : Promise.resolve(null);
     return size.then(bytes => new Promise(resolve => {
-      const light = bytes ? thumb.replace(/\.webp$/, `-${bytes}.webp`) : '';
+      const light = direct ? thumb : bytes ? thumb.replace(/\.webp$/, `-${bytes}.webp`) : '';
       const attempt = (url, fallback) => {
         const img = new Image();
         img.onload = () => (img.decode ? img.decode().catch(() => {}) : Promise.resolve()).then(() => {
@@ -1720,17 +1745,22 @@
     // redundant fetch this late in the page's life.
     const data = await window.__releasesPromise;
     const list = Array.isArray(data) ? data : (data.releases || []);
+    // From the panel, "image"/"thumb"/"audio" are full https URLs (cover 1200 px,
+    // light copy 640 px, optional preview); from the old releases.json, "image"
+    // is a file name in ./assets/ and the light copy is found by size (loadCover).
+    const remote = (v) => /^https:\/\//.test(String(v || ''));
     RELEASES = list.map((r) => ({
       catalog: r.catalog,
       title: r.title,
       artist: r.artist,
-      art: `./assets/${r.image}`,
-      thumb: r.image ? `./assets/thumbs/${String(r.image).replace(/\.[^.]+$/, '')}.webp` : '',
-      spotify: r.spotify_link,
-      soundcloud: r.soundcloud_link,
-      applemusic: r.applemusic_link || r.apple_music_link || r.applemusic || r.apple_link || r.apple,
-      youtubemusic: r.youtubemusic_link || r.youtube_music_link || r.ytmusic_link,
-      collabLinks: r.collab_links || {},
+      art: remote(r.image) ? r.image : `./assets/${r.image}`,
+      thumb: remote(r.image) ? (remote(r.thumb) ? r.thumb : '') : (r.image ? `./assets/thumbs/${String(r.image).replace(/\.[^.]+$/, '')}.webp` : ''),
+      audio: remote(r.audio) ? r.audio : '',
+      spotify: safeLink(r.spotify_link),
+      soundcloud: safeLink(r.soundcloud_link),
+      applemusic: safeLink(r.applemusic_link || r.apple_music_link || r.applemusic || r.apple_link || r.apple),
+      youtubemusic: safeLink(r.youtubemusic_link || r.youtube_music_link || r.ytmusic_link),
+      collabLinks: Object.fromEntries(Object.entries(r.collab_links || {}).map(([name, url]) => [name, safeLink(url)]).filter(([, url]) => url)),
       label: r.label
     }));
   }
@@ -1931,8 +1961,8 @@
       if (name.toLowerCase() === 'neutro') return 'Neutro';
       const link = r.collabLinks && r.collabLinks[name];
       return link
-        ? `<a href="${link}" target="_blank" rel="noopener">${name}</a>`
-        : name;
+        ? `<a href="${link}" target="_blank" rel="noopener">${escHtml(name)}</a>`
+        : escHtml(name);
     }).join(' &amp; ');
   }
 
@@ -2086,7 +2116,7 @@
 
     const meta = document.createElement('div');
     meta.className = 'release-card-meta';
-    meta.innerHTML = `<div class="release-title">${r.title}</div><div class="release-artist">${COLLAB_ICON}<span class="artist-text">${artistCreditHtml(r)}</span></div>`;
+    meta.innerHTML = `<div class="release-title">${escHtml(r.title)}</div><div class="release-artist">${COLLAB_ICON}<span class="artist-text">${artistCreditHtml(r)}</span></div>`;
     // the artist line can contain a real <a> to the collaborator's Spotify
     // profile — stop it from also bubbling up to the card's own click
     // handler, which would otherwise open the release modal at the same time
@@ -2199,7 +2229,8 @@
 
     const audio = new Audio();
     audio.preload = 'metadata';
-    audio.src = './assets/LATESTRELEASE.mp3';
+    // The preview uploaded with the latest release in the panel; without one, the usual file.
+    audio.src = latest.audio || './assets/LATESTRELEASE.mp3';
     registerAudioElement(audio);
 
     let isPlaying = false;
