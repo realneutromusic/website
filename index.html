@@ -1673,9 +1673,32 @@
   // capitalization — "image": "NTR008.JPG" only works if the real file
   // is also named NTR008.JPG, not ntr008.jpg. To add a new release:
   // paste a new object at the TOP of the array, drop its artwork in
-  // ./assets/, done.
+  // ./assets/, done. Optional (lighter page): a 640x640 copy in
+  // ./assets/thumbs/ with the same name ending in .webp (NTR011.webp) —
+  // the cards and the "now playing" cover use it, the release window
+  // keeps the full artwork. Without it the full artwork is used.
   // ================================================================
   let RELEASES = [];
+
+  // Loads and decodes a cover before it is painted (see the lazy-load observer
+  // below for why), trying the light copy in ./assets/thumbs/ first and the
+  // full artwork if there is none. The light copy (640 px) is only used where
+  // it is sharp enough: an element that needs more pixels (a full-width card
+  // on a high-density phone) gets the full artwork. Resolves with the URL.
+  const THUMB_PX = 720;
+  function loadCover(thumb, full, el) {
+    const px = el ? Math.max(el.clientWidth, el.clientHeight) * (window.devicePixelRatio || 1) : 0;
+    if (!px || px > THUMB_PX) thumb = '';
+    return new Promise(resolve => {
+      const attempt = (url, fallback) => {
+        const img = new Image();
+        img.onload = () => (img.decode ? img.decode().catch(() => {}) : Promise.resolve()).then(() => resolve(url));
+        img.onerror = () => (fallback ? attempt(fallback, null) : resolve(url));
+        img.src = url;
+      };
+      attempt(thumb || full, thumb ? full : null);
+    });
+  }
 
   async function loadReleases() {
     // The actual network request already started as early as possible, in
@@ -1689,6 +1712,7 @@
       title: r.title,
       artist: r.artist,
       art: `./assets/${r.image}`,
+      thumb: r.image ? `./assets/thumbs/${String(r.image).replace(/\.[^.]+$/, '')}.webp` : '',
       spotify: r.spotify_link,
       soundcloud: r.soundcloud_link,
       applemusic: r.applemusic_link || r.apple_music_link || r.applemusic || r.apple_link || r.apple,
@@ -1900,7 +1924,8 @@
   }
 
   function openReleaseModal(r) {
-    document.getElementById('release-modal-art').style.backgroundImage = `url(${r.art})`;
+    // full artwork on top of the card's light copy (already loaded): no empty frame while it arrives
+    document.getElementById('release-modal-art').style.backgroundImage = r.thumb ? `url(${r.art}), url(${r.thumb})` : `url(${r.art})`;
     document.getElementById('release-modal-label').textContent = r.catalog || 'Neutro';
     document.getElementById('release-modal-title').textContent = r.title;
 
@@ -2027,6 +2052,7 @@
     // fonts, so cards near the bottom sat blank for a while after they'd
     // already animated into view
     artImg.dataset.src = r.art;
+    if (r.thumb) artImg.dataset.thumb = r.thumb;
     stage.appendChild(artImg);
 
     if (r.catalog) {
@@ -2113,7 +2139,7 @@
   }
 
   if (latest && npArt && npTitle && npPlay && npWave) {
-    npArt.style.backgroundImage = `url(${latest.art})`;
+    loadCover(latest.thumb, latest.art, npArt).then(url => { npArt.style.backgroundImage = `url(${url})`; });
     npTitle.textContent = latest.title;
     if (npSub && latest.artist) npSub.textContent = latest.artist;
     if (npCatalog && latest.catalog) npCatalog.textContent = ' · ' + latest.catalog;
@@ -2297,8 +2323,8 @@
       entries.forEach((entry) => {
         if (entry.isIntersecting) {
           const el = entry.target;
-          const src = el.dataset.src;
-          delete el.dataset.src;
+          const src = el.dataset.src, thumb = el.dataset.thumb;
+          delete el.dataset.src; delete el.dataset.thumb;
           imageObserver.unobserve(el);
           // Decode off the main render path first. Setting background-image
           // directly forces the browser to decode the full image inside the
@@ -2310,14 +2336,7 @@
           // once it resolves we just set the background, which is then
           // instant. Falls back to the old direct-assign if decode() isn't
           // supported or fails (e.g. a 404).
-          const preloader = new Image();
-          preloader.src = src;
-          const paint = () => { el.style.backgroundImage = `url(${src})`; };
-          if (preloader.decode) {
-            preloader.decode().then(paint).catch(paint);
-          } else {
-            paint();
-          }
+          loadCover(thumb, src, el).then(url => { el.style.backgroundImage = `url(${url})`; });
         }
       });
     }, { threshold: 0, rootMargin: '600px 0px 600px 0px' });
