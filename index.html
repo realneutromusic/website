@@ -1678,33 +1678,39 @@
   // capitalization — "image": "NTR008.JPG" only works if the real file
   // is also named NTR008.JPG, not ntr008.jpg. To add a new release:
   // paste a new object at the TOP of the array, drop its artwork in
-  // ./assets/, done. Optional (lighter page): a 640x640 copy in
-  // ./assets/thumbs/ with the same name ending in .webp (NTR011.webp) —
-  // the cards and the "now playing" cover use it, the release window
-  // keeps the full artwork. Without it the full artwork is used.
-  // If you ever replace a cover, replace (or delete) its copy in thumbs/ too,
-  // or the cards keep showing the old one.
+  // ./assets/, done. Nothing else to do: replacing a cover also just works.
   // ================================================================
   let RELEASES = [];
 
   // Loads and decodes a cover before it is painted (see the lazy-load observer
-  // below for why), trying the light copy in ./assets/thumbs/ first and the
-  // full artwork if there is none. The light copy (640 px) is only used where
-  // it is sharp enough: an element that needs more pixels (a full-width card
-  // on a high-density phone) gets the full artwork. Resolves with the URL.
+  // below for why). Cards and the "now playing" cover first try a light 640 px
+  // copy in ./assets/thumbs/, named after the cover AND its exact size in bytes
+  // (NTR010.jpg of 532271 bytes → thumbs/NTR010-532271.webp). A HEAD request
+  // gives the current size, so a cover that was replaced (different size) or a
+  // new one without a copy simply loads the full artwork — nobody has to keep
+  // the copies up to date. The copy is only used where it is sharp enough: an
+  // element that needs more pixels (a full-width card on a high-density phone)
+  // gets the full artwork. Resolves with the URL that was painted.
   const THUMB_PX = 720;
+  const lightCovers = new Map(); // full artwork URL → light copy that loaded
   function loadCover(thumb, full, el) {
     const px = el ? Math.max(el.clientWidth, el.clientHeight) * (window.devicePixelRatio || 1) : 0;
-    if (!px || px > THUMB_PX) thumb = '';
-    return new Promise(resolve => {
+    const size = thumb && px && px <= THUMB_PX
+      ? fetch(full, { method: 'HEAD' }).then(res => (res.ok ? res.headers.get('Content-Length') : null)).catch(() => null)
+      : Promise.resolve(null);
+    return size.then(bytes => new Promise(resolve => {
+      const light = bytes ? thumb.replace(/\.webp$/, `-${bytes}.webp`) : '';
       const attempt = (url, fallback) => {
         const img = new Image();
-        img.onload = () => (img.decode ? img.decode().catch(() => {}) : Promise.resolve()).then(() => resolve(url));
+        img.onload = () => (img.decode ? img.decode().catch(() => {}) : Promise.resolve()).then(() => {
+          if (url === light) lightCovers.set(full, light);
+          resolve(url);
+        });
         img.onerror = () => (fallback ? attempt(fallback, null) : resolve(url));
         img.src = url;
       };
-      attempt(thumb || full, thumb ? full : null);
-    });
+      attempt(light || full, light ? full : null);
+    }));
   }
 
   async function loadReleases() {
@@ -1932,7 +1938,8 @@
 
   function openReleaseModal(r) {
     // full artwork on top of the card's light copy (already loaded): no empty frame while it arrives
-    document.getElementById('release-modal-art').style.backgroundImage = r.thumb ? `url(${r.art}), url(${r.thumb})` : `url(${r.art})`;
+    const light = lightCovers.get(r.art);
+    document.getElementById('release-modal-art').style.backgroundImage = light ? `url(${r.art}), url(${light})` : `url(${r.art})`;
     document.getElementById('release-modal-label').textContent = r.catalog || 'Neutro';
     document.getElementById('release-modal-title').textContent = r.title;
 
