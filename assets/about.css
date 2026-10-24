@@ -1,0 +1,60 @@
+/* Neutro's artist card in the hero (the same card as the store's About page, ported to this site's colours) and the
+   latest release's player at the top of Releases. */
+
+/* The card */
+.about-stage{--rx:2deg;--ry:-6deg;position:relative;justify-self:end;width:100%;max-width:440px;perspective:1400px;padding-bottom:40px;isolation:isolate}
+.about-stage:before{content:'';position:absolute;inset:4% 2% 12%;border-radius:40%;background:radial-gradient(closest-side,rgba(79,123,176,.32),rgba(79,123,176,0) 70%);filter:blur(10px);z-index:-1}
+/* In 3D the half of the card that moves away sits behind .about-float's plane: without pointer events that invisible
+   plane cannot take the clicks of the buttons. */
+.about-float{transform-style:preserve-3d;animation:ntCardFloat 6.5s ease-in-out infinite;pointer-events:none}
+.about-float>*{pointer-events:auto}
+.about-artist{position:relative;border-radius:28px;overflow:hidden;background:#0a111e;transform:rotateX(var(--rx)) rotateY(var(--ry));transition:transform .7s var(--ease);
+  box-shadow:0 1px 0 rgba(255,255,255,.12) inset,0 50px 80px -30px rgba(0,0,0,.85),0 22px 40px -22px rgba(0,0,0,.8),24px 30px 60px -40px rgba(79,123,176,.55)}
+.about-artist .pd-shine{position:absolute;inset:0;z-index:2;border-radius:inherit;pointer-events:none;background:linear-gradient(245deg,rgba(255,255,255,.18) 0%,rgba(255,255,255,0) 38%,rgba(255,255,255,0) 70%,rgba(255,255,255,.06) 100%)}
+.about-stage .pd-shadow{position:absolute;left:18%;right:18%;bottom:8px;height:26px;border-radius:50%;background:radial-gradient(closest-side,rgba(0,0,0,.75),rgba(0,0,0,0));filter:blur(6px);animation:ntCardShadow 6.5s ease-in-out infinite;z-index:-1}
+.about-artist-photo{position:relative;margin:0;aspect-ratio:1/1;overflow:hidden;background:#0a2a52}
+.about-artist-photo img{display:block;width:100%;height:100%;object-fit:cover}
+.about-artist-photo:after{content:'';position:absolute;inset:0;pointer-events:none;background:linear-gradient(180deg,rgba(10,17,30,0) 48%,rgba(10,17,30,.55) 72%,#0a111e)}
+.about-artist-photo figcaption{position:absolute;z-index:1;left:28px;right:28px;bottom:24px}
+.about-artist-photo b{display:flex;align-items:center;gap:10px;font:800 clamp(30px,3vw,42px)/1 Unbounded,sans-serif;letter-spacing:.02em;color:var(--ink);text-shadow:0 2px 24px rgba(0,0,0,.45)}
+/* Verified seal next to the name (own drawing, not any network's logo) */
+.about-verified{flex:none;width:.72em;height:.72em;filter:drop-shadow(0 2px 8px rgba(0,0,0,.35))}
+.about-verified .seal{fill:#2f9bff;stroke:#2f9bff;stroke-width:1.6;stroke-linejoin:round}
+.about-verified .tick{fill:none;stroke:#fff;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.about-artist ul.about-genres{list-style:none;display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 0;padding:0}
+.about-artist .about-genres li{padding:7px 13px;border-radius:999px;font:600 12.5px/1.2 Sora,sans-serif;color:var(--ink);background:rgba(168,200,236,.16);border:1px solid rgba(168,200,236,.32)}
+.about-artist-body{padding:20px 28px 28px}
+.about-artist .about-artist-label{margin:0 0 12px;font:500 11px 'JetBrains Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-faint)}
+.about-artist ul.about-listen{list-style:none;display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:0;padding:0}
+.about-listen li{list-style:none}
+.about-artist .about-listen a{display:flex;align-items:center;gap:11px;min-height:50px;padding:12px 14px;border-radius:14px;border:1px solid var(--line);background:rgba(4,7,13,.4);color:var(--ink);font-size:14px;font-weight:600;text-decoration:none;transition:border-color .25s var(--ease),background .25s var(--ease)}
+.about-artist .about-listen a:hover{border-color:var(--steel);background:rgba(168,200,236,.08)}
+.about-artist .about-listen a:focus-visible{outline:2px solid var(--steel-bright);outline-offset:2px}
+.about-listen svg{width:18px;height:18px;flex:none;fill:var(--steel-bright)}
+@keyframes ntCardFloat{0%,100%{translate:0 0}50%{translate:0 -12px}}
+@keyframes ntCardShadow{0%,100%{transform:scaleX(1);opacity:.85}50%{transform:scaleX(.88);opacity:.6}}
+@media(max-width:880px){.about-stage{--rx:1deg;--ry:-3deg}}
+@media(max-width:560px){.about-artist-photo figcaption{left:20px;right:20px;bottom:18px}.about-artist-body{padding:18px 20px 22px}}
+@media(max-width:340px){.about-artist ul.about-listen{grid-template-columns:1fr}}
+@media(prefers-reduced-motion:reduce){.about-stage{--rx:0deg;--ry:0deg}.about-float,.about-stage .pd-shadow{animation:none}.about-artist{transition:none}}
+
+/* In the hero: the card takes the place the "Now Playing" player had, with the same entrance. */
+.hero .about-stage{opacity:0;animation:riseIn .55s var(--ease-spring) forwards;animation-delay:.12s}
+@media(max-width:980px){.hero .about-stage{justify-self:center}}
+
+/* The latest release's player now opens the Releases section, laid out wide: cover on the left, the rest beside it,
+   centred on the cover. Same component and ids (its script is unchanged); one column on small screens. */
+.releases-latest{margin:0 0 44px}
+.releases-latest .now-playing{max-width:880px;margin:0 auto}
+@media(min-width:760px){
+  .releases-latest .now-playing-card.card{display:grid;grid-template-columns:minmax(220px,300px) minmax(0,1fr);column-gap:30px;align-items:center;
+    grid-template-areas:"art ." "art tag" "art title" "art sub" "art controls" "art strip" "art footer" "art .";grid-template-rows:1fr repeat(6,auto) 1fr;transform:none}
+  .releases-latest .now-playing-art{grid-area:art;align-self:start}
+  .releases-latest .now-playing-tag{grid-area:tag;margin-top:0}
+  .releases-latest .now-playing-title{grid-area:title}
+  .releases-latest .now-playing-sub{grid-area:sub}
+  .releases-latest .now-playing-controls{grid-area:controls}
+  .releases-latest .now-playing-strip{grid-area:strip}
+  .releases-latest .now-playing-footer{grid-area:footer}
+}
+@media(prefers-reduced-motion:reduce){.hero .about-stage{opacity:1;animation:none}}
