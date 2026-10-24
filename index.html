@@ -2440,15 +2440,23 @@
   }
 
   function initMysteryCard() {
-    // HEAD only asks whether HIDDEN.jpg exists — the image itself (~240 KB) used
-    // to be downloaded on every visit just for this check; now it loads when
-    // someone heads for the strip (see buildMysteryCard).
-    fetch('./assets/HIDDEN.jpg', { method: 'HEAD' })
-      .then(res => { if (res.ok) buildMysteryCard(); })
-      .catch(() => { /* offline or blocked — show nothing, ever */ });
+    // The teaser now comes from the admin panel (a release marked «Teaser
+    // «Próximamente»»: only its cover and audio). When the panel answered, it
+    // decides — no teaser there means no strip. Only without the panel (old
+    // releases.json) does the old ./assets/HIDDEN.jpg check apply; HEAD only
+    // asks whether it exists, the image loads when someone heads for the strip.
+    window.__releasesPromise.catch(() => null).then((data) => {
+      const fromPanel = data && !Array.isArray(data) && 'teaser' in data;
+      const teaser = fromPanel && data.teaser;
+      const ok = (v) => /^https:\/\//.test(String(v || ''));
+      if (fromPanel) { if (teaser && ok(teaser.image) && ok(teaser.audio)) buildMysteryCard(teaser.image, teaser.audio); return; }
+      fetch('./assets/HIDDEN.jpg', { method: 'HEAD' })
+        .then(res => { if (res.ok) buildMysteryCard('./assets/HIDDEN.jpg', './assets/HIDDEN.mp3'); })
+        .catch(() => { /* offline or blocked — show nothing, ever */ });
+    });
   }
 
-  function buildMysteryCard() {
+  function buildMysteryCard(art, audioSrc) {
     const strip = document.createElement('button');
     strip.type = 'button';
     strip.className = 'mystery-strip';
@@ -2465,7 +2473,7 @@
       <div class="mystery-reveal-inner">
         <button type="button" class="mystery-reveal-close" id="mystery-reveal-close" aria-label="Close">✕</button>
         <div class="mystery-reveal-art-stage">
-          <div class="mystery-reveal-art" style="background-image:url(./assets/HIDDEN.jpg)"></div>
+          <div class="mystery-reveal-art"></div>
         </div>
         <div class="mystery-reveal-body">
           <div class="mystery-reveal-eyebrow"><span class="pulse"></span>Coming Soon</div>
@@ -2501,7 +2509,9 @@
 
     const audio = new Audio();
     audio.preload = 'none';
-    audio.src = './assets/HIDDEN.mp3';
+    // url() quoting: the teaser's address comes from the panel (https only, see initMysteryCard)
+    reveal.querySelector('.mystery-reveal-art').style.backgroundImage = `url("${String(art).replace(/["\\]/g, '')}")`;
+    audio.src = audioSrc;
     audio.volume = 0.7;
     registerAudioElement(audio);
 
@@ -2612,7 +2622,7 @@
     }
     // fetch the artwork as soon as someone heads for the strip (pointer, keyboard
     // or touch), so the reveal still opens with the image already there
-    const preloadArt = () => { new Image().src = './assets/HIDDEN.jpg'; };
+    const preloadArt = () => { new Image().src = art; };
     ['pointerenter', 'focus', 'touchstart'].forEach(type => strip.addEventListener(type, preloadArt, { once: true, passive: true }));
     strip.addEventListener('click', () => {
       reveal.classList.add('open');
