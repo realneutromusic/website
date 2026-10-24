@@ -1954,16 +1954,22 @@
   // with any name other than Neutro turned into a link IF releases.json
   // has a matching entry in that release's collab_links — otherwise that
   // name just renders as plain text (nothing breaks if a link is missing).
+  // Separators kept as written: "&", "," and "feat." / "ft." / "featuring" (singers),
+  // the same ones the admin panel uses to ask for each collaborator's link.
+  const CREDIT_SEP = /(\s*(?:&|,|\bfeat\.?(?=\s)|\bft\.?(?=\s)|\bfeaturing\b)\s*)/i;
   function artistCreditHtml(r) {
-    const parts = (r.artist || 'Neutro').split('&').map(s => s.trim()).filter(Boolean);
-    if (!parts.length) return 'Neutro';
-    return parts.map((name) => {
+    const tokens = String(r.artist || 'Neutro').split(CREDIT_SEP);
+    if (!tokens.some((t, i) => i % 2 === 0 && t.trim())) return 'Neutro';
+    return tokens.map((t, i) => {
+      if (i % 2) { const sep = t.trim(); return sep === '&' ? ' &amp; ' : sep === ',' ? ', ' : ` ${escHtml(sep)} `; }
+      const name = t.trim();
+      if (!name) return '';
       if (name.toLowerCase() === 'neutro') return 'Neutro';
-      const link = r.collabLinks && r.collabLinks[name];
+      const link = r.collabLinks && r.collabLinks[name.replace(/[()]/g, '').trim()];
       return link
         ? `<a href="${link}" target="_blank" rel="noopener">${escHtml(name)}</a>`
         : escHtml(name);
-    }).join(' &amp; ');
+    }).join('');
   }
 
   function openReleaseModal(r) {
