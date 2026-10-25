@@ -219,17 +219,6 @@
     color: var(--ink-faint); font-weight: 500; flex-shrink: 0;
   }
   .topbar .mark-text .value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .topbar .mark-wave {
-    display: flex; align-items: center; gap: 2px; height: 11px; flex-shrink: 0;
-  }
-  .topbar .mark-wave span {
-    width: 2px; border-radius: 1px; background: var(--steel-bright);
-    animation: markWave 0.8s ease-in-out infinite;
-  }
-  .topbar .mark-wave span:nth-child(1) { height: 40%; animation-delay: -0.32s; }
-  .topbar .mark-wave span:nth-child(2) { height: 100%; animation-delay: -0.16s; }
-  .topbar .mark-wave span:nth-child(3) { height: 65%; animation-delay: 0s; }
-  @keyframes markWave { 0%, 100% { transform: scaleY(0.4); } 50% { transform: scaleY(1); } }
   @media (max-width: 560px) { .topbar .mark { max-width: 190px; } }
 
   .topbar nav {
@@ -391,134 +380,9 @@
 
   @keyframes riseIn { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
 
-  /* ---------- now playing: the latest release shown as a full-bleed
-     photograph — the cover art IS the card, not a small square icon
-     sitting above a stack of player chrome. Title and controls float
-     on gradient scrims over the image, like a title card, with a thin
-     strip of film-sprocket perforations down the left edge as the one
-     quiet nod to "this is a photography project that also makes music".
-     ---------- */
-  /* ---------- now playing: clean card, image on top and fully visible
-     (no gradient scrims, no text overlaid on the photo — that's the
-     Spotify/Apple Music "now playing" look and it's not ours), all the
-     info sits in its own panel below, same as any other card on the site ---------- */
-  .now-playing {
-    position: relative; z-index: 3;
-    perspective: 2200px;
-    opacity: 0; animation: riseIn 0.55s var(--ease-spring) forwards; animation-delay: 0.12s;
-  }
-  .now-playing-card.card {
-    position: relative;
-    padding: 18px;
-    background: rgba(12,20,36,0.72);
-    border-color: rgba(238,243,250,0.14);
-    backdrop-filter: blur(18px);
-    box-shadow: 0 40px 90px -28px rgba(0,0,0,0.75);
-    overflow: hidden;
-    transform: rotateY(-4deg);
-    transform-style: preserve-3d;
-    transition: transform 0.2s linear, box-shadow 0.4s var(--ease);
-  }
-  @media (max-width: 980px) {
-    .now-playing-card.card { transform: none; }
-  }
-  .now-playing-card-glow {
-    position: absolute; inset: -30%; z-index: 0; pointer-events: none;
-    background: radial-gradient(circle at var(--mx, 30%) var(--my, 20%), rgba(168,200,236,0.16), transparent 62%);
-    transition: opacity 0.5s var(--ease);
-  }
-  .now-playing-card.card > *:not(.now-playing-card-glow) { position: relative; z-index: 1; }
-
-  .now-playing-art {
-    position: relative;
-    width: 100%; aspect-ratio: 1 / 1; border-radius: 12px; overflow: hidden;
-    background-size: cover; background-position: center;
-    box-shadow: 0 16px 34px -14px rgba(0,0,0,0.6);
-  }
-
-  .now-playing-tag {
-    margin-top: 16px;
-    display: inline-flex; align-items: center; gap: 7px;
-    font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase;
-    color: var(--steel-bright);
-  }
-  .now-playing-tag .pulse {
-    width: 6px; height: 6px; border-radius: 50%; background: var(--steel-bright);
-    box-shadow: 0 0 0 0 rgba(168,200,236,0.55);
-    animation: eyebrowPing 2.4s ease-out infinite;
-  }
-  .now-playing-title {
-    margin-top: 8px;
-    font-family: 'Unbounded', sans-serif; font-weight: 800; font-size: 23px; letter-spacing: -0.01em; line-height: 1.15;
-  }
-  .now-playing-sub { font-size: 13px; color: var(--ink-dim); margin-top: 5px; }
-
-  .now-playing-controls {
-    margin-top: 18px;
-    display: flex; align-items: center; gap: 14px;
-  }
-  .now-playing-play {
-    position: relative; flex-shrink: 0;
-    width: 50px; height: 50px; border-radius: 50%;
-    background: var(--steel);
-    display: flex; align-items: center; justify-content: center;
-    border: none; cursor: pointer;
-    transition: all 0.3s var(--ease-spring);
-  }
-  .now-playing-play:hover { background: var(--steel-bright); transform: scale(1.07); }
-  .now-playing-play svg { width: 17px; height: 17px; fill: #04070d; margin-left: 2px; position: relative; z-index: 1; }
-  #now-playing-icon { display: flex; position: relative; z-index: 1; }
-  .now-playing-play.is-playing svg { margin-left: 0; }
-  .now-playing-play.is-loading { pointer-events: none; }
-  .now-playing-play.is-loading svg { opacity: 0; }
-  .now-playing-play-spin {
-    position: absolute; inset: 6px; border-radius: 50%;
-    border: 2px solid rgba(4,7,13,0.25); border-top-color: rgba(4,7,13,0.85);
-    opacity: 0; animation: spin 0.8s linear infinite;
-  }
-  .now-playing-play.is-loading .now-playing-play-spin { opacity: 1; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  /* seek bar: a bold gradient-filled strip with tick marks, so it reads
-     as an intentional instrument even paused at 0% */
-  .now-playing-wave {
-    flex: 1; min-width: 0;
-    position: relative;
-    display: flex; align-items: center;
-    cursor: pointer;
-    padding: 10px 0;
-  }
-  .now-playing-wave-track {
-    position: relative; width: 100%; height: 5px; border-radius: 999px;
-    background: var(--line); overflow: hidden;
-  }
-  .now-playing-wave-fill {
-    position: absolute; left: 0; top: 0; bottom: 0; width: 0%;
-    background: linear-gradient(90deg, var(--steel-deep), var(--steel-bright));
-    border-radius: 999px;
-    transition: width 0.15s linear;
-  }
-  .now-playing-wave-ticks {
-    position: absolute; inset: 0; z-index: 1;
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 0 2px; pointer-events: none;
-  }
-  .now-playing-wave-ticks span { width: 1px; height: 9px; background: rgba(4,7,13,0.45); border-radius: 1px; }
-  .now-playing-wave-dot {
-    position: absolute; top: 50%; left: 0%; width: 12px; height: 12px; border-radius: 50%;
-    background: var(--steel-bright); transform: translate(-50%, -50%);
-    box-shadow: 0 0 0 4px rgba(168,200,236,0.18), 0 0 14px rgba(168,200,236,0.65);
-    transition: left 0.15s linear;
-  }
-  .now-playing-wave.is-playing .now-playing-wave-dot { animation: trailPulse 1s ease-in-out infinite; }
-  @keyframes trailPulse { 0%, 100% { transform: translate(-50%, -50%) scale(1); } 50% { transform: translate(-50%, -50%) scale(1.2); } }
-
-  .now-playing-strip {
-    margin-top: 6px;
-    display: flex; align-items: center; justify-content: space-between;
-    font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: var(--ink-faint);
-  }
-  .now-playing-transport { display: flex; align-items: center; gap: 8px; }
+  /* round mute button of the teaser's player */
   .now-playing-skip {
     width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
     display: flex; align-items: center; justify-content: center;
@@ -527,39 +391,10 @@
   }
   .now-playing-skip:hover { border-color: var(--ink-faint); color: var(--ink); }
   .now-playing-skip svg { width: 11px; height: 11px; fill: currentColor; display: block; }
-  .now-playing-skip #now-playing-volume-icon,
   .now-playing-skip #mystery-reveal-volume-icon {
     display: flex; align-items: center; justify-content: center;
   }
 
-  /* "Listen on" — a small grid of platform buttons instead of a plain
-     text row of links, so the card ends on the same clean note it starts on */
-  .now-playing-footer {
-    margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line);
-  }
-  .now-playing-footer-label {
-    font-family: 'JetBrains Mono', monospace; font-size: 10.5px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase;
-    color: var(--ink-faint); margin-bottom: 10px; display: block;
-  }
-  .now-playing-links {
-    display: flex; flex-wrap: wrap; gap: 8px;
-  }
-  .now-playing-links a {
-    flex: 1 1 calc(50% - 4px);
-    display: flex; align-items: center; justify-content: space-between; gap: 8px;
-    padding: 10px 12px;
-    border: 1px solid var(--line); border-radius: 10px;
-    background: rgba(238,243,250,0.03);
-    font-size: 12.5px; font-weight: 600; color: var(--ink);
-    transition: all 0.2s var(--ease);
-  }
-  .now-playing-links a:hover { border-color: var(--steel); background: var(--steel-soft); color: var(--steel-bright); }
-  .now-playing-links a svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2; flex-shrink: 0; opacity: 0.6; }
-
-  @media (max-width: 560px) {
-    .now-playing-card.card { padding: 14px; }
-    .now-playing-title { font-size: 19px; }
-  }
 </style>
 <style>
   /* ---------- section scaffolding ---------- */
@@ -1420,10 +1255,9 @@
 <a href="#main" class="skip-link">Skip to Content</a>
 
 <header class="topbar">
-  <button class="mark mono" id="status-pill" type="button" aria-label="Currently playing or current section — click to jump there">
+  <button class="mark mono" id="status-pill" type="button" aria-label="Current section — click to jump to the next one">
     <span class="mark-dot" id="status-dot"></span>
     <span class="mark-text"><span class="label" id="status-label">Viewing</span><span class="value" id="status-value">Home</span></span>
-    <span class="mark-wave" id="status-wave" style="display:none" aria-hidden="true"><span></span><span></span><span></span></span>
   </button>
   <nav aria-label="Main navigation">
     <a href="#main">Home</a>
@@ -1743,12 +1577,8 @@
   const PLAY_ICON = '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
 
   // ---------- shared audio coordinator ----------
-  // BUG THAT WAS HERE: the "Latest Release" player and the "Hidden" player
-  // are each their own independent <audio> element, built in separate
-  // functions that never knew about each other. Nothing stopped both from
-  // playing at once if you started one, then the other. Every <audio> on
-  // the page registers itself here, and starting any one of them pauses
-  // every other registered one.
+  // Every <audio> on the page registers itself here, and starting any one
+  // of them pauses every other registered one.
   const ALL_AUDIO_ELEMENTS = [];
   function registerAudioElement(audio) {
     ALL_AUDIO_ELEMENTS.push(audio);
@@ -1758,7 +1588,6 @@
       });
     });
   }
-  const STOP_ICON = '<svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg>';
   const COLLAB_ICON = '<svg class="person-icon" viewBox="0 0 24 24"><path d="M12 2a5 5 0 110 10 5 5 0 010-10zm0 12c4.4 0 8 2.2 8 5v3H4v-3c0-2.8 3.6-5 8-5z"/></svg>';
   const EXT_ICON = '<svg class="ext-icon" viewBox="0 0 24 24"><path d="M7 17L17 7M7 7h10v10" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
@@ -2116,229 +1945,6 @@
   layoutReleaseGrid();
   window.addEventListener('resize', debounce(layoutReleaseGrid, 150));
 
-  // ---------- now playing: full inline player driven by a native <audio> element ----------
-  // Plays ./assets/LATESTRELEASE.mp3 directly — no SoundCloud embed involved here,
-  // so there's nothing that can be blocked by a track's embed/privacy settings.
-  // Update that one file whenever there's a new "latest release" to preview.
-  const latest = RELEASES[0];
-  const npArt = document.getElementById('now-playing-art');
-  const npCard = document.getElementById('now-playing-card');
-  const npCardGlow = document.getElementById('now-playing-card-glow');
-  if (npCard && npCardGlow) {
-    // magnetic 3D tilt — the same effect the release cards used to have,
-    // moved here at the user's request; the release cards now get a
-    // softer, non-tracking hover instead.
-    npCard.addEventListener('mousemove', (e) => {
-      const rect = npCard.getBoundingClientRect();
-      const px = (e.clientX - rect.left) / rect.width;
-      const py = (e.clientY - rect.top) / rect.height;
-      const tiltX = (py - 0.5) * -3.5;
-      const tiltY = (px - 0.5) * 3.5;
-      npCard.style.transform = `perspective(1800px) rotateX(${tiltX}deg) rotateY(${tiltY}deg) translateY(-3px)`;
-      npCardGlow.style.setProperty('--mx', (px * 100) + '%');
-      npCardGlow.style.setProperty('--my', (py * 100) + '%');
-    });
-    npCard.addEventListener('mouseleave', () => { npCard.style.transform = ''; });
-  }
-  const npTitle = document.getElementById('now-playing-title');
-  const npSub = document.getElementById('now-playing-sub');
-  const npPlay = document.getElementById('now-playing-play');
-  const npBack = document.getElementById('now-playing-back');
-  const npForward = document.getElementById('now-playing-forward');
-  const npIcon = document.getElementById('now-playing-icon');
-  const npWave = document.getElementById('now-playing-wave');
-  const npElapsed = document.getElementById('now-playing-elapsed');
-  const npDuration = document.getElementById('now-playing-duration');
-  const npSpotifyLink = document.getElementById('now-playing-spotify-link');
-  const npSoundcloudLink = document.getElementById('now-playing-soundcloud-link');
-  const npAppleLink = document.getElementById('now-playing-applemusic-link');
-  const npYoutubeMusicLink = document.getElementById('now-playing-youtubemusic-link');
-  const npCatalog = document.getElementById('now-playing-catalog');
-
-  function formatTime(seconds) {
-    const total = Number.isFinite(seconds) ? Math.max(0, Math.round(seconds)) : 0;
-    const m = Math.floor(total / 60);
-    const s = total % 60;
-    return `${m}:${String(s).padStart(2, '0')}`;
-  }
-
-  if (latest && npArt && npTitle && npPlay && npWave) {
-    loadCover(latest.thumb, latest.art, npArt).then(url => { npArt.style.backgroundImage = `url(${url})`; });
-    npTitle.textContent = latest.title;
-    if (npSub && latest.artist) npSub.textContent = latest.artist;
-    if (npCatalog && latest.catalog) npCatalog.textContent = ' · ' + latest.catalog;
-    if (npSpotifyLink && latest.spotify) npSpotifyLink.href = latest.spotify;
-    if (npSoundcloudLink && latest.soundcloud) npSoundcloudLink.href = latest.soundcloud;
-    if (npAppleLink) {
-      if (latest.applemusic) {
-        npAppleLink.href = latest.applemusic;
-        npAppleLink.style.display = '';
-      } else {
-        npAppleLink.style.display = 'none';
-      }
-    }
-    if (npYoutubeMusicLink) {
-      if (latest.youtubemusic) {
-        npYoutubeMusicLink.href = latest.youtubemusic;
-        npYoutubeMusicLink.style.display = '';
-      } else {
-        npYoutubeMusicLink.style.display = 'none';
-      }
-    }
-
-    // seek bar: a gradient-filled strip with sprocket-style tick marks —
-    // looks intentional at rest (0%), not just an empty line waiting for
-    // playback to give it meaning
-    const TICK_COUNT = 28;
-    npWave.innerHTML = `
-      <div class="now-playing-wave-track">
-        <span class="now-playing-wave-fill" id="now-playing-wave-fill"></span>
-        <span class="now-playing-wave-ticks" aria-hidden="true">${'<span></span>'.repeat(TICK_COUNT)}</span>
-      </div>
-      <span class="now-playing-wave-dot" id="now-playing-wave-dot"></span>
-    `;
-    const waveFill = npWave.querySelector('#now-playing-wave-fill');
-    const waveDot = npWave.querySelector('#now-playing-wave-dot');
-
-    function paintProgress(fraction) {
-      const pct = (fraction * 100).toFixed(2) + '%';
-      waveFill.style.width = pct;
-      waveDot.style.left = pct;
-      npWave.setAttribute('aria-valuenow', Math.round(fraction * 100));
-    }
-
-    const audio = new Audio();
-    audio.preload = 'metadata';
-    // The preview uploaded with the latest release in the panel; without one, the usual file.
-    audio.src = latest.audio || './assets/LATESTRELEASE.mp3';
-    registerAudioElement(audio);
-
-    let isPlaying = false;
-    let hasErrored = false;
-
-    // ---------- volume control: mute + a compact slider ----------
-    const muteBtn = document.getElementById('now-playing-mute');
-    const volumeIcon = document.getElementById('now-playing-volume-icon');
-    const volumeSlider = document.getElementById('now-playing-volume-slider');
-    const ICON_VOLUME_UP = '<svg viewBox="0 0 24 24"><path d="M5 9v6h4l5 5V4l-5 5H5z"/><path d="M16.5 12a4.5 4.5 0 0 0-1.77-3.59l1.06-1.06A6 6 0 0 1 18.5 12a6 6 0 0 1-2.71 4.65l-1.06-1.06A4.5 4.5 0 0 0 16.5 12z"/></svg>';
-    const ICON_MUTED = '<svg viewBox="0 0 24 24"><path d="M5 9v6h4l5 5V4l-5 5H5z" opacity="0.5"/><path d="M19.5 7.5l-1.4 1.4 2.6 2.6-2.6 2.6 1.4 1.4 2.6-2.6 2.6 2.6 1.4-1.4-2.6-2.6 2.6-2.6-1.4-1.4-2.6 2.6z" transform="translate(-3)"/></svg>';
-    audio.volume = 0.7;
-    let lastVolume = 0.7;
-    if (volumeSlider) volumeSlider.value = 70;
-
-    function refreshVolumeIcon() {
-      if (!volumeIcon) return;
-      volumeIcon.innerHTML = (audio.muted || audio.volume === 0) ? ICON_MUTED : ICON_VOLUME_UP;
-    }
-    refreshVolumeIcon();
-
-    volumeSlider && volumeSlider.addEventListener('input', () => {
-      const v = Number(volumeSlider.value) / 100;
-      audio.volume = v;
-      audio.muted = false;
-      if (v > 0) lastVolume = v;
-      refreshVolumeIcon();
-    });
-    muteBtn && muteBtn.addEventListener('click', () => {
-      if (audio.muted || audio.volume === 0) {
-        audio.muted = false;
-        audio.volume = lastVolume || 0.7;
-        if (volumeSlider) volumeSlider.value = Math.round(audio.volume * 100);
-      } else {
-        lastVolume = audio.volume;
-        audio.muted = true;
-        if (volumeSlider) volumeSlider.value = 0;
-      }
-      refreshVolumeIcon();
-    });
-
-    // clicking the mute icon, or finishing a drag on the slider, leaves
-    // that element focused — normal browser behavior for any button/input.
-    // Since the slider only shows on :hover or :focus-within, a lingering
-    // focus after a click would keep it visibly expanded even after the
-    // mouse leaves, until something else stole focus. Blur right after the
-    // interaction settles so it collapses like it's supposed to.
-    const npVolumeHover = document.getElementById('now-playing-volume-hover');
-    if (npVolumeHover) {
-      npVolumeHover.addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) b.blur(); });
-      volumeSlider && volumeSlider.addEventListener('change', () => volumeSlider.blur());
-    }
-
-    function setLoading(on) {
-      npPlay.classList.toggle('is-loading', on);
-    }
-    function setPlayingUI(playing) {
-      isPlaying = playing;
-      npIcon.innerHTML = playing
-        ? '<svg viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>'
-        : '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
-      npPlay.classList.toggle('is-playing', playing);
-      npWave.classList.toggle('is-playing', playing);
-    }
-
-    audio.addEventListener('loadedmetadata', () => {
-      npDuration.textContent = formatTime(audio.duration);
-      setLoading(false);
-    });
-    audio.addEventListener('play', () => { setLoading(false); setPlayingUI(true); if (window.setNowPlayingStatus) window.setNowPlayingStatus(latest.title); });
-    audio.addEventListener('pause', () => { setPlayingUI(false); if (window.setNowPlayingStatus) window.setNowPlayingStatus(null); });
-    audio.addEventListener('ended', () => {
-      setPlayingUI(false);
-      paintProgress(0);
-      npElapsed.textContent = '0:00';
-      if (window.setNowPlayingStatus) window.setNowPlayingStatus(null);
-    });
-    audio.addEventListener('timeupdate', () => {
-      const fraction = audio.duration ? Math.min(1, audio.currentTime / audio.duration) : 0;
-      paintProgress(fraction);
-      npElapsed.textContent = formatTime(audio.currentTime);
-    });
-    audio.addEventListener('error', () => {
-      hasErrored = true;
-      setLoading(false);
-    });
-
-    window.closeNowPlaying = function() {
-      if (isPlaying) audio.pause();
-    };
-
-    npPlay.addEventListener('click', (e) => {
-      e.preventDefault();
-      if (hasErrored) { window.open(latest.soundcloud, '_blank', 'noopener'); return; }
-      if (isPlaying) { audio.pause(); return; }
-      setLoading(true);
-      audio.play().catch(() => { setLoading(false); });
-    });
-
-    npBack && npBack.addEventListener('click', (e) => {
-      e.preventDefault();
-      audio.currentTime = 0;
-      paintProgress(0);
-      npElapsed.textContent = '0:00';
-    });
-    npForward && npForward.addEventListener('click', (e) => {
-      e.preventDefault();
-      window.open(latest.soundcloud, '_blank', 'noopener');
-    });
-
-    function seekFromClientX(clientX, el) {
-      if (!audio.duration) return;
-      const rect = el.getBoundingClientRect();
-      const fraction = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
-      audio.currentTime = fraction * audio.duration;
-      paintProgress(fraction);
-      npElapsed.textContent = formatTime(audio.currentTime);
-    }
-    npWave.addEventListener('click', (e) => seekFromClientX(e.clientX, npWave));
-    npWave.addEventListener('keydown', (e) => {
-      if (!audio.duration) return;
-      if (e.key === 'ArrowRight') audio.currentTime = Math.min(audio.duration, audio.currentTime + 3);
-      if (e.key === 'ArrowLeft') audio.currentTime = Math.max(0, audio.currentTime - 3);
-    });
-  } else {
-    window.closeNowPlaying = function() {};
-  }
-
   // ---------- lazy-load cover art shortly before each card is scrolled into view ----------
   // fires well ahead of the viewport (600px) so the image has already loaded
   // by the time the reveal animation below plays — no more blank cards
@@ -2617,10 +2223,8 @@
   // ---------- status pill: scroll-spy by default, switches to "now playing" while audio is active ----------
   (function setupStatusPill() {
     const pill = document.getElementById('status-pill');
-    const dot = document.getElementById('status-dot');
     const label = document.getElementById('status-label');
     const value = document.getElementById('status-value');
-    const wave = document.getElementById('status-wave');
     if (!pill) return;
 
     const sections = [
@@ -2630,44 +2234,31 @@
       { id: 'contact', label: 'Viewing', name: 'Contact' }
     ].map(s => ({ ...s, el: document.getElementById(s.id) })).filter(s => s.el);
 
-    let nowPlayingText = null; // set externally when a track starts/stops
-
+    // A section counts as current once it reaches the spot where a jump to it stops: its scroll-margin
+    // (140px on phones, more than the old fixed 120 → after the pill's jump it still said Home and the
+    // next tap went to Releases again, forever).
+    let edge = 0;
+    window.addEventListener('resize', () => { edge = 0; }, { passive: true });
+    function currentSection() {
+      if (!edge) edge = Math.max(120, (parseFloat(getComputedStyle(sections[sections.length - 1].el).scrollMarginTop) || 0) + 10);
+      let current = sections[0];
+      const scrollY = window.scrollY + edge;
+      sections.forEach(s => { if (s.el.offsetTop <= scrollY) current = s; });
+      return current;
+    }
     function render() {
-      if (nowPlayingText) {
-        label.textContent = 'Playing';
-        value.textContent = nowPlayingText;
-        dot.style.animationPlayState = 'running';
-        wave.style.display = 'flex';
-      } else {
-        wave.style.display = 'none';
-        let current = sections[0];
-        const scrollY = window.scrollY + 120;
-        sections.forEach(s => { if (s.el.offsetTop <= scrollY) current = s; });
-        label.textContent = current.label;
-        value.textContent = current.name;
-      }
+      const current = currentSection();
+      label.textContent = current.label;
+      value.textContent = current.name;
     }
 
     window.addEventListener('scroll', render, { passive: true });
     render();
 
     pill.addEventListener('click', () => {
-      if (nowPlayingText) {
-        document.getElementById('now-playing') && document.getElementById('now-playing').scrollIntoView({ behavior: 'smooth', block: 'center' });
-      } else {
-        let current = sections[0];
-        const scrollY = window.scrollY + 120;
-        sections.forEach(s => { if (s.el.offsetTop <= scrollY) current = s; });
-        const next = sections[(sections.indexOf(current) + 1) % sections.length];
-        next.el.scrollIntoView({ behavior: 'smooth' });
-      }
+      const next = sections[(sections.indexOf(currentSection()) + 1) % sections.length];
+      next.el.scrollIntoView({ behavior: 'smooth' });
     });
-
-    // exposed so any player (hero or release cards) can report what's currently audible
-    window.setNowPlayingStatus = function(text) {
-      nowPlayingText = text;
-      render();
-    };
   })();
 
   // ---------- contact form (Formspree — delivers straight to email, no mail app opens) ----------
