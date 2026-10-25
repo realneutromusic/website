@@ -278,7 +278,7 @@
   .hero {
     min-height: 100vh;
     position: relative;
-    display: flex; align-items: flex-start;
+    display: flex; align-items: center; /* text + artist card centred in the space under the menu */
     overflow: hidden;
     background: var(--bg);
   }
@@ -320,7 +320,7 @@
 
   .hero-content {
     position: relative; z-index: 3;
-    padding: 100px 32px 60px;
+    padding: 96px 32px 24px;
     max-width: 1280px; margin: 0 auto; width: 100%;
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(380px, 460px);
@@ -1486,62 +1486,9 @@
       <div class="block-head-left">
         <div class="tag mono">Discography</div>
         <h2 class="display-xl">Releases</h2>
-        <span class="sub">Tap play for a quick preview, right here · pick a platform to listen in full</span>
+        <span class="sub">Tap a release to listen on your favourite platform</span>
       </div>
       <span class="block-count mono"><b id="release-count">8</b> tracks</span>
-    </div>
-    <div class="releases-latest">
-      <!-- Latest release: full inline player, audio playback only — never leaves the page -->
-      <div class="now-playing" id="now-playing">
-        <div class="now-playing-card card" id="now-playing-card">
-          <div class="now-playing-card-glow" id="now-playing-card-glow" aria-hidden="true"></div>
-
-          <div class="now-playing-art" id="now-playing-art"></div>
-
-          <span class="now-playing-tag mono"><span class="pulse"></span>Latest release<span id="now-playing-catalog"></span></span>
-          <div class="now-playing-title" id="now-playing-title">—</div>
-          <div class="now-playing-sub" id="now-playing-sub">Neutro</div>
-
-          <div class="now-playing-controls">
-            <button class="now-playing-play" id="now-playing-play" type="button" aria-label="Play preview of the latest release">
-              <span class="now-playing-play-spin" aria-hidden="true"></span>
-              <span id="now-playing-icon"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></span>
-            </button>
-            <div class="now-playing-wave" id="now-playing-wave" role="slider" aria-label="Seek" tabindex="0" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div>
-          </div>
-
-          <div class="now-playing-strip">
-            <span class="mono" id="now-playing-elapsed">0:00</span>
-            <div class="now-playing-transport">
-              <button class="now-playing-skip" id="now-playing-back" type="button" aria-label="Restart preview">
-                <svg viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
-              </button>
-              <div class="volume-hover" id="now-playing-volume-hover">
-                <button class="now-playing-skip" id="now-playing-mute" type="button" aria-label="Mute">
-                  <span id="now-playing-volume-icon">
-                    <svg viewBox="0 0 24 24"><path d="M5 9v6h4l5 5V4l-5 5H5z"/><path d="M16.5 12a4.5 4.5 0 0 0-1.77-3.59l1.06-1.06A6 6 0 0 1 18.5 12a6 6 0 0 1-2.71 4.65l-1.06-1.06A4.5 4.5 0 0 0 16.5 12z"/></svg>
-                  </span>
-                </button>
-                <input type="range" id="now-playing-volume-slider" class="now-playing-volume-slider volume-hover-slider" min="0" max="100" value="70" aria-label="Volume">
-              </div>
-              <button class="now-playing-skip" id="now-playing-forward" type="button" aria-label="Open full track on SoundCloud">
-                <svg viewBox="0 0 24 24"><path d="M16 6h2v12h-2zM6 6l8.5 6L6 18z"/></svg>
-              </button>
-            </div>
-            <span class="mono" id="now-playing-duration">0:30</span>
-          </div>
-
-          <div class="now-playing-footer">
-            <span class="now-playing-footer-label mono">Listen On</span>
-            <div class="now-playing-links">
-              <a id="now-playing-spotify-link" href="https://open.spotify.com/artist/2Zj4lZCxNSCb5rjx82Ptmu" target="_blank" rel="noopener">Spotify<svg viewBox="0 0 24 24"><path d="M7 17L17 7M7 7h10v10" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
-              <a id="now-playing-soundcloud-link" href="https://soundcloud.com/realneutromusic" target="_blank" rel="noopener">SoundCloud<svg viewBox="0 0 24 24"><path d="M7 17L17 7M7 7h10v10" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
-              <a id="now-playing-applemusic-link" href="#" target="_blank" rel="noopener" style="display:none">Apple Music<svg viewBox="0 0 24 24"><path d="M7 17L17 7M7 7h10v10" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
-              <a id="now-playing-youtubemusic-link" href="#" target="_blank" rel="noopener" style="display:none">YouTube Music<svg viewBox="0 0 24 24"><path d="M7 17L17 7M7 7h10v10" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
     <div class="release-grid" id="release-grid"></div>
   </section>
