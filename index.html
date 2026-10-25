@@ -13,18 +13,9 @@
   if (!location.hash) { window.scrollTo(0, 0); }
 </script>
 
-<!-- Fires the releases.json request the instant the browser starts on
-     <head> — in parallel with the font and hero-image fetches below —
-     instead of waiting for the ~1500-line inline script further down the
-     page to finish parsing and executing before it even starts. On a cold
-     load (new tab, nothing cached, nothing warmed up) that script doesn't
-     run until the parser has worked through most of the document, which
-     is often *after* the user has already scrolled to Releases. That's
-     what produced the stutter: an empty grid, then every card being
-     built, decoded, and animated in one burst right as it's needed most.
-     Starting the request here means it's usually already resolved by the
-     time anyone reaches that section. loadReleases() further down just
-     awaits this same promise instead of firing a second request. -->
+<!-- The releases request starts here, at the top of <head>, in parallel with
+     the fonts and hero photo, so the list is usually ready before anyone
+     reaches Releases; loadReleases() further down awaits this same promise. -->
 <script>
   // Releases come from the admin panel ("Web oficial → Lanzamientos"): what is
   // published there shows here at once. If that request fails, the last list
@@ -360,13 +351,6 @@
     margin-top: 32px; display: inline-flex; gap: 14px; flex-wrap: wrap;
     opacity: 0; animation: riseIn 0.5s var(--ease) forwards; animation-delay: 0.19s;
   }
-
-  .hero-meta {
-    margin-top: 38px; display: flex; gap: 26px; flex-wrap: wrap;
-    opacity: 0; animation: riseIn 0.5s var(--ease) forwards; animation-delay: 0.24s;
-  }
-  .hero-meta-item { font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: var(--ink-faint); }
-  .hero-meta-item b { color: var(--ink-dim); font-weight: 500; }
 
   .btn {
     display: inline-flex; align-items: center; gap: 8px;
@@ -1472,43 +1456,13 @@
   const SPOTIFY_PROFILE = "https://open.spotify.com/artist/2Zj4lZCxNSCb5rjx82Ptmu?si=mXX1XdotS3eUgpKmnmy_cw";
   const APPLE_PROFILE = "https://music.apple.com/us/artist/neutro/1831228505";
 
-  // ================================================================
-  // RELEASES — loaded live from releases.json on the server.
-  // ----------------------------------------------------------------
-  // releases.json is an array, ordered NEWEST FIRST (index 0 is the
-  // one shown as "Latest release" in the hero player):
-  //   [
-  //     {
-  //       "catalog": "NTR#008",
-  //       "artist": "Artist Name",
-  //       "title": "Track Name",
-  //       "image": "ntr008.jpg",
-  //       "spotify_link": "...",
-  //       "soundcloud_link": "...",
-  //       "applemusic_link": "..." (optional — omit if there isn't one yet)
-  //       "youtubemusic_link": "..." (optional — omit if there isn't one yet)
-  //       "collab_links": { "CollabName": "https://open.spotify.com/artist/..." }
-  //         (optional — one entry per collaborator in "artist" other than
-  //         Neutro himself, so their name in the modal can link straight to
-  //         their own Spotify profile. Skip a name here and it just renders
-  //         as plain text instead of a link.)
-  //       "label": "Neon Tide Records" (optional — the record label/imprint
-  //         this specific release came out on, if any. Shows as a small
-  //         "℗ Label Name" line in the modal, under the artist credit.
-  //         Omit entirely for self-released tracks — nothing shows.)
-  //     },
-  //     ...
-  //   ]
-  // "image" must match the filename in ./assets/ EXACTLY, including
-  // capitalization — "image": "NTR008.JPG" only works if the real file
-  // is also named NTR008.JPG, not ntr008.jpg. To add a new release:
-  // paste a new object at the TOP of the array, drop its artwork in
-  // ./assets/, done. Nothing else to do: replacing a cover also just works.
-  // ================================================================
+  // RELEASES — published from the admin panel (store.realneutromusic.com/admin → Web oficial),
+  // newest first; see window.__releasesPromise in <head>. releases.json (same field names, "image" =
+  // a file name in ./assets/) is only the fallback when the panel cannot be reached.
   let RELEASES = [];
 
   // Loads and decodes a cover before it is painted (see the lazy-load observer
-  // below for why). Cards and the "now playing" cover first try a light 640 px
+  // below for why). Cards first try a light 640 px
   // copy in ./assets/thumbs/, named after the cover AND its exact size in bytes
   // (NTR010.jpg of 532271 bytes → thumbs/NTR010-532271.webp). A HEAD request
   // gives the current size, so a cover that was replaced (different size) or a
@@ -2013,11 +1967,8 @@
   }
 
   // ---------- mystery strip: a teaser for the next, unannounced release ----------
-  // It only ever appears if ./assets/HIDDEN.jpg actually exists on the server.
-  // We test that by trying to load it as an Image — if it 404s, we just never
-  // touch the DOM, so there's nothing to remove later when there's no hidden
-  // release queued up. Lives pinned to the left edge of the whole page, not
-  // tucked inside the Releases section, so it can be noticed anywhere.
+  // Only when there is one (see initMysteryCard). Lives pinned to the left edge
+  // of the whole page, not tucked inside Releases, so it can be noticed anywhere.
   if ('requestIdleCallback' in window) {
     requestIdleCallback(initMysteryCard, { timeout: 2000 });
   } else {
@@ -2026,8 +1977,8 @@
   }
 
   function initMysteryCard() {
-    // The teaser now comes from the admin panel (a release marked «Teaser
-    // «Próximamente»»: only its cover and audio). When the panel answered, it
+    // The teaser now comes from the admin panel (a draft release marked
+    // «Teaser»: only its cover and audio). When the panel answered, it
     // decides — no teaser there means no strip. Only without the panel (old
     // releases.json) does the old ./assets/HIDDEN.jpg check apply; HEAD only
     // asks whether it exists, the image loads when someone heads for the strip.
