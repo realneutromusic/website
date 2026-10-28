@@ -451,6 +451,8 @@
   .cat-releases::before { content: '← '; }
   .cat-releases:hover { color: var(--ink); border-bottom-color: var(--ink-faint); }
   .release-card.card[hidden] { display: none; }
+  /* Card size comes from the whole catalogue; search results line up from the left. */
+  .release-grid { justify-content: flex-start; }
   .cat-empty { color: var(--ink-dim); font-size: 14px; padding: 40px 0; text-align: center; }
   @media (max-width: 640px) {
     .cat-top-spacer { display: none; }
@@ -482,7 +484,7 @@
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5" stroke-linecap="round"/></svg>
       <input type="search" id="cat-q" placeholder="Search title or artist…" aria-label="Search releases by title or artist" autocomplete="off">
     </label>
-    <span class="block-count mono" aria-live="polite"><b id="release-count">0</b> releases</span>
+    <span class="block-count mono" aria-live="polite"><b id="release-count">0</b> <span id="release-word">releases</span></span>
     <a class="cat-releases mono" href="/#releases">Back to Releases</a>
   </div>
   <div class="release-grid" id="release-grid"></div>
@@ -717,7 +719,7 @@
   function layoutReleaseGrid() {
     const grid = document.getElementById('release-grid');
     if (!grid) return;
-    const cards = Array.from(grid.children).filter((c) => !c.hidden);
+    const cards = Array.from(grid.children);
     const n = cards.length;
     if (n === 0) return;
     const gap = 22;
@@ -830,6 +832,7 @@
       if (match) shown++;
     });
     countEl.textContent = shown;
+    document.getElementById('release-word').textContent = shown === 1 ? 'release' : 'releases';
     emptyEl.hidden = shown > 0;
     layoutReleaseGrid();
   }
