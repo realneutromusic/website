@@ -443,6 +443,13 @@
   .cat-search input::placeholder { color: var(--ink-faint); }
   .cat-search input:focus { outline: none; border-color: var(--steel); }
   .cat-search input:focus-visible { outline: 2px solid var(--steel-bright); outline-offset: 2px; }
+  /* Same small link as "View Full Catalogue" on the home page, right above the top-right card. */
+  .cat-releases {
+    margin-left: auto; font-size: 12px; color: var(--steel-bright); padding: 6px 2px;
+    border-bottom: 1px solid transparent; transition: color 0.2s, border-color 0.2s;
+  }
+  .cat-releases::before { content: '← '; }
+  .cat-releases:hover { color: var(--ink); border-bottom-color: var(--ink-faint); }
   .release-card.card[hidden] { display: none; }
   .cat-empty { color: var(--ink-dim); font-size: 14px; padding: 40px 0; text-align: center; }
   @media (max-width: 640px) {
@@ -476,6 +483,7 @@
       <input type="search" id="cat-q" placeholder="Search title or artist…" aria-label="Search releases by title or artist" autocomplete="off">
     </label>
     <span class="block-count mono" aria-live="polite"><b id="release-count">0</b> releases</span>
+    <a class="cat-releases mono" href="/#releases">Back to Releases</a>
   </div>
   <div class="release-grid" id="release-grid"></div>
   <p class="cat-empty" id="cat-empty" hidden>No releases match your search.</p>
