@@ -54,11 +54,18 @@
   const sections = links.map(link => ({ link, section: document.getElementById(link.hash.slice(1)) })).filter(item => item.section);
   let frame = 0;
   function updateActive() {
-    frame = 0; let current = sections[0];
+    frame = 0;
+    // Full Catalogue view (#catalogue): the Home sections are hidden; it belongs to Releases.
+    if (root.classList.contains('is-catalogue')) {
+      for (const item of sections) item.link.hash === '#releases' ? item.link.setAttribute('aria-current','location') : item.link.removeAttribute('aria-current');
+      return;
+    }
+    let current = sections[0];
     for (const item of sections) if (item.section.getBoundingClientRect().top <= 150) current = item;
     for (const item of sections) item === current ? item.link.setAttribute('aria-current','location') : item.link.removeAttribute('aria-current');
   }
   document.addEventListener('scroll', () => { if (!frame) frame = requestAnimationFrame(updateActive); }, {passive:true});
+  addEventListener('nt:view', updateActive);
   updateActive();
   if ('IntersectionObserver' in window) {
     const observer = new IntersectionObserver(entries => {

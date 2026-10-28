@@ -11,6 +11,8 @@
 <script>
   if ('scrollRestoration' in history) { history.scrollRestoration = 'manual'; }
   if (!location.hash) { window.scrollTo(0, 0); }
+  // #catalogue = the Full Catalogue view of this same page: shown from the first paint, no flash of Home.
+  if (location.hash === '#catalogue') { document.documentElement.classList.add('is-catalogue'); }
 </script>
 
 <!-- The releases request starts here, at the top of <head>, in parallel with
@@ -432,6 +434,39 @@
     border-bottom: 1px solid transparent; transition: color 0.2s, border-color 0.2s;
   }
   .release-more::after { content: ' →'; }
+  /* ---------- FULL CATALOGUE: a view of this page (#catalogue), not another page ----------
+     Switching to it hides the Home sections and shows every release with search; nothing
+     reloads, so the paint strokes and everything else simply carry on (like the Store). */
+  .cat-view { display: none; }
+  html.is-catalogue .cat-view { display: block; }
+  html.is-catalogue main > section:not(#catalogue) { display: none; }
+  .cat-view.block { border-top: 0; padding-top: 150px; }
+  #cat-title:focus { outline: none; }
+  .cat-tools { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin: -18px 0 30px; }
+  .cat-search { position: relative; flex: 0 1 360px; min-width: 0; }
+  .cat-search svg { position: absolute; left: 14px; top: 50%; width: 15px; height: 15px; transform: translateY(-50%); fill: none; stroke: var(--ink-faint); stroke-width: 2; pointer-events: none; }
+  .cat-search input {
+    width: 100%; padding: 11px 14px 11px 38px; border-radius: 12px;
+    border: 1px solid var(--line); background: rgba(12,20,36,0.55); color: var(--ink);
+    font: 14px 'Sora', sans-serif; transition: border-color 0.2s;
+  }
+  .cat-search input::placeholder { color: var(--ink-faint); }
+  .cat-search input:focus { outline: none; border-color: var(--steel); }
+  .cat-search input:focus-visible { outline: 2px solid var(--steel-bright); outline-offset: 2px; }
+  .cat-releases {
+    margin-left: auto; font-size: 12px; color: var(--steel-bright); padding: 6px 2px;
+    border-bottom: 1px solid transparent; transition: color 0.2s, border-color 0.2s;
+  }
+  .cat-releases::before { content: '← '; }
+  .cat-releases:hover { color: var(--ink); border-bottom-color: var(--ink-faint); }
+  /* the card size comes from the whole catalogue; search results line up from the left */
+  .cat-grid { justify-content: flex-start; }
+  .release-card.card[hidden] { display: none; }
+  .cat-empty { color: var(--ink-dim); font-size: 14px; padding: 40px 0; text-align: center; }
+  @media (max-width: 640px) {
+    .cat-view.block { padding-top: 190px; }
+    .cat-search { flex-basis: 100%; }
+  }
   .release-more:hover { color: var(--ink); border-bottom-color: var(--ink-faint); }
   .release-more:focus-visible { outline: 2px solid var(--steel-bright); outline-offset: 3px; border-radius: 4px; }
 
@@ -1229,7 +1264,7 @@
   @media (prefers-reduced-motion: reduce) { .tools-modal-inner { animation: none; opacity: 1; transform: none; } }
 </style>
 <link rel="stylesheet" href="./assets/neutro-motion.css?v=4">
-<script src="./assets/neutro-motion.js?v=2" defer></script>
+<script src="./assets/neutro-motion.js?v=3" defer></script>
 <link rel="stylesheet" href="./assets/about.css?v=1">
 <script src="./assets/about.js?v=1" defer></script>
 <link rel="stylesheet" href="./assets/plugin-reader.css?v=5">
@@ -1307,6 +1342,26 @@
     </div>
   </section>
 
+  <section class="block wrap cat-view" id="catalogue" aria-labelledby="cat-title">
+    <div class="block-head">
+      <div class="block-head-left">
+        <div class="tag mono">Discography</div>
+        <h2 class="display-xl" id="cat-title" tabindex="-1">Full Catalogue</h2>
+        <span class="sub" id="cat-sub">Every release, newest first</span>
+      </div>
+    </div>
+    <div class="cat-tools">
+      <label class="cat-search">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5" stroke-linecap="round"/></svg>
+        <input type="search" id="cat-q" placeholder="Search title or artist…" aria-label="Search releases by title or artist" autocomplete="off">
+      </label>
+      <span class="block-count mono" aria-live="polite"><b id="cat-count">0</b> <span id="cat-word">releases</span></span>
+      <a class="cat-releases mono" href="#releases">Back to Releases</a>
+    </div>
+    <div class="release-grid cat-grid" id="cat-grid"></div>
+    <p class="cat-empty" id="cat-empty" hidden>No releases match your search.</p>
+  </section>
+
   <section class="block wrap" id="releases">
     <div class="block-head">
       <div class="block-head-left">
@@ -1316,7 +1371,7 @@
       </div>
       <span class="block-count mono"><b id="release-count">8</b> tracks</span>
     </div>
-    <div class="release-bar"><a class="release-more mono" id="release-more" href="./catalogue/" hidden>View Full Catalogue</a></div>
+    <div class="release-bar"><a class="release-more mono" id="release-more" href="#catalogue" hidden>View Full Catalogue</a></div>
     <div class="release-grid" id="release-grid"></div>
   </section>
 
@@ -1659,8 +1714,10 @@
     footerIcons.appendChild(a);
   });
 
-  // How many releases the home page shows (newest first); the rest are in /catalogue/.
+  // How many releases the home page shows (newest first); every one is in the Full Catalogue view (#catalogue).
   const RELEASES_SHOWN = 8;
+  // Filled in once the releases are ready (see the Full Catalogue view at the end of renderReleasesAndPlayer).
+  const catalogueHooks = { show: null, home: null };
   async function renderReleasesAndPlayer() {
   const grid = document.getElementById('release-grid');
   const releaseCountEl = document.getElementById('release-count');
@@ -1790,8 +1847,8 @@
   // avoiding a single stranded card (e.g. 7 → 4+3, 10 → 4+4+2) — a
   // remainder of exactly 1 is the one layout that actually looks broken;
   // a shorter-but-not-lone last row reads as normal.
-  function bestReleaseColumnCount(n, maxCols) {
-    const target = Math.min(3, maxCols);
+  function bestReleaseColumnCount(n, maxCols, prefer = 3) {
+    const target = Math.min(prefer, maxCols);
     if (n <= target) return n || 1;
 
     // exact fits first, target itself takes priority — only reach for a
@@ -1813,8 +1870,9 @@
     return target; // rare counts (e.g. 13) can't fully avoid it either way
   }
 
-  function layoutReleaseGrid() {
-    const grid = document.getElementById('release-grid');
+  // prefer: 3 on Home, 4 in the catalogue (denser). Hidden cards (search) still count, so the card
+  // size never changes while searching.
+  function layoutReleaseGrid(grid = document.getElementById('release-grid'), prefer = 3) {
     if (!grid) return;
     const cards = Array.from(grid.children);
     const n = cards.length;
@@ -1824,7 +1882,7 @@
     const containerWidth = grid.getBoundingClientRect().width;
     if (containerWidth <= 0) return;
     const maxCols = Math.max(1, Math.floor((containerWidth + gap) / (minCardWidth + gap)));
-    const cols = bestReleaseColumnCount(n, maxCols);
+    const cols = bestReleaseColumnCount(n, maxCols, prefer);
     const width = (containerWidth - (cols - 1) * gap) / cols;
     cards.forEach((c) => { c.style.flexBasis = width + 'px'; c.style.maxWidth = width + 'px'; });
   }
@@ -1834,7 +1892,8 @@
   // per card; batching it into a single insertion means it's invalidated
   // once total, no matter how many releases there are.
   const cardsFragment = document.createDocumentFragment();
-  RELEASES.slice(0, RELEASES_SHOWN).forEach((r) => {
+  // One card, used by the Home grid and by the Full Catalogue view.
+  function buildReleaseCard(r) {
     const card = document.createElement('div');
     card.className = 'release-card card';
     card.setAttribute('role', 'button');
@@ -1905,22 +1964,30 @@
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openReleaseModal(r); }
     });
 
-    cardsFragment.appendChild(card);
-  });
+    return card;
+  }
+  RELEASES.slice(0, RELEASES_SHOWN).forEach((r) => cardsFragment.appendChild(buildReleaseCard(r)));
   grid.appendChild(cardsFragment);
   layoutReleaseGrid();
 
-  // ---------- "View Full Catalogue" → /catalogue/ (every release, with search) ----------
+  // ---------- "View Full Catalogue" → the #catalogue view (every release, with search) ----------
   const moreLink = document.getElementById('release-more');
   if (moreLink && RELEASES.length > RELEASES_SHOWN) moreLink.hidden = false;
-  window.addEventListener('resize', debounce(layoutReleaseGrid, 150));
+  window.addEventListener('resize', debounce(() => {
+    layoutReleaseGrid();
+    if (catalogueBuilt) layoutReleaseGrid(catGrid, 4);
+  }, 150));
 
   // ---------- lazy-load cover art shortly before each card is scrolled into view ----------
   // fires well ahead of the viewport (600px) so the image has already loaded
   // by the time the reveal animation below plays — no more blank cards
-  const artImgs = Array.from(document.querySelectorAll('.release-art-img[data-src]'));
+  // Watches a set of cards (Home now, the catalogue when it is first opened): covers load and cards
+  // animate in as they come near, never before (hidden catalogue cards cost nothing).
+  let imageObserver = null, revealObserver = null, revealBatchIndex = 0;
+  function watchReleaseCards(cards) {
+  const artImgs = cards.map((card) => card.querySelector('.release-art-img[data-src]')).filter(Boolean);
   if ('IntersectionObserver' in window) {
-    const imageObserver = new IntersectionObserver((entries) => {
+    imageObserver = imageObserver || new IntersectionObserver((entries) => {
       entries.forEach((entry) => {
         if (entry.isIntersecting) {
           const el = entry.target;
@@ -1947,10 +2014,9 @@
   }
 
   // ---------- scroll-triggered reveal animation for release cards ----------
-  const rows = Array.from(document.querySelectorAll('.release-card'));
+  const rows = cards;
   if ('IntersectionObserver' in window) {
-    let revealBatchIndex = 0;
-    const observer = new IntersectionObserver((entries) => {
+    const observer = revealObserver = revealObserver || new IntersectionObserver((entries) => {
       // entries can contain several cards at once (a whole row, or more,
       // crossing the line together on a fast first scroll) — stagger by
       // arrival order within that batch instead of by fixed grid position,
@@ -1981,6 +2047,38 @@
   } else {
     rows.forEach(row => row.classList.add('in-view'));
   }
+  }
+  watchReleaseCards(Array.from(grid.children));
+
+  // ---------- Full Catalogue view: built the first time it is opened ----------
+  const catGrid = document.getElementById('cat-grid');
+  let catalogueBuilt = false;
+  catalogueHooks.show = () => {
+    if (!catalogueBuilt) {
+      catalogueBuilt = true;
+      const cards = RELEASES.map((r) => buildReleaseCard(r));
+      catGrid.append(...cards);
+      // search: title, artist or catalogue number; accents and case ignored
+      const fold = (v) => String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+      const keys = RELEASES.map((r) => fold(`${r.title} ${r.artist} ${r.catalog || ''}`));
+      const input = document.getElementById('cat-q');
+      document.getElementById('cat-sub').textContent = `${RELEASES.length} ${RELEASES.length === 1 ? 'release' : 'releases'} in the catalogue`;
+      const applySearch = () => {
+        const words = fold(input.value).split(/\s+/).filter(Boolean);
+        let shown = 0;
+        cards.forEach((card, i) => { card.hidden = !words.every((w) => keys[i].includes(w)); if (!card.hidden) shown++; });
+        document.getElementById('cat-count').textContent = shown;
+        document.getElementById('cat-word').textContent = shown === 1 ? 'release' : 'releases';
+        document.getElementById('cat-empty').hidden = shown > 0;
+      };
+      input.addEventListener('input', applySearch);
+      applySearch();
+      watchReleaseCards(cards);
+    }
+    layoutReleaseGrid(catGrid, 4);
+  };
+  catalogueHooks.home = () => layoutReleaseGrid();
+  if (document.documentElement.classList.contains('is-catalogue')) catalogueHooks.show();
 
   // ---------- mystery strip: a teaser for the next, unannounced release ----------
   // Only when there is one (see initMysteryCard). Lives pinned to the left edge
@@ -2187,6 +2285,38 @@
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && reveal.classList.contains('open')) closeReveal(); });
   }
 
+  // ---------- Home ⇄ Full Catalogue without loading another page ----------
+  // The address says which view is on (#catalogue), so links, the back/forward buttons and a
+  // reload all work. Leaving the catalogue lands on the section asked for (#releases, #socials…),
+  // or back where Home was left when the back button is used.
+  const HOME_TITLE = document.title;
+  let showingCatalogue = document.documentElement.classList.contains('is-catalogue');
+  let homeScroll = 0;
+  function routeView() {
+    const want = location.hash === '#catalogue';
+    if (want === showingCatalogue) return;
+    showingCatalogue = want;
+    const root = document.documentElement;
+    if (want) {
+      homeScroll = window.scrollY;
+      root.classList.add('is-catalogue');
+      document.title = 'Full Catalogue — Neutro';
+      if (catalogueHooks.show) catalogueHooks.show();
+      window.scrollTo({ top: 0, behavior: 'instant' });
+      document.getElementById('cat-title').focus({ preventScroll: true });
+    } else {
+      root.classList.remove('is-catalogue');
+      document.title = HOME_TITLE;
+      if (catalogueHooks.home) catalogueHooks.home();
+      const target = location.hash.length > 1 && location.hash !== '#main' ? document.getElementById(location.hash.slice(1)) : null;
+      if (target) target.scrollIntoView({ behavior: 'instant' });
+      else window.scrollTo({ top: location.hash === '#main' ? 0 : homeScroll, behavior: 'instant' });
+    }
+    window.dispatchEvent(new Event('nt:view'));
+  }
+  window.addEventListener('hashchange', routeView);
+  if (showingCatalogue) document.title = 'Full Catalogue — Neutro';
+
   // ---------- status pill: scroll-spy by default, switches to "now playing" while audio is active ----------
   (function setupStatusPill() {
     const pill = document.getElementById('status-pill');
@@ -2214,15 +2344,20 @@
       return current;
     }
     function render() {
+      // in the Full Catalogue view the Home sections are hidden: the pill just says where you are
+      if (document.documentElement.classList.contains('is-catalogue')) { label.textContent = 'Viewing'; value.textContent = 'Catalogue'; return; }
       const current = currentSection();
       label.textContent = current.label;
       value.textContent = current.name;
     }
 
     window.addEventListener('scroll', render, { passive: true });
+    window.addEventListener('nt:view', render);
     render();
 
     pill.addEventListener('click', () => {
+      // from the catalogue, the pill goes back to Releases
+      if (document.documentElement.classList.contains('is-catalogue')) { location.hash = '#releases'; return; }
       const next = sections[(sections.indexOf(currentSection()) + 1) % sections.length];
       next.el.scrollIntoView({ behavior: 'smooth' });
     });
