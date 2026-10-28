@@ -17,9 +17,30 @@
         return `<svg class="nt-paint nt-paint-${index}" style="--paint-start:${index * 4.8}s" viewBox="0 0 1000 340" preserveAspectRatio="none" focusable="false"><defs><mask id="nt-paint-${index}" maskUnits="userSpaceOnUse" x="0" y="0" width="1000" height="340">${paths}</mask></defs><image href="${image}" width="1000" height="340" preserveAspectRatio="none" mask="url(#nt-paint-${index})"/></svg>`;
       }).join('');
       document.body.prepend(brushes);
+      resumeBrushes();
     }
     root.classList.toggle('nt-background-paused', document.hidden || reduced.matches);
   }
+  // Moving between the home page and /catalogue/ is a full page load: without this the strokes would start
+  // again from zero. The point the strokes reached is kept for this tab (sessionStorage) and the next page
+  // carries on from there, like the Store does when it changes section without reloading.
+  const CLOCK = 'nt_brush_clock';
+  const brushAnimations = () => brushes ? [...brushes.querySelectorAll('.nt-paint, .nt-paint-path')].flatMap(el => el.getAnimations ? el.getAnimations() : []) : [];
+  function saveBrushes() {
+    const first = brushAnimations()[0];
+    if (!first || first.currentTime == null) return;
+    try { sessionStorage.setItem(CLOCK, JSON.stringify({ t: first.currentTime, at: Date.now(), running: !document.hidden })); } catch (e) { /* no storage */ }
+  }
+  function resumeBrushes() {
+    let saved = null;
+    try { saved = JSON.parse(sessionStorage.getItem(CLOCK)); } catch (e) { /* no storage */ }
+    if (!saved || !Number.isFinite(saved.t)) return;
+    // time spent on the way here only counts if the strokes were moving when the last page was left
+    const time = saved.t + (saved.running ? Math.max(0, Date.now() - saved.at) : 0);
+    for (const animation of brushAnimations()) animation.currentTime = time;
+  }
+  addEventListener('pagehide', saveBrushes);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) saveBrushes(); });
   syncMotion(); document.addEventListener('visibilitychange', syncMotion); reduced.addEventListener('change', syncMotion);
   const links = [...document.querySelectorAll('.topbar nav a[href^="#"]')];
   links.forEach(link => {
