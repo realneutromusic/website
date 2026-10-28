@@ -423,6 +423,20 @@
     gap: 22px;
     padding-top: 6px;
   }
+  /* Only the latest releases at first (RELEASES_SHOWN); the rest wait, covers
+     included, until "View All Releases" is pressed. */
+  .release-card.card[hidden] { display: none; }
+  /* "View All" sits right above the top-right card, in the gap under the heading */
+  .release-bar { display: flex; justify-content: flex-end; margin: -30px 0 10px; }
+  .release-bar:not(:has(.release-more:not([hidden]))) { display: none; }
+  .release-more {
+    font-size: 12px; color: var(--steel-bright); padding: 6px 2px; background: none; border: 0; cursor: pointer;
+    border-bottom: 1px solid transparent; transition: color 0.2s, border-color 0.2s;
+  }
+  .release-more::after { content: ' →'; }
+  .release-more[aria-expanded="true"]::after { content: ' ↑'; }
+  .release-more:hover { color: var(--ink); border-bottom-color: var(--ink-faint); }
+  .release-more:focus-visible { outline: 2px solid var(--steel-bright); outline-offset: 3px; border-radius: 4px; }
 
   /* ---------- MYSTERY STRIP: a barely-there sliver pinned to the far left edge
      of the whole viewport. Bigger and more obviously clickable than before —
@@ -1308,6 +1322,7 @@
       </div>
       <span class="block-count mono"><b id="release-count">8</b> tracks</span>
     </div>
+    <div class="release-bar"><button type="button" class="release-more mono" id="release-more" aria-controls="release-grid" aria-expanded="false" hidden>View All</button></div>
     <div class="release-grid" id="release-grid"></div>
   </section>
 
@@ -1649,6 +1664,8 @@
     footerIcons.appendChild(a);
   });
 
+  // How many releases the page shows before "View All Releases" (newest first).
+  const RELEASES_SHOWN = 8;
   async function renderReleasesAndPlayer() {
   const grid = document.getElementById('release-grid');
   const releaseCountEl = document.getElementById('release-count');
@@ -1804,7 +1821,7 @@
   function layoutReleaseGrid() {
     const grid = document.getElementById('release-grid');
     if (!grid) return;
-    const cards = Array.from(grid.children);
+    const cards = Array.from(grid.children).filter((c) => !c.hidden);
     const n = cards.length;
     if (n === 0) return;
     const gap = 22;
@@ -1812,7 +1829,10 @@
     const containerWidth = grid.getBoundingClientRect().width;
     if (containerWidth <= 0) return;
     const maxCols = Math.max(1, Math.floor((containerWidth + gap) / (minCardWidth + gap)));
-    const cols = bestReleaseColumnCount(n, maxCols);
+    // After "View All Releases" the cards keep the size they had with the latest
+    // ones only, unless that would leave a single card alone on the last row.
+    const firstCols = bestReleaseColumnCount(Math.min(n, RELEASES_SHOWN), maxCols);
+    const cols = n > RELEASES_SHOWN && n % firstCols !== 1 ? firstCols : bestReleaseColumnCount(n, maxCols);
     const width = (containerWidth - (cols - 1) * gap) / cols;
     cards.forEach((c) => { c.style.flexBasis = width + 'px'; c.style.maxWidth = width + 'px'; });
   }
@@ -1822,9 +1842,10 @@
   // per card; batching it into a single insertion means it's invalidated
   // once total, no matter how many releases there are.
   const cardsFragment = document.createDocumentFragment();
-  RELEASES.forEach((r) => {
+  RELEASES.forEach((r, i) => {
     const card = document.createElement('div');
     card.className = 'release-card card';
+    if (i >= RELEASES_SHOWN) card.hidden = true;
     card.setAttribute('role', 'button');
     card.setAttribute('tabindex', '0');
     card.setAttribute('aria-label', `View details for ${r.title}`);
@@ -1897,6 +1918,23 @@
   });
   grid.appendChild(cardsFragment);
   layoutReleaseGrid();
+
+  // ---------- "View All" (top right of Releases): the page opens with the latest ones only ----------
+  // Hidden cards are already observed below: their covers load and they animate
+  // in only once they are shown and scrolled to, so a long catalogue costs nothing.
+  const moreBtn = document.getElementById('release-more');
+  if (moreBtn && RELEASES.length > RELEASES_SHOWN) {
+    moreBtn.hidden = false;
+    moreBtn.setAttribute('aria-label', `View all ${RELEASES.length} releases`);
+    moreBtn.addEventListener('click', () => {
+      const open = moreBtn.getAttribute('aria-expanded') !== 'true';
+      grid.querySelectorAll('.release-card').forEach((c, i) => { c.hidden = !open && i >= RELEASES_SHOWN; });
+      moreBtn.setAttribute('aria-expanded', String(open));
+      moreBtn.textContent = open ? 'Show Latest' : 'View All';
+      moreBtn.setAttribute('aria-label', open ? 'Show the latest releases only' : `View all ${RELEASES.length} releases`);
+      layoutReleaseGrid();
+    });
+  }
   window.addEventListener('resize', debounce(layoutReleaseGrid, 150));
 
   // ---------- lazy-load cover art shortly before each card is scrolled into view ----------
