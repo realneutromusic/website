@@ -55,8 +55,8 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;bac
 .btn-solid{background:var(--steel-bright);border-color:var(--steel-bright);color:var(--bg)}
 .btn-solid:hover{background:var(--ink);border-color:var(--ink)}
 .block{scroll-margin-top:110px}
-/* waiting for its AnimatedContent entrance (neutro-motion.js); never added with reduced motion */
-.nt-ac-wait{opacity:0}
+.nt-enter{animation:nt-section-enter .48s var(--ease) both}
+@keyframes nt-section-enter{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
 @media(max-width:640px){
  .topbar{flex-wrap:wrap;gap:12px;padding-bottom:24px}
  .topbar .mark{max-width:100%;margin-right:0}
@@ -67,4 +67,4 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;bac
  .hero-content{padding-top:155px}
  .block{scroll-margin-top:140px}
 }
-@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}.nt-nav-letter>span,.nt-nav-letter::after{transition:none}.topbar nav a:hover .nt-nav-letter>span,.topbar nav a:hover .nt-nav-letter::after{transform:none}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}.nt-enter{animation:none}.nt-nav-letter>span,.nt-nav-letter::after{transition:none}.topbar nav a:hover .nt-nav-letter>span,.topbar nav a:hover .nt-nav-letter::after{transform:none}}

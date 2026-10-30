@@ -342,11 +342,6 @@
     opacity: 0; animation: riseIn 0.5s var(--ease) forwards; animation-delay: 0.09s;
   }
   .hero h1 .accent { color: var(--steel-bright); }
-  /* Tech Text (assets/tech-text.js) draws NEUTRO on a canvas over the h1: the HTML letters stay for search engines,
-     screen readers and layout, transparent once the canvas is ready. */
-  .hero h1 { position: relative; }
-  .hero h1.tech-text-on, .hero h1.tech-text-on .accent { color: transparent; text-shadow: none; -webkit-user-select: none; user-select: none; touch-action: pan-y; }
-  .tech-text-canvas { position: absolute; display: block; pointer-events: none; letter-spacing: normal; }
 
   .hero p {
     margin: 24px 0 0; max-width: 460px; font-size: 17px; line-height: 1.65; color: var(--ink-dim);
@@ -508,8 +503,7 @@
   .dodge-field__pill {
     display: inline-flex; align-items: center; justify-content: center;
     height: 52px; margin: 0; padding: 0 28px; border: 0; border-radius: 999px;
-    background: color-mix(in srgb, var(--df-ink) 8%, rgba(12,20,36,0.55));
-    -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+    background: color-mix(in srgb, var(--df-ink) 10%, rgba(12,20,36,0.9)); /* no backdrop blur: it was recomputed on every scroll frame */
     color: color-mix(in srgb, var(--df-ink) 72%, transparent);
     font-family: inherit; font-size: 18px; font-weight: 500; line-height: 1; letter-spacing: -0.012em;
     cursor: pointer; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; touch-action: manipulation;
@@ -699,7 +693,7 @@
     overflow: visible;
     opacity: 0;
     cursor: pointer;
-    transform: translateY(100px); /* entrance like React Bits AnimatedContent */
+    transform: translateY(14px);
     transition: border-color 0.3s var(--ease), box-shadow 0.4s var(--ease), transform 0.45s var(--ease-spring);
     /* flex-basis (width) is set per-card by layoutReleaseGrid() in JS —
        this flex-shrink:0 just stops cards from being unwillingly squeezed
@@ -719,7 +713,7 @@
   .release-card.in-view {
     opacity: 1;
     transform: translateY(0);
-    animation: cardReveal 0.8s cubic-bezier(.215,.61,.355,1) forwards;
+    animation: cardReveal 0.55s var(--ease) forwards;
   }
   @keyframes cardReveal { to { opacity: 1; transform: translateY(0); } }
 
@@ -1030,8 +1024,8 @@
   .glass-icon__glass {
     position: absolute; inset: 0; z-index: 1; border-radius: 31%;
     display: flex; align-items: center; justify-content: center;
-    background: color-mix(in srgb, #dfdfdf 20%, transparent);
-    -webkit-backdrop-filter: blur(4px) saturate(1.5); backdrop-filter: blur(4px) saturate(1.5);
+    /* frosted without backdrop-filter (the spectrum moving behind made it re-blur every frame): the plate's colour, misted */
+    background: color-mix(in srgb, #dfdfdf 24%, color-mix(in srgb, rgb(var(--glow)) 62%, transparent));
     box-shadow:
       inset 1.5px 1.5px 0 rgba(255,255,255,0.85),
       inset 0 0 0 1px rgba(255,255,255,0.16),
@@ -1300,9 +1294,8 @@
   }
   @media (prefers-reduced-motion: reduce) { .tools-modal-inner { animation: none; opacity: 1; transform: none; } }
 </style>
-<link rel="stylesheet" href="./assets/neutro-motion.css?v=5">
-<script src="./assets/neutro-motion.js?v=4" defer></script>
-<script src="./assets/tech-text.js?v=1" defer></script>
+<link rel="stylesheet" href="./assets/neutro-motion.css?v=6">
+<script src="./assets/neutro-motion.js?v=5" defer></script>
 <link rel="stylesheet" href="./assets/about.css?v=1">
 <script src="./assets/about.js?v=1" defer></script>
 <link rel="stylesheet" href="./assets/plugin-reader.css?v=5">
@@ -2070,7 +2063,7 @@
       entries.forEach((entry) => {
         if (entry.isIntersecting) {
           const row = entry.target;
-          row.style.animationDelay = Math.min(revealBatchIndex, 7) * 0.08 + 's';
+          row.style.animationDelay = Math.min(revealBatchIndex, 7) * 0.06 + 's';
           revealBatchIndex++;
           row.classList.add('will-animate');
           row.classList.add('in-view');
