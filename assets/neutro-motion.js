@@ -67,13 +67,41 @@
   document.addEventListener('scroll', () => { if (!frame) frame = requestAnimationFrame(updateActive); }, {passive:true});
   addEventListener('nt:view', updateActive);
   updateActive();
-  if ('IntersectionObserver' in window) {
+  // Sections come in like React Bits «AnimatedContent» (https://reactbits.dev/animations/animated-content, its default
+  // values): 100 px up and from transparent in 0.8 s with power3.out, the children one after another (0.08 s), once,
+  // when the block's top reaches 90 % of the window. Web Animations instead of GSAP; without JS everything is visible.
+  if ('IntersectionObserver' in window && 'animate' in Element.prototype && !reduced.matches) {
+    const AC = {distance:100, duration:800, ease:'cubic-bezier(.215,.61,.355,1)', stagger:80};
+    const groups = new Map();
+    const enter = group => {
+      const targets = groups.get(group);
+      if (!targets) return;
+      groups.delete(group);
+      observer.unobserve(group);
+      targets.forEach((el, i) => {
+        el.classList.remove('nt-ac-wait');
+        const run = el.animate([{opacity:0,transform:`translateY(${AC.distance}px)`},{opacity:1,transform:'none'}],
+          {duration:AC.duration, easing:AC.ease, delay:i * AC.stagger, fill:'backwards'});
+        run.onfinish = () => run.cancel(); // back to the page's own styles (hover lifts and the like)
+      });
+    };
     const observer = new IntersectionObserver(entries => {
-      for (const entry of entries) if (entry.isIntersecting) {
-        if (!reduced.matches) entry.target.classList.add('nt-enter');
-        observer.unobserve(entry.target);
+      for (const entry of entries) if (entry.isIntersecting) enter(entry.target);
+    }, {rootMargin:'0px 0px -10% 0px'});
+    // Keyboard: focus landing in a block that has not come in yet shows it at once (never a focused invisible link).
+    document.addEventListener('focusin', e => {
+      for (const [group, targets] of groups) if (group.contains(e.target)) {
+        groups.delete(group); observer.unobserve(group);
+        targets.forEach(el => el.classList.remove('nt-ac-wait'));
       }
-    }, {threshold:.1});
-    document.querySelectorAll('.block-head,.socials-field,.contact-panel').forEach(el => observer.observe(el));
+    });
+    for (const [selector, children] of [['.block-head', true], ['.socials-spectrum', false], ['.socials-grid', true], ['.contact-panel', false]]) {
+      document.querySelectorAll(selector).forEach(el => {
+        const targets = children && el.children.length ? [...el.children] : [el];
+        targets.forEach(t => t.classList.add('nt-ac-wait'));
+        groups.set(el, targets);
+        observer.observe(el);
+      });
+    }
   }
 })();

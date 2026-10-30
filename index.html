@@ -342,6 +342,11 @@
     opacity: 0; animation: riseIn 0.5s var(--ease) forwards; animation-delay: 0.09s;
   }
   .hero h1 .accent { color: var(--steel-bright); }
+  /* Tech Text (assets/tech-text.js) draws NEUTRO on a canvas over the h1: the HTML letters stay for search engines,
+     screen readers and layout, transparent once the canvas is ready. */
+  .hero h1 { position: relative; }
+  .hero h1.tech-text-on, .hero h1.tech-text-on .accent { color: transparent; text-shadow: none; -webkit-user-select: none; user-select: none; touch-action: pan-y; }
+  .tech-text-canvas { position: absolute; display: block; pointer-events: none; letter-spacing: normal; }
 
   .hero p {
     margin: 24px 0 0; max-width: 460px; font-size: 17px; line-height: 1.65; color: var(--ink-dim);
@@ -351,6 +356,26 @@
   .hero-cta {
     margin-top: 32px; display: inline-flex; gap: 14px; flex-wrap: wrap;
     opacity: 0; animation: riseIn 0.5s var(--ease) forwards; animation-delay: 0.19s;
+  }
+
+  /* Total plays under the buttons (count-up from 0 when it comes into view, again on hover) */
+  .hero-plays {
+    margin-top: 30px; min-height: calc(4rem + 26px); display: flex; flex-direction: column; gap: 8px;
+    visibility: hidden;
+  }
+  .hero-plays.is-ready { visibility: visible; animation: riseIn 0.5s var(--ease) both; }
+  .count-up-text {
+    font-family: 'Unbounded', sans-serif; font-size: 4rem; font-weight: 700; line-height: 1;
+    letter-spacing: -0.02em; color: var(--ink); font-variant-numeric: tabular-nums;
+    text-shadow: 0 4px 40px rgba(4,7,13,0.6); width: fit-content; cursor: default;
+  }
+  .hero-plays-label {
+    font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 500;
+    letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-dim);
+  }
+  @media (max-width: 640px) {
+    .hero-plays { min-height: calc(2.9rem + 26px); }
+    .count-up-text { font-size: 2.9rem; }
   }
 
   .btn {
@@ -469,56 +494,47 @@
   .release-more:hover { color: var(--ink); border-bottom-color: var(--ink-faint); }
   .release-more:focus-visible { outline: 2px solid var(--steel-bright); outline-offset: 3px; border-radius: 4px; }
 
-  /* ---------- MYSTERY STRIP: a barely-there sliver pinned to the far left edge
-     of the whole viewport. Bigger and more obviously clickable than before —
-     a vertical "CLICK HERE" tab. Stays perfectly still — the only motion is a
-     soft diagonal shine that sweeps across it every few seconds, the same
-     "catch the light" effect used on premium CTAs, so it reads as an
-     invitation without ever jumping or resizing. Never appears at all unless
-     HIDDEN.jpg exists on the server. ---------- */
-  .mystery-strip {
-    position: fixed; left: 0; top: 50%; z-index: 40;
-    transform: translateY(-50%);
-    width: 26px; height: 104px;
-    border-radius: 0 10px 10px 0;
-    cursor: pointer;
-    border: none; border-left: none; padding: 12px 0;
-    margin: 0;
-    background: var(--steel);
-    box-shadow: 0 6px 24px -6px rgba(79,123,176,0.55);
-    display: flex; align-items: center; justify-content: center;
-    box-sizing: border-box;
-    overflow: hidden;
-    transition: width 0.25s var(--ease), background 0.25s var(--ease);
+  /* Way into the teaser: React Bits «Dodge Field» (see initDodgeField) on the left edge, where the old strip was.
+     Same look as the component: a soft pill, labels that blur into each other, filled when caught. */
+  .dodge-field {
+    --df-ink: #eef3fa; --df-contrast: #04070d; --df-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+    position: relative; display: grid; place-items: center;
   }
-  .mystery-strip:hover { width: 30px; background: var(--steel-bright); }
-  .mystery-strip:focus-visible { outline: 2px solid var(--steel-bright); outline-offset: 2px; }
-  .mystery-strip-shine {
-    position: absolute; top: -40%; left: -120%;
-    width: 60%; height: 180%;
-    background: linear-gradient(115deg, transparent 30%, rgba(255,255,255,0.55) 50%, transparent 70%);
-    transform: rotate(8deg);
-    animation: mysteryShine 3.6s ease-in-out infinite;
-    pointer-events: none;
+  .mystery-dodge {
+    position: fixed; left: 14px; top: 50%; z-index: 40; height: 240px;
+    transform: translateY(-50%); pointer-events: none;
   }
-  .mystery-strip-label {
-    position: relative; z-index: 1;
-    writing-mode: vertical-rl; text-orientation: mixed;
-    font-family: 'Unbounded', sans-serif; font-weight: 800; font-size: 10px; letter-spacing: 0.03em;
-    color: #04070d;
-    white-space: nowrap;
-    transform: rotate(180deg);
+  .dodge-field__mover { display: inline-grid; will-change: transform; pointer-events: auto; }
+  .dodge-field__pill {
+    display: inline-flex; align-items: center; justify-content: center;
+    height: 52px; margin: 0; padding: 0 28px; border: 0; border-radius: 999px;
+    background: color-mix(in srgb, var(--df-ink) 8%, rgba(12,20,36,0.55));
+    -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+    color: color-mix(in srgb, var(--df-ink) 72%, transparent);
+    font-family: inherit; font-size: 18px; font-weight: 500; line-height: 1; letter-spacing: -0.012em;
+    cursor: pointer; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+    transition: transform 160ms var(--df-ease-out), background-color 220ms ease, color 220ms ease;
   }
-  @keyframes mysteryShine {
-    0%, 45% { left: -120%; }
-    65%, 100% { left: 160%; }
-  }
+  .dodge-field__pill:active { transform: scale(0.97); }
+  .dodge-field__pill:focus-visible { outline: 2px solid color-mix(in srgb, var(--df-ink) 60%, transparent); outline-offset: 3px; }
+  @media (hover: hover) and (pointer: fine) { .dodge-field__pill:hover { color: color-mix(in srgb, var(--df-ink) 90%, transparent); } }
+  .dodge-field__mover[data-relented='true'] .dodge-field__pill { color: var(--df-ink); }
+  .dodge-field__mover[data-caught='true'] .dodge-field__pill { background: var(--df-ink); color: var(--df-contrast); }
+  .dodge-field__labels { display: grid; }
+  .dodge-field__label { grid-area: 1 / 1; white-space: nowrap; transition: opacity 200ms ease, filter 200ms ease; }
+  .dodge-field__label[data-active='false'] { opacity: 0; filter: blur(2px); }
   @media (prefers-reduced-motion: reduce) {
-    .mystery-strip-shine { animation: none; display: none; }
+    .dodge-field__pill { transition: background-color 220ms ease, color 220ms ease; }
+    .dodge-field__pill:active { transform: none; }
+    .dodge-field .dodge-field__label { filter: none; }
   }
+  /* upright against the edge, like the old strip, so it never covers the page; it dodges up and down */
+  .mystery-dodge { left: 10px; }
+  .mystery-dodge .dodge-field__pill { writing-mode: vertical-rl; rotate: 180deg; height: auto; width: 44px; padding: 22px 0; font-size: 15px; }
+  /* phones: nothing dodges (no cursor); slimmer */
   @media (max-width: 640px) {
-    .mystery-strip { width: 20px; height: 82px; padding: 8px 0; }
-    .mystery-strip-label { font-size: 9px; }
+    .mystery-dodge { left: 4px; height: auto; }
+    .mystery-dodge .dodge-field__pill { width: 30px; padding: 14px 0; font-size: 12px; }
   }
 
   /* ---------- MYSTERY REVEAL: hidden panel with blurred art + HIDDEN.mp3 ---------- */
@@ -683,7 +699,7 @@
     overflow: visible;
     opacity: 0;
     cursor: pointer;
-    transform: translateY(14px);
+    transform: translateY(100px); /* entrance like React Bits AnimatedContent */
     transition: border-color 0.3s var(--ease), box-shadow 0.4s var(--ease), transform 0.45s var(--ease-spring);
     /* flex-basis (width) is set per-card by layoutReleaseGrid() in JS —
        this flex-shrink:0 just stops cards from being unwillingly squeezed
@@ -703,7 +719,7 @@
   .release-card.in-view {
     opacity: 1;
     transform: translateY(0);
-    animation: cardReveal 0.55s var(--ease) forwards;
+    animation: cardReveal 0.8s cubic-bezier(.215,.61,.355,1) forwards;
   }
   @keyframes cardReveal { to { opacity: 1; transform: translateY(0); } }
 
@@ -998,15 +1014,37 @@
     position: relative; z-index: 1;
     display: flex; align-items: center; justify-content: space-between;
   }
+  /* Glass Icons (React Bits «GlassIcons», https://reactbits.dev/components/glass-icons — Copyright (c) 2026 David Haz,
+     MIT + Commons Clause): the platform's colour on a plate tilted 30° behind a frosted glass tile with a lit bevel,
+     white icon; pressed in on hover. Their defaults (tilt 30, frost .2, shine .85, tint #dfdfdf at .2) in CSS. */
   .socials-card-icon {
-    width: 46px; height: 46px; border-radius: 13px; flex-shrink: 0;
-    display: flex; align-items: center; justify-content: center;
-    background: rgba(var(--glow), 0.14);
-    border: 1px solid rgba(var(--glow), 0.3);
-    transition: all 0.35s var(--ease-spring);
+    position: relative; width: 52px; height: 52px; flex-shrink: 0; isolation: isolate;
   }
-  .socials-card:hover .socials-card-icon { transform: scale(1.08) rotate(-4deg); background: rgba(var(--glow), 0.22); }
-  .socials-card-icon svg { width: 21px; height: 21px; fill: var(--ink); }
+  .glass-icon__plate {
+    position: absolute; inset: 0; border-radius: 31%;
+    background: linear-gradient(135deg, color-mix(in srgb, rgb(var(--glow)) 78%, #fff), color-mix(in srgb, rgb(var(--glow)) 72%, #000));
+    transform: rotate(30deg) translate(-5%, -9%); transform-origin: 70% 70%;
+    box-shadow: 0 10px 22px -10px rgba(var(--glow), 0.75);
+    transition: transform 0.45s var(--ease-spring);
+  }
+  .glass-icon__glass {
+    position: absolute; inset: 0; z-index: 1; border-radius: 31%;
+    display: flex; align-items: center; justify-content: center;
+    background: color-mix(in srgb, #dfdfdf 20%, transparent);
+    -webkit-backdrop-filter: blur(4px) saturate(1.5); backdrop-filter: blur(4px) saturate(1.5);
+    box-shadow:
+      inset 1.5px 1.5px 0 rgba(255,255,255,0.85),
+      inset 0 0 0 1px rgba(255,255,255,0.16),
+      inset -1.5px -2px 2px rgba(0,0,0,0.22),
+      inset 0 10px 14px -10px rgba(255,255,255,0.55),
+      0 8px 18px -10px rgba(0,0,0,0.45);
+    transform: translate(4%, 6%);
+    transition: transform 0.35s var(--ease-spring), box-shadow 0.35s var(--ease);
+  }
+  .glass-icon__glass svg { width: 22px; height: 22px; fill: #fff; color: #fff; filter: drop-shadow(0 1px 1px rgba(0,0,0,0.25)); }
+  .socials-card:hover .glass-icon__glass { transform: translate(4%, 6%) scale(0.93); }
+  .socials-card:hover .glass-icon__plate { transform: rotate(18deg) translate(-3%, -6%) scale(0.97); }
+  @media (prefers-reduced-motion: reduce) { .glass-icon__plate, .glass-icon__glass { transition: none; } }
 
   .socials-card-go {
     width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0;
@@ -1262,8 +1300,9 @@
   }
   @media (prefers-reduced-motion: reduce) { .tools-modal-inner { animation: none; opacity: 1; transform: none; } }
 </style>
-<link rel="stylesheet" href="./assets/neutro-motion.css?v=4">
-<script src="./assets/neutro-motion.js?v=3" defer></script>
+<link rel="stylesheet" href="./assets/neutro-motion.css?v=5">
+<script src="./assets/neutro-motion.js?v=4" defer></script>
+<script src="./assets/tech-text.js?v=1" defer></script>
 <link rel="stylesheet" href="./assets/about.css?v=1">
 <script src="./assets/about.js?v=1" defer></script>
 <link rel="stylesheet" href="./assets/plugin-reader.css?v=5">
@@ -1311,6 +1350,12 @@
         <div class="hero-cta">
           <a class="btn btn-solid" href="#releases">Listen Now</a>
           <a class="btn btn-ghost" href="#contact">Contact Me</a>
+        </div>
+        <!-- Total plays: set in the admin panel (Web oficial) from Songstats, grows by itself with SoundCloud plays.
+             Its space is kept from the start, so the hero never moves when the number arrives. -->
+        <div class="hero-plays" id="hero-plays">
+          <span class="count-up-text" id="hero-plays-num" aria-hidden="true"></span>
+          <span class="hero-plays-label" id="hero-plays-label">Total Plays</span>
         </div>
       </div>
 
@@ -1668,7 +1713,7 @@
     card.innerHTML = `
       <div class="socials-card-glow" aria-hidden="true"></div>
       <div class="socials-card-top">
-        <span class="socials-card-icon">${ICONS[s.key]}</span>
+        <span class="socials-card-icon" aria-hidden="true"><span class="glass-icon__plate"></span><span class="glass-icon__glass">${ICONS[s.key]}</span></span>
         <span class="socials-card-go">
           <svg viewBox="0 0 24 24"><path d="M7 17L17 7M7 7h10v10" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </span>
@@ -2025,7 +2070,7 @@
       entries.forEach((entry) => {
         if (entry.isIntersecting) {
           const row = entry.target;
-          row.style.animationDelay = Math.min(revealBatchIndex, 7) * 0.06 + 's';
+          row.style.animationDelay = Math.min(revealBatchIndex, 7) * 0.08 + 's';
           revealBatchIndex++;
           row.classList.add('will-animate');
           row.classList.add('in-view');
@@ -2089,6 +2134,44 @@
   }
   }
 
+  // Total plays in the hero, like the CountUp component: 0 → total in 1 s with ease-out, "," separators, starts
+  // when it comes into view and plays again on hover. The number comes with the releases (/api/releases → plays);
+  // without it (panel not set, or old releases.json) the space stays empty.
+  (function initPlayCounter() {
+    const box = document.getElementById('hero-plays');
+    const num = document.getElementById('hero-plays-num');
+    if (!box || !num) return;
+    const fmt = (n) => Math.round(n).toLocaleString('en-US');
+    const still = window.matchMedia('(prefers-reduced-motion: reduce)');
+    let total = 0, frame = 0;
+    const run = () => {
+      cancelAnimationFrame(frame);
+      if (still.matches) { num.textContent = fmt(total); return; }
+      const start = performance.now(), duration = 1000;
+      const step = (now) => {
+        const t = Math.min(1, (now - start) / duration);
+        num.textContent = fmt(total * (1 - Math.pow(1 - t, 3))); // easeOut
+        if (t < 1) frame = requestAnimationFrame(step);
+      };
+      num.textContent = fmt(0);
+      frame = requestAnimationFrame(step);
+    };
+    window.__releasesPromise.catch(() => null).then((data) => {
+      const n = Number(data && data.plays && data.plays.total);
+      if (!Number.isFinite(n) || n <= 0) return;
+      total = n;
+      box.setAttribute('role', 'text');
+      box.setAttribute('aria-label', fmt(total) + ' total plays');
+      num.textContent = fmt(still.matches ? total : 0);
+      box.classList.add('is-ready');
+      const seen = new IntersectionObserver((entries) => {
+        if (entries.some((e) => e.isIntersecting)) { seen.disconnect(); run(); }
+      }, { threshold: 0.4 });
+      seen.observe(num);
+      num.addEventListener('mouseenter', run);
+    });
+  })();
+
   function initMysteryCard() {
     // The teaser now comes from the admin panel (a draft release marked
     // «Teaser»: only its cover and audio). When the panel answered, it
@@ -2106,13 +2189,87 @@
     });
   }
 
+  /* Dodge Field — port to plain JavaScript of «DodgeField» from React Bits (https://reactbits.dev/c/micro/dodge-field).
+     Copyright (c) 2026 David Haz — MIT + Commons Clause License Condition v1.0
+     (https://github.com/DavidHDev/react-bits/blob/main/LICENSE.md): use, copy, modify, merge, publish and distribute as
+     part of a website, not selling, sublicensing or redistributing the components themselves; this notice is kept with
+     the code. THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.
+     Same behaviour and defaults (reach 72, radius 120, falloff 2, flee 130 ms, return 620 ms with bounce 0.1, patience
+     4, clamp); here it dodges along the edge only (axis "y") so it never runs into the page. Springs instead of Motion. */
+  function initDodgeField(field, taunts) {
+    const P = { reach: 72, radius: 120, falloff: 2, flee: 130, back: 620, bounce: 0.1, patience: 4, axis: 'y', inset: 12 };
+    const COUNT_LINE = 0.55, DEAD_ZONE = 6, CAUGHT_HOLD_MS = 760;
+    const mover = field.querySelector('.dodge-field__mover'), labels = [...field.querySelectorAll('.dodge-field__label')];
+    const fine = window.matchMedia('(hover: hover) and (pointer: fine)'), reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
+    let dodges = 0, caught = false, inside = false, armed = true, pointer = null, raf = 0, last = 0, hold = 0;
+    const bearing = { x: 0, y: 1 }, pos = { x: 0, y: 0 }, vel = { x: 0, y: 0 }, target = { x: 0, y: 0 };
+    let spring = { duration: P.back, bounce: P.bounce };
+    const gave = () => dodges >= Math.max(1, P.patience);
+    const still = () => gave() || caught || reduce.matches || !fine.matches;
+    const paint = () => {
+      const index = gave() || caught ? taunts.length - 1 : Math.min(dodges, Math.max(0, taunts.length - 2));
+      labels.forEach((l, i) => l.dataset.active = String(i === index));
+      mover.dataset.relented = String(gave()); mover.dataset.caught = String(caught); mover.dataset.fled = String(inside && !still());
+    };
+    const room = () => ({ x: Math.max(0, (field.clientWidth - mover.offsetWidth) / 2 - P.inset), y: Math.max(0, (field.clientHeight - mover.offsetHeight) / 2 - P.inset) });
+    // a spring that settles in `duration` with `bounce` (0 = no overshoot), like Motion's duration-based springs
+    const step = now => {
+      raf = 0;
+      const dt = Math.min(0.032, last ? (now - last) / 1000 : 1 / 60); last = now;
+      const w = 2 * Math.PI / (spring.duration / 1000), zeta = 1 - spring.bounce;
+      let moving = false;
+      for (const k of ['x', 'y']) {
+        const a = -w * w * (pos[k] - target[k]) - 2 * zeta * w * vel[k];
+        vel[k] += a * dt; pos[k] += vel[k] * dt;
+        if (Math.abs(pos[k] - target[k]) > 0.05 || Math.abs(vel[k]) > 0.5) moving = true; else { pos[k] = target[k]; vel[k] = 0; }
+      }
+      mover.style.transform = `translate(${pos.x}px, ${pos.y}px)`;
+      if (moving) raf = requestAnimationFrame(step); else last = 0;
+    };
+    const go = () => { if (!raf) { last = 0; raf = requestAnimationFrame(step); } };
+    const frame = () => {
+      const rect = field.getBoundingClientRect();
+      const dx = pointer ? pointer.x - (rect.left + rect.width / 2) : Infinity, dy = pointer ? pointer.y - (rect.top + rect.height / 2) : Infinity;
+      const d = Math.hypot(dx, dy), isInside = d <= P.radius;
+      if (!isInside && !inside) return;
+      if (!still()) {
+        if (d < P.radius * COUNT_LINE) { if (armed) { armed = false; dodges++; } }
+        else if (d > P.radius) armed = true;
+      }
+      if (Number.isFinite(d) && d > DEAD_ZONE) {
+        if (P.axis === 'y') { bearing.x = 0; bearing.y = Math.sign(dy) || 1; }
+        else { bearing.x = dx / d; bearing.y = dy / d; }
+      }
+      const flee = isInside && !still() ? (1 - d / P.radius) ** P.falloff : 0, r = room();
+      target.x = Math.min(r.x, Math.max(-r.x, -bearing.x * flee * P.reach));
+      target.y = Math.min(r.y, Math.max(-r.y, -bearing.y * flee * P.reach));
+      spring = flee > 0 ? { duration: P.flee, bounce: 0 } : { duration: P.back, bounce: P.bounce };
+      inside = isInside;
+      paint(); go();
+    };
+    let ticking = 0;
+    const tick = () => { if (!ticking) ticking = requestAnimationFrame(() => { ticking = 0; frame(); }); };
+    window.addEventListener('pointermove', e => { if (e.pointerType === 'touch' || !fine.matches) return; pointer = { x: e.clientX, y: e.clientY }; tick(); }, { passive: true });
+    window.addEventListener('scroll', tick, { passive: true, capture: true });
+    document.addEventListener('pointerleave', () => { pointer = null; tick(); });
+    window.addEventListener('blur', () => { pointer = null; tick(); });
+    mover.addEventListener('click', () => {
+      caught = true; paint(); target.x = target.y = 0; spring = { duration: P.back, bounce: P.bounce }; go();
+      clearTimeout(hold);
+      hold = setTimeout(() => { caught = false; dodges = 0; armed = false; paint(); }, CAUGHT_HOLD_MS);
+    });
+    paint();
+  }
+
   function buildMysteryCard(art, audioSrc) {
-    const strip = document.createElement('button');
-    strip.type = 'button';
-    strip.className = 'mystery-strip';
-    strip.setAttribute('aria-label', 'Something unreleased — click to take a look');
-    strip.innerHTML = '<span class="mystery-strip-shine" aria-hidden="true"></span><span class="mystery-strip-label">CLICK HERE</span>';
-    document.body.appendChild(strip);
+    // The way in: React Bits «Dodge Field» on the left edge — the pill runs from the cursor until it gives in.
+    const TAUNTS = ['Catch me', 'Nope', 'Too slow', 'Almost', 'Okay, okay'];
+    const dodge = document.createElement('div');
+    dodge.className = 'dodge-field mystery-dodge';
+    dodge.innerHTML = `<div class="dodge-field__mover"><button type="button" class="dodge-field__pill" aria-label="Something unreleased — click to take a look"><span class="dodge-field__labels">${TAUNTS.map((t, i) => `<span class="dodge-field__label" data-active="${i === 0}" aria-hidden="true">${t}</span>`).join('')}</span></button></div>`;
+    document.body.appendChild(dodge);
+    const strip = dodge.querySelector('.dodge-field__pill');
+    initDodgeField(dodge, TAUNTS);
 
     const reveal = document.createElement('div');
     reveal.className = 'mystery-reveal';
