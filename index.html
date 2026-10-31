@@ -2128,12 +2128,12 @@
   function initDodgeField(field, taunts) {
     // Room to run (the field is most of the screen's height); it still gives in after `patience` near misses, so the
     // teaser can always be opened.
-    const P = { radius: 150, flee: 140, back: 620, bounce: 0.1, patience: 5, inset: 12 };
+    const P = { radius: 150, flee: 220, back: 620, bounce: 0.1, patience: 5, inset: 12 };
     const COUNT_LINE = 0.55, CAUGHT_HOLD_MS = 760;
     const mover = field.querySelector('.dodge-field__mover'), labels = [...field.querySelectorAll('.dodge-field__label')];
     const fine = window.matchMedia('(hover: hover) and (pointer: fine)'), reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
     // Once caught it stays given in (closing the teaser does not restart the chase); a reload starts it again.
-    let dodges = 0, caught = false, inside = false, armed = true, pointer = null, raf = 0, last = 0, hold = 0, slip = 0;
+    let dodges = 0, caught = false, inside = false, armed = true, pointer = null, raf = 0, last = 0, hold = 0, side = 0;
     const pos = { x: 0, y: 0 }, vel = { x: 0, y: 0 }, target = { x: 0, y: 0 };
     let spring = { duration: P.back, bounce: P.bounce };
     const gave = () => dodges >= Math.max(1, P.patience);
@@ -2159,28 +2159,27 @@
       if (moving) raf = requestAnimationFrame(step); else last = 0;
     };
     const go = () => { if (!raf) { last = 0; raf = requestAnimationFrame(step); } };
-    // Distance from where the pill is now (not the field's centre), so chasing it keeps it running; it backs off until
-    // the cursor is `radius` away, and cornered at an end it slips past to the other side (`slip`, until it is past).
+    // Where it should be depends only on the cursor (a steady target, so it glides instead of stepping): far enough
+    // above or below the cursor to keep `radius` between them, on the side it is already on; if that side has no
+    // room left (cornered) it crosses to the other side. Distances from where the pill is now (no layout reads).
     const frame = () => {
-      const pill = mover.getBoundingClientRect();
-      const dx = pointer ? pointer.x - (pill.left + pill.width / 2) : Infinity, dy = pointer ? pointer.y - (pill.top + pill.height / 2) : Infinity;
-      const d = Math.hypot(dx, dy), isInside = d <= P.radius, r = room();
-      if (!isInside && !inside && !slip) return;
+      const f = field.getBoundingClientRect(), r = room();
+      const rx = pointer ? pointer.x - (f.left + f.width / 2) : Infinity, ry = pointer ? pointer.y - (f.top + f.height / 2) : 0;
+      const d = Math.hypot(rx - pos.x, ry - pos.y), isInside = d <= P.radius;
+      if (!isInside && !inside && !side) return;
       if (!still()) {
         if (d < P.radius * COUNT_LINE) { if (armed) { armed = false; dodges++; } }
         else if (d > P.radius) armed = true;
       }
-      const away = -(Math.sign(dy) || 1); // up when the cursor is below, down when above
-      if (slip && away === slip) slip = 0; // got past the cursor
-      if (isInside && !still()) {
-        let dir = slip || away;
-        const want = pos.y + dir * (P.radius - d + 24);
-        if (!slip && Math.abs(want) > r.y && Math.abs(pos.y) >= r.y - 4) { slip = -dir; dir = slip; } // cornered
-        target.x = 0;
-        target.y = Math.min(r.y, Math.max(-r.y, slip ? pos.y + slip * (P.radius * 2) : want));
+      const gap = Number.isFinite(rx) ? Math.sqrt(Math.max(0, (P.radius + 12) ** 2 - rx * rx)) : 0;
+      if (gap > 0 && !still()) {
+        if (!side) side = pos.y <= ry ? -1 : 1;
+        let t = ry + side * gap;
+        if (Math.abs(t) > r.y) { side = -side; t = ry + side * gap; } // cornered: slip past to the other side
+        target.x = 0; target.y = Math.min(r.y, Math.max(-r.y, t));
         spring = { duration: P.flee, bounce: 0 };
-      } else if (still() || d > P.radius * 1.6 || !pointer) {
-        slip = 0; target.x = target.y = 0; spring = { duration: P.back, bounce: P.bounce };
+      } else {
+        side = 0; target.x = target.y = 0; spring = { duration: P.back, bounce: P.bounce };
       }
       inside = isInside;
       paint(); go();
