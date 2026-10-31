@@ -46,3 +46,13 @@
 @media(max-width:980px){.hero .about-stage{justify-self:center}}
 
 @media(prefers-reduced-motion:reduce){.hero .about-stage{opacity:1;animation:none}}
+
+/* Reflective Card (reflective-card.js, React Bits «ReflectiveCard»): a metal plate is the card's background. The photo
+   melts into it at the bottom, the content sits on top and the old static shine gives way to the plate's own light. */
+.about-artist .reflective-card__canvas{position:absolute;inset:0;z-index:0;display:block;width:100%;height:100%;pointer-events:none}
+.about-artist.has-metal>:not(.reflective-card__canvas){position:relative;z-index:1}
+.about-artist.has-metal .pd-shine{display:none}
+.about-artist.has-metal .about-artist-photo{background:transparent}
+.about-artist.has-metal .about-artist-photo img{-webkit-mask-image:linear-gradient(180deg,#000 52%,rgba(0,0,0,.55) 74%,transparent);mask-image:linear-gradient(180deg,#000 52%,rgba(0,0,0,.55) 74%,transparent)}
+.about-artist.has-metal .about-artist-photo:after{background:none}
+.about-artist.has-metal::after{content:'';position:absolute;inset:0;z-index:2;border-radius:inherit;pointer-events:none;box-shadow:inset 0 0 0 1px rgba(255,255,255,.07),inset 0 1px 0 rgba(255,255,255,.1)}
