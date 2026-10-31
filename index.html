@@ -24,8 +24,6 @@
   // this browser saw is used, and as a last resort the old releases.json.
   window.__releasesPromise = (function () {
     var KEY = 'nt_releases_v1';
-    // The hero's play counter keeps its space unless this browser last saw the site without one (no jump either way).
-    try { var last = JSON.parse(localStorage.getItem(KEY)); if (last && last.releases && !(last.plays && last.plays.total > 0)) document.documentElement.classList.add('no-plays'); } catch (e) { /* no storage: keep the space */ }
     var json = function (url) {
       return fetch(url, { cache: 'no-store' }).then(function (res) {
         if (!res.ok) throw new Error('releases request failed: ' + res.status);
@@ -353,27 +351,6 @@
   .hero-cta {
     margin-top: 32px; display: inline-flex; gap: 14px; flex-wrap: wrap;
     opacity: 0; animation: riseIn 0.5s var(--ease) forwards; animation-delay: 0.19s;
-  }
-
-  /* Total plays under the buttons (count-up from 0 when it comes into view, again on hover) */
-  .hero-plays {
-    margin-top: 30px; min-height: calc(4rem + 26px); display: flex; flex-direction: column; gap: 8px;
-    visibility: hidden;
-  }
-  .hero-plays.is-ready { visibility: visible; animation: riseIn 0.5s var(--ease) both; }
-  .no-plays .hero-plays { display: none; }
-  .count-up-text {
-    font-family: 'Unbounded', sans-serif; font-size: 4rem; font-weight: 700; line-height: 1;
-    letter-spacing: -0.02em; color: var(--ink); font-variant-numeric: tabular-nums;
-    text-shadow: 0 4px 40px rgba(4,7,13,0.6); width: fit-content; cursor: default;
-  }
-  .hero-plays-label {
-    font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 500;
-    letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-dim);
-  }
-  @media (max-width: 640px) {
-    .hero-plays { min-height: calc(2.9rem + 26px); }
-    .count-up-text { font-size: 2.9rem; }
   }
 
   .btn {
@@ -1347,12 +1324,6 @@
           <a class="btn btn-solid" href="#releases">Listen Now</a>
           <a class="btn btn-ghost" href="#contact">Contact Me</a>
         </div>
-        <!-- Total plays: set in the admin panel (Web oficial) from Songstats, grows by itself with SoundCloud plays.
-             Its space is kept from the start, so the hero never moves when the number arrives. -->
-        <div class="hero-plays" id="hero-plays">
-          <span class="count-up-text" id="hero-plays-num" aria-hidden="true"></span>
-          <span class="hero-plays-label" id="hero-plays-label">Total Plays</span>
-        </div>
       </div>
 
       <!-- Neutro's artist card (the same as the store's About page) -->
@@ -2129,45 +2100,6 @@
     setTimeout(initMysteryCard, 1200);
   }
   }
-
-  // Total plays in the hero, like the CountUp component: 0 → total in 1 s with ease-out, "," separators, starts
-  // when it comes into view and plays again on hover. The number comes with the releases (/api/releases → plays);
-  // without it (panel not set, or old releases.json) the space stays empty.
-  (function initPlayCounter() {
-    const box = document.getElementById('hero-plays');
-    const num = document.getElementById('hero-plays-num');
-    if (!box || !num) return;
-    const fmt = (n) => Math.round(n).toLocaleString('en-US');
-    const still = window.matchMedia('(prefers-reduced-motion: reduce)');
-    let total = 0, frame = 0;
-    const run = () => {
-      cancelAnimationFrame(frame);
-      if (still.matches) { num.textContent = fmt(total); return; }
-      const start = performance.now(), duration = 1000;
-      const step = (now) => {
-        const t = Math.min(1, (now - start) / duration);
-        num.textContent = fmt(total * (1 - Math.pow(1 - t, 3))); // easeOut
-        if (t < 1) frame = requestAnimationFrame(step);
-      };
-      num.textContent = fmt(0);
-      frame = requestAnimationFrame(step);
-    };
-    window.__releasesPromise.catch(() => null).then((data) => {
-      const n = Number(data && data.plays && data.plays.total);
-      if (!Number.isFinite(n) || n <= 0) { document.documentElement.classList.add('no-plays'); return; }
-      document.documentElement.classList.remove('no-plays');
-      total = n;
-      box.setAttribute('role', 'text');
-      box.setAttribute('aria-label', fmt(total) + ' total plays');
-      num.textContent = fmt(still.matches ? total : 0);
-      box.classList.add('is-ready');
-      const seen = new IntersectionObserver((entries) => {
-        if (entries.some((e) => e.isIntersecting)) { seen.disconnect(); run(); }
-      }, { threshold: 0.4 });
-      seen.observe(num);
-      num.addEventListener('mouseenter', run);
-    });
-  })();
 
   function initMysteryCard() {
     // The teaser now comes from the admin panel (a draft release marked
