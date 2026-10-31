@@ -476,7 +476,7 @@
     position: relative; display: grid; place-items: center;
   }
   .mystery-dodge {
-    position: fixed; left: 14px; top: 50%; z-index: 40; height: 240px;
+    position: fixed; left: 14px; top: 50%; z-index: 40; height: min(78vh, 640px);
     transform: translateY(-50%); pointer-events: none;
   }
   .dodge-field__mover { display: inline-grid; will-change: transform; pointer-events: auto; }
@@ -2126,12 +2126,14 @@
      Same behaviour and defaults (reach 72, radius 120, falloff 2, flee 130 ms, return 620 ms with bounce 0.1, patience
      4, clamp); here it dodges along the edge only (axis "y") so it never runs into the page. Springs instead of Motion. */
   function initDodgeField(field, taunts) {
-    const P = { reach: 72, radius: 120, falloff: 2, flee: 130, back: 620, bounce: 0.1, patience: 4, axis: 'y', inset: 12 };
-    const COUNT_LINE = 0.55, DEAD_ZONE = 6, CAUGHT_HOLD_MS = 760;
+    // Room to run (the field is most of the screen's height); it still gives in after `patience` near misses, so the
+    // teaser can always be opened.
+    const P = { radius: 150, flee: 140, back: 620, bounce: 0.1, patience: 5, inset: 12 };
+    const COUNT_LINE = 0.55, CAUGHT_HOLD_MS = 760;
     const mover = field.querySelector('.dodge-field__mover'), labels = [...field.querySelectorAll('.dodge-field__label')];
     const fine = window.matchMedia('(hover: hover) and (pointer: fine)'), reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
-    let dodges = 0, caught = false, inside = false, armed = true, pointer = null, raf = 0, last = 0, hold = 0;
-    const bearing = { x: 0, y: 1 }, pos = { x: 0, y: 0 }, vel = { x: 0, y: 0 }, target = { x: 0, y: 0 };
+    let dodges = 0, caught = false, inside = false, armed = true, pointer = null, raf = 0, last = 0, hold = 0, slip = 0;
+    const pos = { x: 0, y: 0 }, vel = { x: 0, y: 0 }, target = { x: 0, y: 0 };
     let spring = { duration: P.back, bounce: P.bounce };
     const gave = () => dodges >= Math.max(1, P.patience);
     const still = () => gave() || caught || reduce.matches || !fine.matches;
@@ -2156,23 +2158,29 @@
       if (moving) raf = requestAnimationFrame(step); else last = 0;
     };
     const go = () => { if (!raf) { last = 0; raf = requestAnimationFrame(step); } };
+    // Distance from where the pill is now (not the field's centre), so chasing it keeps it running; it backs off until
+    // the cursor is `radius` away, and cornered at an end it slips past to the other side (`slip`, until it is past).
     const frame = () => {
-      const rect = field.getBoundingClientRect();
-      const dx = pointer ? pointer.x - (rect.left + rect.width / 2) : Infinity, dy = pointer ? pointer.y - (rect.top + rect.height / 2) : Infinity;
-      const d = Math.hypot(dx, dy), isInside = d <= P.radius;
-      if (!isInside && !inside) return;
+      const pill = mover.getBoundingClientRect();
+      const dx = pointer ? pointer.x - (pill.left + pill.width / 2) : Infinity, dy = pointer ? pointer.y - (pill.top + pill.height / 2) : Infinity;
+      const d = Math.hypot(dx, dy), isInside = d <= P.radius, r = room();
+      if (!isInside && !inside && !slip) return;
       if (!still()) {
         if (d < P.radius * COUNT_LINE) { if (armed) { armed = false; dodges++; } }
         else if (d > P.radius) armed = true;
       }
-      if (Number.isFinite(d) && d > DEAD_ZONE) {
-        if (P.axis === 'y') { bearing.x = 0; bearing.y = Math.sign(dy) || 1; }
-        else { bearing.x = dx / d; bearing.y = dy / d; }
+      const away = -(Math.sign(dy) || 1); // up when the cursor is below, down when above
+      if (slip && away === slip) slip = 0; // got past the cursor
+      if (isInside && !still()) {
+        let dir = slip || away;
+        const want = pos.y + dir * (P.radius - d + 24);
+        if (!slip && Math.abs(want) > r.y && Math.abs(pos.y) >= r.y - 4) { slip = -dir; dir = slip; } // cornered
+        target.x = 0;
+        target.y = Math.min(r.y, Math.max(-r.y, slip ? pos.y + slip * (P.radius * 2) : want));
+        spring = { duration: P.flee, bounce: 0 };
+      } else if (still() || d > P.radius * 1.6 || !pointer) {
+        slip = 0; target.x = target.y = 0; spring = { duration: P.back, bounce: P.bounce };
       }
-      const flee = isInside && !still() ? (1 - d / P.radius) ** P.falloff : 0, r = room();
-      target.x = Math.min(r.x, Math.max(-r.x, -bearing.x * flee * P.reach));
-      target.y = Math.min(r.y, Math.max(-r.y, -bearing.y * flee * P.reach));
-      spring = flee > 0 ? { duration: P.flee, bounce: 0 } : { duration: P.back, bounce: P.bounce };
       inside = isInside;
       paint(); go();
     };
