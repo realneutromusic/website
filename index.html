@@ -2132,6 +2132,7 @@
     const COUNT_LINE = 0.55, CAUGHT_HOLD_MS = 760;
     const mover = field.querySelector('.dodge-field__mover'), labels = [...field.querySelectorAll('.dodge-field__label')];
     const fine = window.matchMedia('(hover: hover) and (pointer: fine)'), reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
+    // Once caught it stays given in (closing the teaser does not restart the chase); a reload starts it again.
     let dodges = 0, caught = false, inside = false, armed = true, pointer = null, raf = 0, last = 0, hold = 0, slip = 0;
     const pos = { x: 0, y: 0 }, vel = { x: 0, y: 0 }, target = { x: 0, y: 0 };
     let spring = { duration: P.back, bounce: P.bounce };
@@ -2193,7 +2194,8 @@
     mover.addEventListener('click', () => {
       caught = true; paint(); target.x = target.y = 0; spring = { duration: P.back, bounce: P.bounce }; go();
       clearTimeout(hold);
-      hold = setTimeout(() => { caught = false; dodges = 0; armed = false; paint(); }, CAUGHT_HOLD_MS);
+      dodges = Math.max(dodges, P.patience);
+      hold = setTimeout(() => { caught = false; armed = false; paint(); }, CAUGHT_HOLD_MS);
     });
     paint();
   }
