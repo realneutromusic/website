@@ -24,6 +24,8 @@
   // this browser saw is used, and as a last resort the old releases.json.
   window.__releasesPromise = (function () {
     var KEY = 'nt_releases_v1';
+    // The hero's play counter keeps its space unless this browser last saw the site without one (no jump either way).
+    try { var last = JSON.parse(localStorage.getItem(KEY)); if (last && last.releases && !(last.plays && last.plays.total > 0)) document.documentElement.classList.add('no-plays'); } catch (e) { /* no storage: keep the space */ }
     var json = function (url) {
       return fetch(url, { cache: 'no-store' }).then(function (res) {
         if (!res.ok) throw new Error('releases request failed: ' + res.status);
@@ -359,6 +361,7 @@
     visibility: hidden;
   }
   .hero-plays.is-ready { visibility: visible; animation: riseIn 0.5s var(--ease) both; }
+  .no-plays .hero-plays { display: none; }
   .count-up-text {
     font-family: 'Unbounded', sans-serif; font-size: 4rem; font-weight: 700; line-height: 1;
     letter-spacing: -0.02em; color: var(--ink); font-variant-numeric: tabular-nums;
@@ -2151,7 +2154,8 @@
     };
     window.__releasesPromise.catch(() => null).then((data) => {
       const n = Number(data && data.plays && data.plays.total);
-      if (!Number.isFinite(n) || n <= 0) return;
+      if (!Number.isFinite(n) || n <= 0) { document.documentElement.classList.add('no-plays'); return; }
+      document.documentElement.classList.remove('no-plays');
       total = n;
       box.setAttribute('role', 'text');
       box.setAttribute('aria-label', fmt(total) + ' total plays');
