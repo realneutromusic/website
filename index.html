@@ -1280,7 +1280,7 @@
   @media (prefers-reduced-motion: reduce) { .tools-modal-inner { animation: none; opacity: 1; transform: none; } }
 </style>
 <link rel="stylesheet" href="./assets/neutro-motion.css?v=6">
-<script src="./assets/neutro-motion.js?v=5" defer></script>
+<script src="./assets/neutro-motion.js?v=6" defer></script>
 <link rel="stylesheet" href="./assets/about.css?v=3">
 <script src="./assets/about.js?v=1" defer></script>
 <link rel="stylesheet" href="./assets/plugin-reader.css?v=5">
@@ -1990,6 +1990,8 @@
 
     card.addEventListener('click', () => openReleaseModal(r));
     card.addEventListener('keydown', (e) => {
+      // only the card itself: Enter on the collaborator link inside it follows that link
+      if (e.target !== card) return;
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openReleaseModal(r); }
     });
 
@@ -2602,6 +2604,13 @@
     const f = e.dataTransfer.files && e.dataTransfer.files[0];
     if (f) handleFile(f);
   });
+  // a file dropped just outside the zone (still in the Tools window) is analysed too, instead of the
+  // browser opening it and leaving the site; the Plugin Reader tab handles its own (pr-active)
+  ['dragover', 'drop'].forEach(evt => toolsModal.addEventListener(evt, (e) => {
+    if (toolsModal.classList.contains('pr-active') || !e.dataTransfer || !e.dataTransfer.types.includes('Files')) return;
+    e.preventDefault();
+    if (evt === 'drop' && !dropZone.contains(e.target)) { const f = e.dataTransfer.files[0]; if (f) handleFile(f); }
+  }));
   fileInput.addEventListener('change', (e) => { const f = e.target.files[0]; if (f) handleFile(f); });
   // bumping the generation drops an analysis still running, so its results don't reappear after clearing
   fileChipClear.addEventListener('click', (e) => { e.stopPropagation(); fileInput.value = ''; analysisGeneration++; resetTool(); });

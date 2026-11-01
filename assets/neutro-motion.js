@@ -75,5 +75,10 @@
       }
     }, {threshold:.1});
     document.querySelectorAll('.block-head,.socials-field,.contact-panel').forEach(el => observer.observe(el));
+    // focus that arrives first (Tab scrolls a card in) shows its section at once: no focused control mid-fade
+    document.addEventListener('focusin', e => {
+      const el = e.target.closest?.('.block-head,.socials-field,.contact-panel');
+      if (el) { observer.unobserve(el); el.classList.remove('nt-enter'); }
+    });
   }
 })();
