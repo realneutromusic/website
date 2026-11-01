@@ -24,8 +24,11 @@
   // this browser saw is used, and as a last resort the old releases.json.
   window.__releasesPromise = (function () {
     var KEY = 'nt_releases_v1';
+    // A request that hangs gives up after 8 s, so the fallbacks below still show the releases.
     var json = function (url) {
-      return fetch(url, { cache: 'no-store' }).then(function (res) {
+      var ctl = window.AbortController ? new AbortController() : null;
+      if (ctl) setTimeout(function () { ctl.abort(); }, 8000);
+      return fetch(url, { cache: 'no-store', signal: ctl ? ctl.signal : undefined }).then(function (res) {
         if (!res.ok) throw new Error('releases request failed: ' + res.status);
         return res.json();
       });
@@ -1439,7 +1442,7 @@
             <span id="form-submit-label">Send Message</span>
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
-          <p class="form-status" id="form-status"></p>
+          <p class="form-status" id="form-status" role="status" aria-live="polite"></p>
         </form>
       </div>
     </div>
@@ -1554,6 +1557,18 @@
   const escHtml = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   function safeLink(v) {
     try { const u = new URL(String(v || '')); return u.protocol === 'https:' ? u.href.replace(/"/g, '%22') : ''; } catch (e) { return ''; }
+  }
+  // Keeps Tab / Shift+Tab inside an open dialog (the page behind it is not inert).
+  function trapFocus(dialog) {
+    dialog.addEventListener('keydown', (e) => {
+      if (e.key !== 'Tab') return;
+      const controls = [...dialog.querySelectorAll('button, input, select, textarea, a[href], [tabindex="0"]')]
+        .filter(el => !el.disabled && el.tabIndex >= 0 && el.getClientRects().length);
+      if (!controls.length) return;
+      const first = controls[0], last = controls[controls.length - 1];
+      if (e.shiftKey && (document.activeElement === first || !dialog.contains(document.activeElement))) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    });
   }
   function loadCover(thumb, full, el) {
     const px = el ? Math.max(el.clientWidth, el.clientHeight) * (window.devicePixelRatio || 1) : 0;
@@ -1769,6 +1784,7 @@
     // "Listen on" links out of the Tab order and the accessibility tree.
     modalBackdrop.inert = true;
     document.body.appendChild(modalBackdrop);
+    trapFocus(modalBackdrop);
 
     function closeReleaseModal() {
       if (!modalBackdrop.classList.contains('visible')) return;
@@ -2216,6 +2232,7 @@
     reveal.id = 'mystery-reveal';
     reveal.setAttribute('role', 'dialog');
     reveal.setAttribute('aria-modal', 'true');
+    reveal.setAttribute('aria-label', 'Coming Soon');
     reveal.innerHTML = `
       <div class="mystery-reveal-inner">
         <button type="button" class="mystery-reveal-close" id="mystery-reveal-close" aria-label="Close">✕</button>
@@ -2253,6 +2270,7 @@
       </div>
     `;
     document.body.appendChild(reveal);
+    trapFocus(reveal);
 
     const audio = new Audio();
     audio.preload = 'none';
@@ -2311,7 +2329,8 @@
     // so the hover-revealed slider actually collapses again
     const mysteryVolumeHover = reveal.querySelector('#mystery-reveal-volume-hover');
     if (mysteryVolumeHover) {
-      mysteryVolumeHover.addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) b.blur(); });
+      // pointer clicks only (e.detail > 0): a keyboard user keeps focus on the button
+      mysteryVolumeHover.addEventListener('click', (e) => { const b = e.target.closest('button'); if (b && e.detail > 0) b.blur(); });
       volumeSlider && volumeSlider.addEventListener('change', () => volumeSlider.blur());
     }
 
@@ -2392,6 +2411,8 @@
     const want = location.hash === '#catalogue';
     if (want === showingCatalogue) return;
     showingCatalogue = want;
+    // a release window opened in the other view closes with it (back/forward buttons)
+    if (window.closeReleaseModal) window.closeReleaseModal();
     const root = document.documentElement;
     if (want) {
       homeScroll = window.scrollY;
@@ -2582,7 +2603,8 @@
     if (f) handleFile(f);
   });
   fileInput.addEventListener('change', (e) => { const f = e.target.files[0]; if (f) handleFile(f); });
-  fileChipClear.addEventListener('click', (e) => { e.stopPropagation(); fileInput.value = ''; resetTool(); });
+  // bumping the generation drops an analysis still running, so its results don't reappear after clearing
+  fileChipClear.addEventListener('click', (e) => { e.stopPropagation(); fileInput.value = ''; analysisGeneration++; resetTool(); });
 
   function handleFile(file) {
     getEssentia();
@@ -3468,7 +3490,7 @@
     .catch((err) => {
       console.error('Could not load releases.json:', err);
       const grid = document.getElementById('release-grid');
-      if (grid) grid.innerHTML = '<p style="color:var(--ink-faint);font-size:14px;">Releases couldn\'t be loaded right now — check that releases.json is reachable at ./releases.json.</p>';
+      if (grid) grid.innerHTML = '<p style="color:var(--ink-faint);font-size:14px;">Releases couldn\'t be loaded right now. Please try again in a moment.</p>';
     });
 
 })();
