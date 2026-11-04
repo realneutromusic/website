@@ -66,16 +66,31 @@
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
-  "@type": "MusicGroup",
-  "name": "Neutro",
-  "url": "https://realneutromusic.com/",
-  "genre": ["EDM", "Retro Future", "Future House"],
-  "sameAs": [
-    "https://open.spotify.com/artist/2Zj4lZCxNSCb5rjx82Ptmu",
-    "https://soundcloud.com/realneutromusic",
-    "https://music.apple.com/us/artist/neutro/1831228505",
-    "https://instagram.com/realneutromusic",
-    "https://youtube.com/@realneutromusic"
+  "@graph": [
+    {
+      "@type": "WebSite",
+      "@id": "https://realneutromusic.com/#website",
+      "name": "Neutro",
+      "alternateName": ["Neutro Music", "realneutromusic"],
+      "url": "https://realneutromusic.com/",
+      "publisher": { "@id": "https://realneutromusic.com/#neutro" }
+    },
+    {
+      "@type": "MusicGroup",
+      "@id": "https://realneutromusic.com/#neutro",
+      "name": "Neutro",
+      "url": "https://realneutromusic.com/",
+      "image": "https://realneutromusic.com/assets/neutro-about.jpg",
+      "description": "EDM producer: mainly Retro Future and Future House.",
+      "genre": ["EDM", "Retro Future", "Future House"],
+      "sameAs": [
+        "https://open.spotify.com/artist/2Zj4lZCxNSCb5rjx82Ptmu",
+        "https://soundcloud.com/realneutromusic",
+        "https://music.apple.com/us/artist/neutro/1831228505",
+        "https://instagram.com/realneutromusic",
+        "https://youtube.com/@realneutromusic"
+      ]
+    }
   ]
 }
 </script>
